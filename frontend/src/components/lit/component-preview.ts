@@ -104,7 +104,7 @@ export interface PreviewState {
    */
   readings?: Array<{
     layer?: string; path?: string; fact?: string; source?: string; drawn?: string;
-    verdict?: string; why?: string;
+    verdict?: string; why?: string; chosen?: string;
   }>;
   /**
    * EVERY ANNOTATION IN THE FILE — the designer's notes quoted verbatim, and the property marks
@@ -686,12 +686,22 @@ export class ComponentPreview extends LitElement {
       }
       .reading {
         display: grid;
-        grid-template-columns: 1.4fr 1fr 1.2fr 1.2fr 0.7fr;
+        /* LAYER, FACT, FIGMA STATED, DRAWN, SOURCE, VERDICT. The source is the channel the drawing
+           took the fact from (REST, MCP, or both) — the one column that says why the drawn value
+           is the drawn value. */
+        grid-template-columns: 1.4fr 1fr 1.2fr 1.2fr 0.6fr 0.7fr;
         gap: 8px;
         padding: 3px 10px;
         font-size: 11px;
         line-height: 1.5;
         border-top: 1px solid rgba(35, 67, 84, 0.06);
+      }
+      .rfrom {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 10px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        opacity: 0.75;
       }
       .reading.differs,
       .reading.not-read,
@@ -1214,9 +1224,20 @@ export class ComponentPreview extends LitElement {
     // column opens then you drop the spinner there so that the user is not staring at a blank
     // third column while it's ingesting."*
     if (this.preview?.pending) {
+      const steps = this.preview.steps ?? [];
       return html`<div class="pending">
         <span class="bigspin" aria-hidden="true"></span>
         <p class="ptext">${this.preview.note || "Ingesting — reading the node from Figma…"}</p>
+        ${steps.length
+          ? html`<details class="acc" open>
+              <summary>The run so far — ${steps.length} step${steps.length === 1 ? "" : "s"}</summary>
+              <div class="steps">
+                ${steps.map(
+                  (s) => html`<div class="step"><span class="sat">${s.at || ""}</span> ${s.text || ""}</div>`,
+                )}
+              </div>
+            </details>`
+          : nothing}
       </div>`;
     }
     // NO RUN YET. Said in words: an empty pane and a preview of nothing are different claims.
@@ -1317,6 +1338,16 @@ export class ComponentPreview extends LitElement {
               </div>
             </div>`
           : nothing}
+        ${(p.steps ?? []).length
+          ? html`<details class="acc" open>
+              <summary>The run, step by step — ${(p.steps ?? []).length} steps</summary>
+              <div class="steps">
+                ${(p.steps ?? []).map(
+                  (s) => html`<div class="step"><span class="sat">${s.at || ""}</span> ${s.text || ""}</div>`,
+                )}
+              </div>
+            </details>`
+          : nothing}
         ${(p.specs ?? []).length
           ? html`<details class="acc" open>
               <summary>Specs — ${(p.specs ?? []).length} layer(s)</summary>
@@ -1352,12 +1383,14 @@ export class ComponentPreview extends LitElement {
                 verdict. ${(p.readings ?? []).length} facts.
               </summary>
               <div class="readings">
+              <div class="readhead">Layer · Fact · Figma stated · Drawn · Source · Verdict</div>
               ${(p.readings ?? []).map(
                 (r) => html`<div class="reading ${r.verdict || ''}">
                   <span class="rlayer">${r.layer}</span>
                   <code class="rfact">${r.fact}</code>
                   <span class="rvalue">${r.source || "—"}</span>
                   ${r.drawn ? html`<span class="rdrawn">→ ${r.drawn}</span>` : nothing}
+                  <span class="rfrom">${r.chosen === 'mcp' ? 'MCP' : r.chosen === 'rest' ? 'REST' : r.chosen === 'both' ? 'both' : '—'}</span>
                   <span class="rverdict">${r.verdict}</span>
                 </div>`
               )}

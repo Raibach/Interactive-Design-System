@@ -438,6 +438,13 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
         values: [],
       });
       let stepTimer: number | undefined;
+      let applied = false;
+      let settled = false;
+      const settle = () => {
+        if (settled) return;
+        settled = true;
+        window.dispatchEvent(new CustomEvent('ingest-settled'));
+      };
       try {
         const neitherUrlNorTag = "That is neither a Figma URL nor a component id (f-1234-5678).";
         const needsANode =
@@ -469,53 +476,13 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
         // last line under the form's spinner, so the wait shows what is happening rather than an
         // unexplained turn. `?t=` busts any cache, because a cached "processing" is a step that
         // never moves.
-        stepTimer = window.setInterval(async () => {
-          try {
-            const status = await apiFetch(`${API_BASE}/figma/ingest/${jobId}?t=${Date.now()}`);
-            if (!status.ok) return;
-            const payload = (await status.json()) as { steps?: Array<{ text?: string }> };
-            const steps = Array.isArray(payload.steps) ? payload.steps : [];
-            const last = steps[steps.length - 1]?.text;
-            if (last) {
-              setDesignIngest({ busy: true, message: String(last) });
-              setDesignPreview({
-                source: "ingest",
-                pending: true,
-                tag: "",
-                name: "",
-                note: String(last),
-                values: [],
-              });
-            }
-          } catch {
-            // The ingest request itself reports a failure; a failed poll is not a second error.
-          }
-        }, 700);
-        // THE ROOM SAYS WORK STARTED — here, where the request actually starts, and not at the
-        // submit: the guards above can return without a request, and a wait that nothing would
-        // end must not begin. The settle goes out in `finally` for the same reason, backwards.
-        window.dispatchEvent(new CustomEvent('ingest-started'));
-        const res = await apiFetch(`${API_BASE}/figma/ingest`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            // One id for the job, held here because the preview carries it: an approve resolves
-            // this job, so the value that goes out is the value the preview must hand back.
-            jobId,
-            fileKey,
-            nodeId,
-            notes: String(detail.notes ?? ""),
-            sessionId: currentDesignSession?.id ?? "",
-            sessionTitle: currentDesignSession?.title ?? "",
-          }),
-        });
-        const data = await res.json().catch(() => null);
-        if (!res.ok) throw new Error(data?.detail || "Failed to ingest");
-        // ── THE INGEST'S ANSWER BECOMES THE PREVIEW ────────────────────────────────────────────
-        // Read exactly as the modal reads it (`data?.result ?? data`), because it is the same
-        // response: the tag it built, the node it measured, and whether the catalogue already
-        // held that tag — which is what makes the approve button say REPLACE instead of add.
-        const result = (data?.result ?? data ?? {}) as Record<string, any>;
+        /*
+         * ONE ANSWER PATH, TWO DOORS. The long POST carries the finished result, and the status
+         * poll carries the same result once the job says "done". Whichever arrives first applies
+         * it; the other stands down. That is how a late poll stops painting a spinner over a
+         * finished read, and how a lost long response is not a reason to wait forever.
+         */
+        const applyIngestResult = (result: Record<string, any>, jobId: string): void => {
         const details = (result.details ?? {}) as Record<string, any>;
         /*
          * THE DRAFT'S OWN ADDRESS, TAKEN FROM THE ANSWER AND NOT WORKED OUT HERE. The backend
@@ -588,6 +555,20 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
           ? ((result as any).fidelity.fonts as Array<Record<string, any>>)
           : [];
         const fontLine = "";
+        /* THE FACE QUESTION (plan 1.5, 2026-11-03). The backend names every family the design
+           states that this system does not ship, with the layers that state it. The sentence and
+           the two choices are handed to the chat as one event; the chat owns the words in the
+           thread, and its buttons own the two acts. Nothing is decided here. */
+        const fontNotice = (result as any)?.fidelity?.fontNotice as
+          | { statement?: string; faces?: Array<{ family?: string; layers?: string[] }> }
+          | null
+          | undefined;
+        const fontFaces = (Array.isArray(fontNotice?.faces) ? fontNotice!.faces : [])
+          .map((face) => ({
+            family: String(face?.family ?? "").trim(),
+            layers: (Array.isArray(face?.layers) ? face!.layers! : []).map(String).filter(Boolean),
+          }))
+          .filter((face) => face.family);
         /* WHAT THE FILE ITSELF SAYS, in the designer's own words. A note is quoted verbatim; a
            property mark is named with the properties it exposes. Nothing is summarised. */
         const annotations = Array.isArray((result as any)?.fidelity?.annotations)
@@ -631,7 +612,8 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
            each disagreement is. It leads the answer because it says how much of the answer has a
            second opinion behind it — an unread second channel is not agreement. */
         const twoPass = (result as any)?.twoPass as
-          | { summary?: string; mcpError?: string | null; counts?: Record<string, number> }
+          | { summary?: string; mcpError?: string | null; counts?: Record<string, number>;
+              rows?: Array<Record<string, any>> }
           | undefined;
         const twoPassLine = String(twoPass?.summary || "");
         /* HOW THE DESIGN WAS READ — one line, and only when there is something to say. It stands
@@ -642,6 +624,21 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
           | { summary?: string; attempts?: Array<Record<string, any>>; answeredBy?: number }
           | undefined;
         const readLine = String(readRecord?.summary || "");
+        /* WHICH CHANNEL EACH FACT CAME FROM (plan 1.3, 2026-11-03). The two-pass rows carry the
+           chosen source per layer and fact; the reading rows are the table the person reads. The
+           merge is by the layer's name and the fact's name, the same two facts the two reports
+           already print. A fact the second pass did not reconcile keeps no source rather than a
+           guessed one. */
+        const chosenByFact = new Map<string, string>();
+        for (const row of Array.isArray(twoPass?.rows) ? twoPass!.rows! : []) {
+          const key = `${String(row?.layer ?? "")}\u0000${String(row?.fact ?? "")}`;
+          if (row?.chosen && key !== "\u0000") chosenByFact.set(key, String(row.chosen));
+        }
+        const readingsWithSource = ((((result.fidelity as Record<string, any> | undefined)?.readings) ?? []) as Array<Record<string, any>>)
+          .map((row) => ({
+            ...row,
+            chosen: chosenByFact.get(`${String(row?.layer ?? "")}\u0000${String(row?.fact ?? "")}`) ?? "",
+          }));
         setDesignPreview({
           source: "ingest",
           tag: builtTag,
@@ -654,9 +651,8 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
           // THE DRAWN DECLARATIONS PER LAYER — the specs list the panel shows beside the drawing.
           specs: ((details.specs as Array<Record<string, any>> | undefined) ?? []),
           // EVERY FACT READ, layer by layer, with the value and its verdict — the list, not a count.
-          readings: (((result.fidelity as Record<string, any> | undefined)?.readings) ?? []) as Array<
-            Record<string, any>
-          >,
+          // `chosen` is the channel the drawing took the fact from: REST, MCP, or both.
+          readings: readingsWithSource,
           // EVERY ANNOTATION, unsliced — the notes verbatim and the property marks.
           annotations: (((result.fidelity as Record<string, any> | undefined)?.annotations) ?? []) as Array<
             Record<string, any>
@@ -773,9 +769,148 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
             details.target_node_size ? { label: "Size", value: String(details.target_node_size) } : null,
           ].filter(Boolean) as Array<{ label: string; value: string }>,
         });
+        /*
+         * THE CHAT IS ASKED THE FACE QUESTION (plan 1.5). The event is the seat's own, not the
+         * general system-message channel: the room keeps other tabs' seats warm, and a sentence
+         * broadcast to all of them would appear in a thread the ingest never touched. The Tools
+         * chat is the only listener.
+         */
+        if (fontFaces.length) {
+          window.dispatchEvent(
+            new CustomEvent("design-face-offer", {
+              detail: { statement: String(fontNotice?.statement ?? ""), faces: fontFaces },
+            }),
+          );
+        }
         // The ingest also recorded this design's layers — read them back so the tree shows the
         // node it just wrote, which is what the modal does with its own `layersKey`.
         setDesignIngest({ busy: false, message: "", refresh: Date.now() });
+        };
+
+        stepTimer = window.setInterval(async () => {
+          try {
+            const status = await apiFetch(`${API_BASE}/figma/ingest/${jobId}?t=${Date.now()}`);
+            if (status.status === 404) {
+              // THE SERVER NO LONGER HOLDS THIS JOB — and that is not "still working". The job
+              // lives in the server's memory, so a restart takes it away. Say so, and stop.
+              window.clearInterval(stepTimer);
+              setDesignPreview(null);
+              setDesignIngestBusy(false);
+              setDesignIngest({
+                busy: false,
+                message:
+                  `The server no longer holds job ${jobId}. It may have restarted. ` +
+                  `Submit the design again.`,
+              });
+              settle();
+              return;
+            }
+            if (!status.ok) return;
+            const payload = (await status.json()) as {
+              status?: string;
+              error?: string | null;
+              result?: Record<string, any> | null;
+              steps?: Array<{ at?: string; text?: string }>;
+            };
+            const steps = Array.isArray(payload.steps) ? payload.steps : [];
+            const last = steps[steps.length - 1]?.text;
+            if (payload.status === "error") {
+              window.clearInterval(stepTimer);
+              setDesignPreview(null);
+              setDesignIngestBusy(false);
+              setDesignIngest({
+                busy: false,
+                message: `The ingest failed: ${payload.error || last || "the server gave no reason"}`,
+              });
+              settle();
+              return;
+            }
+            if (payload.status === "done") {
+              window.clearInterval(stepTimer);
+              setDesignIngestBusy(false);
+              /*
+               * THE JOB IS DONE, SO THE ANSWER IS TAKEN HERE. The status answer carries the same
+               * result as the long request; taking it here is what makes the answer unavoidable.
+               * A late poll can no longer paint "pending" over a finished read, and a lost long
+               * response is not a reason to wait. One answer path, two doors.
+               */
+              if (!applied) {
+                if (payload.result) {
+                  applied = true;
+                  applyIngestResult(payload.result, jobId);
+                } else {
+                  setDesignIngest({
+                    busy: false,
+                    message:
+                      `The job is done but its status carries no result (job ${jobId}). ` +
+                      `This is a defect in the ingest's answer, not a wait.`,
+                  });
+                }
+              }
+              settle();
+              return;
+            }
+            /*
+             * STILL WORKING. THE WHOLE LOG IS HANDED TO THE PREVIEW, NOT ONLY ITS LAST LINE.
+             *
+             * The last line is a normal statement about the node's history ("No earlier
+             * measurement is held…"), and the line that says why a channel is missing is earlier.
+             * The note therefore leads with the reading's own warning, and the log below it holds
+             * every step; nothing is summarised away.
+             */
+            const readWarning = steps.find((s) =>
+              /read once|second reading did not happen|MCP unavailable/i.test(String(s.text || "")),
+            )?.text;
+            const note = readWarning
+              ? "Reading over REST only — the MCP reading did not happen. The run log is in this column."
+              : String(last || "");
+            if (last) {
+              setDesignIngest({ busy: true, message: String(last) });
+            }
+            if (previewRef.current?.pending === true) {
+              setDesignPreview({
+                source: "ingest",
+                pending: true,
+                tag: "",
+                name: "",
+                note,
+                values: [],
+                steps,
+              });
+            }
+          } catch {
+            // The ingest request itself reports a failure; a failed poll is not a second error.
+          }
+        }, 700);
+        // THE ROOM SAYS WORK STARTED — here, where the request actually starts, and not at the
+        // submit: the guards above can return without a request, and a wait that nothing would
+        // end must not begin. The settle goes out in `finally` for the same reason, backwards.
+        window.dispatchEvent(new CustomEvent('ingest-started'));
+        const res = await apiFetch(`${API_BASE}/figma/ingest`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            // One id for the job, held here because the preview carries it: an approve resolves
+            // this job, so the value that goes out is the value the preview must hand back.
+            jobId,
+            fileKey,
+            nodeId,
+            notes: String(detail.notes ?? ""),
+            sessionId: currentDesignSession?.id ?? "",
+            sessionTitle: currentDesignSession?.title ?? "",
+          }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(data?.detail || "Failed to ingest");
+        // ── THE INGEST'S ANSWER BECOMES THE PREVIEW ────────────────────────────────────────────
+        // Read exactly as the modal reads it (`data?.result ?? data`), because it is the same
+        // response: the tag it built, the node it measured, and whether the catalogue already
+        // held that tag — which is what makes the approve button say REPLACE instead of add.
+        const result = (data?.result ?? data ?? {}) as Record<string, any>;
+        if (!applied) {
+          applied = true;
+          applyIngestResult(result, jobId);
+        }
       } catch (err) {
         // THE PENDING COLUMN IS CLEARED WHEN THE INGEST FAILS: a spinner that keeps turning after
         // the answer has already come back is a claim that work is still happening.
@@ -787,8 +922,8 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
       } finally {
         if (stepTimer !== undefined) window.clearInterval(stepTimer);
         setDesignIngestBusy(false);
-        // Success, a refusal, a network failure — every outcome settles the room's wait.
-        window.dispatchEvent(new CustomEvent('ingest-settled'));
+        // Success, a refusal, a network failure — every outcome settles the room's wait, once.
+        settle();
       }
     };
     /* ONLY THE STANDING TAB ACTS: this listener belongs to the Tools unit, so it answers while

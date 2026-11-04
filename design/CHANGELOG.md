@@ -1275,3 +1275,197 @@ contain, so a stale id cannot survive a rebuild.
 stored turn is drawn. Press Chat and return: the same. Switch to Console and return: the same. No
 person's turn was typed, nothing was asked, and the database's session, its conversations and its
 message were unchanged.
+
+### 2026-11-03 — the ingest plan is complete
+
+**Step 5 and step 3's source column are built.** The ingest already named every family the design
+states that this system does not ship, with the layers that state it. The Tools chat now draws that
+sentence and two buttons: **Use the system's face**, which settles it in the thread, and **Ask for it
+to be added**, which writes a `design_requests` row (kind `font`, the family as its subject, the
+session it came from) and says it waits in the Approve tab. The facts table gains a Source column:
+each row names the channel the drawing took that fact from — REST, MCP, or both.
+
+**Proven on the running app and the tunnel.** A face event drawn into the Tools chat showed the
+sentence and both buttons; the second wrote one queue row, read back and removed after the test; the
+first wrote its confirmation and nothing else. The Source column drew REST and both on a preview
+whose facts carried those choices, on both 5001 and the tunnel's built page. The type check and the
+static build are clean.
+
+**The plan is marked complete.** `design/plans/01-INGEST.md` now states all five steps built, and
+`design/TODO.md` carries the completion.
+
+### 2026-11-03 (later) — the architecture is written down
+
+**From the owner's explanation.** The Design room opens on a design system chosen from a selector:
+Raibach Design System first and default, Carbon beneath it. Under the chosen system the tree follows
+the application's architecture — the global console and the tabs, the components, the child elements
+and their tools, and the functionality of each element. Selecting a functionality loads its code in
+the third column; the chat recommends the Development tool and a button opens the Development tab.
+The console is the gallery of the activities inside Design, with design-system cards, UX cards,
+individual component work and other cards.
+
+**The file.** `design/ARCHITECTURE.md` holds the structure and its To Do list.
+`plans/03-CATALOGUES.md` gains step 5 (the selector and the tree) and its open pin is answered;
+`plans/06-CARDS-AND-CONSOLE.md` gains step 7 (the gallery's kinds); `TODO.md` points to the file and
+records the answer.
+
+**What stands.** The two system cards and their catalogues; the selector, the hierarchy, the
+functionality code and the Development handoff are the plan, not built.
+
+### 2026-11-03 (later still) — the documents get names that say what they hold
+
+**The owner:** *"Handoff is a vague document title. I don't like it because it doesn't really tell us
+anything about what's in it."* The undone file was the to-do list under a name that did not say so.
+
+**Renamed.** `design/UNDONE.md` is now `design/TODO.md` — the open work, the answers, the seven plans
+and the next work. The standing instructions from `HANDOFF.md` are in `design/WORKING-RULES.md` — how to
+work, the local setup, and the mistakes already paid for. The outstanding items from both old handoffs
+are in `TODO.md`; `HANDOFF.md` and `NEXT-CHAT.md` are removed. `README.md` names the new order.
+
+**Kept.** The ingest folder still holds its own `NEXT-CHAT.md`; that folder is the owner's record and
+was not touched.
+
+### 2026-11-03 (later again) — the ingest answer stops being overwritten, and its run log is drawn
+
+**What the owner saw.** The third column kept spinning after an ingest, and the line under the spinner
+read "No earlier measurement is held for this node — nothing to compare against." The owner read that
+as the error, but it is the first-ingest comparison note; the line that says why a channel is missing
+was earlier in the same log.
+
+**The cause, measured.** Job `f29c3fac` was done at 12:55:11. REST answered at 12:55:02; MCP was
+unavailable at 12:55:05, so the design was read once over REST. The long request returned its 321 KB
+answer in 9.2 s. The spinner was a late status poll painting "pending" over the finished answer; the
+poll read only the last step and never the job's status.
+
+**What changed.** The status poll now reads `status`, `result` and `error`. When the job is done it
+takes the result through the same function the long request uses, so there is one answer path with two
+doors and a late poll cannot overwrite it. An error shows the server's own words; a missing job (the
+server restarted) says so and stops. The whole step log is drawn while the ingest runs ("The run so
+far") and in the answer ("The run, step by step"); the waiting note leads with the read warning —
+"Reading over REST only — the MCP reading did not happen" — instead of the last comparison line. The
+"reload the page" fallback was removed: it hid a defect instead of reporting it.
+
+**Proven.** The step log drew in both the waiting panel and the answer on the running source, and the
+static build carries the new strings. The type check and the build are clean.
+
+**The limit, stated.** The step log lives with the job in the server's memory. The durable record is
+the ingest activity row, which carries the outcome and the read attempts; the full steps are not
+written to the database. After a restart the job is gone, and the seat now says so rather than spinning.
+
+### 2026-11-03 (later again) — the approval record takes the ingest's trace
+
+**The owner:** *"Think of it as a trace and you could even leverage our governance application to help
+report this."* The approval queue is the report of what happened, and the ingest's run belongs in it.
+
+**Recorded, not built.** `plans/02-APPROVALS.md` gains steps 9 and 10. Step 9 writes the ingest's every
+step against the session as one event with the run's detail; the review draws it as a trace, and the
+same entries are what the Governance application reports — one run, one record, two readers. Step 10
+is the chat's question after the trace: approve anyway or make corrections, both recorded, both leading
+the next actions.
+
+**What stands.** `design_surface_events` is the session's event table and the review draws its events;
+the review reads only the `review` surface today, and the ingest does not write its run yet. That
+write, and the review's trace, are the next build.
+
+### 2026-11-03 (later again) — the Chat tab's conversations are visible, and the seat document catches up
+
+**What the owner saw.** The Chat tab said "55 Conversations", and expanding it showed no rows he could
+read. The rows were not missing: the seat held 54 in `_conversationRows`, and the list drew all of
+them. Two caps hid them: the open card was 68 pixels (one row), and `.conversation-list` capped itself
+at two rows (65 pixels).
+
+**What changed.** `design-chat.ts` opens the card to `min(360px, 40vh)`; `design-chat.styles.ts` lets
+the list fill the card's body and scroll there. Measured on 5001: 250 pixels of body, 54 rows, 1,885
+pixels of list, the first row "New Chat" and the rest below the scroll. The Tools seat keeps its
+68-pixel card because its one row fits. `ONE-CHAT-PER-TAB.md` now carries the current split and a
+"The conversations bar" section: the count and the rows are one read, the Chat seat reads the
+console's whole person, the Tools seat reads its package.
+
+**Proof.** Live on 5001 after the change; the type check and the static build are clean.
+
+**And the removal's success note is gone.** The owner, 2026-11-03: *"There is a confirmation message
+appearing underneath when I click delete it says removed. We don't need that confirmation message."*
+The row's disappearance is the confirmation; the list redraws without it. A removal that fails, and a
+pointer repair that fails, still say so — only the success line was noise.
+
+### 2026-11-03 (later again) — the Design Chat is Design's, and its bar can start a chat
+
+**The owner's correction.** *"It looks like these are conversations from the entire system … the chat
+seat for design would only be the all of the design chats … The console is only the global console
+chats. These chats are not system … they're related to the individual tabs."* The Design console is a
+package like the Composer's and the global console's.
+
+**The read.** `/api/conversations` now carries `design_only`, filtering by the owning package's
+`session_type` (`design_tab`, `design_session`). The front's read is `listForDesign`; the Chat seat's
+scope is `design`; the whole-person scope is removed from the seat. Measured live: 8 Design chats
+while the table held 26 conversations for the whole system. The Tools and UX seats read their own
+packages; the global console reads its own.
+
+**The button.** The Tools bar's new-conversation mark (`+`) is now on the Chat conversations bar. It
+calls the seat's own start path, and the press stops at the button so the bar does not fold the card.
+Measured: 8 rows before, 9 after; the seat moved to the new conversation and the bar read
+"9 Conversations".
+
+**Proof.** Live on 5001; the type check and the static build are clean.
+
+### 2026-11-03 (later again) — the Approve icon pulses when the queue has work
+
+**The owner:** *"When there is something in the approval queue that's pending approval the icon should
+pulse exactly like the icons on the global console page that shows the user there is a chat or a
+question active when the chat component is docked to the right."*
+
+**What changed.** The rail carries `approval-waiting`; when it is true and the column is folded, the
+Approve tab wears the same `nb-news` class the chat icon uses, so the animation is the same
+`chat-news-pulse` at 2.6 seconds. `design-chat` counts the sessions this person can answer plus the
+general requests still pending; it re-reads on `design-approval-changed`, the review surface publishes
+its own count, and the Tools chat announces a request it files.
+
+**Proof.** One pending request was created. Live, the seat and the rail both read waiting; folded, the
+Approve button carried `nb-news` and its computed animation was `chat-news-pulse` 2.6s; open, it did
+not pulse. The test request was removed. The type check and the build are clean.
+
+### 2026-11-03 (later again) — the Design seat's mark returns to the Design console
+
+**The owner:** *"The icon on the design seat … is supposed to take you to the console for design if
+you're not the global console."*
+
+**What changed.** The Design rail's mark dispatched `navigate-console`, which is the GLOBAL console's
+door — the top-level Console room, handled by `WritingAreaIndex`. It now dispatches
+`design-console-open`, the room's own door: the same one the repeated Design press and the
+notification gate already use. `DesignRoom` closes the working seat and draws the Design console.
+
+**Proof.** Live on 5001: before the press the room stood on the Chat seat; after it, the Design tab
+was still the active top tab and the console cards — Carbon, Raibach Prompt Composer,
+output-footer-area import — stood with the rail. The global Console was not entered. The type check
+and the static build are clean.
+
+### 2026-11-03 (later again) — the Tools greeting belongs to an empty package, and the card's conversation is contextual
+
+**The owner:** the Tools default is its last modified conversation; Grace introduces herself only
+when there is no other conversation to load, and deleting every conversation brings that state back.
+And: opening a card loads its last conversation and activity; an on-load prompt asks where to pick
+up; the shell and the styling components are placeholders for the database's content.
+
+**The greeting.** The Tools gate now reads the server's `message_count` for each conversation row: it
+greets only when the package has no conversations, or one empty one. The in-memory thread is empty for
+a frame while its history is in flight, and that frame is where a second introduction in one
+conversation came from. Measured: the single thread already held two introductions; pressing Tools
+after the fix loaded it with both and added none.
+
+**The card.** Recorded, not built: `plans/06-CARDS-AND-CONSOLE.md` step 8, the "conversation is
+contextual" section of `ONE-CHAT-PER-TAB.md`, and "The shell is a placeholder" in
+`ARCHITECTURE.md`. The card's last conversation and activity, the on-load question, and the shell as
+a placeholder for database content are the design; the question itself is the next build.
+
+**The Design Chat's default, fixed the same day.** Its first read now takes the last Design
+conversation **that holds turns** — not the package's pointer and not an empty conversation. Measured:
+nine Design conversations, the newest empty ("Design — Console", 0 turns), and the seat opened
+`3a69eb60` ("New Chat", 2 turns), the last one with content. Empty conversations stay in the list and
+are not the default; opening one draws the frame's "Nothing in this view yet", which is an empty
+state, not a conversation. The Chat's automatic greeting follows the same only-conversation rule, so
+the empty newest beside eight others added no introduction.
+
+**The Tools duplicate is stored data.** The one Tools conversation holds two identical introductions,
+both written by the repeated-greeting bug before the gate existed. The seat loads that conversation;
+it does not insert a third. Deleting the conversation is the clean route: the next press creates one
+and introduces her once.

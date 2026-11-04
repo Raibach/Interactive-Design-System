@@ -30,6 +30,12 @@ export type ConversationRow = {
   archived: boolean;
   /** When the server last wrote to it — the list's own order, carried so a row can show it. */
   savedAt: string;
+  /**
+   * How many turns the server says it holds. The row is the durable fact; the seat's in-memory
+   * thread can be empty for a frame while the history is still on its way, and a greeting keyed on
+   * that emptiness introduces her twice in one conversation (measured 2026-11-03).
+   */
+  messageCount: number;
 };
 
 export type ConversationsOptions = {
@@ -76,26 +82,28 @@ export async function listForPackage(
       tab: String(c?.tab || 'chat'),
       archived: c?.is_archived === true,
       savedAt: String(c?.updated_at ?? ''),
+      messageCount: Number(c?.message_count ?? 0),
     }))
     .filter((row) => row.id);
 }
 
 /**
- * EVERY CONVERSATION THE PERSON HAS — the Design console's own reach (owner, 2026-11-02:
- * *"All conversations should be reachable from the design console seat"*).
+ * ALL OF DESIGN'S CONVERSATIONS — the Design Chat's read, and no seat reads the whole system.
  *
- * A tab reads its own package: Tools its own, UX its own. The console is the one seat whose list
- * is the whole person's work, so a conversation started in Tools can be reopened from there. The
- * server answers without `session_id` with every conversation the caller owns.
+ * The owner, 2026-11-03: the Chat seat for Design is *"the all of the design chats … already
+ * pre-filtered to design chat"*; the console is only the global console's chats, and each tab its
+ * own. The server filters by the owning package's type: `design_tab` and `design_session`. The
+ * design catalogues (the system cards) and the other rooms are not this list.
  */
-export async function listForUser(
+export async function listForDesign(
   options: ConversationsOptions,
   fetchImpl: typeof fetch = fetch,
 ): Promise<ConversationRow[]> {
   const { userId } = options;
-  const res = await fetchImpl('/api/conversations?include_archived=true', {
-    headers: { 'X-User-ID': userId },
-  });
+  const res = await fetchImpl(
+    '/api/conversations?include_archived=true&design_only=true',
+    { headers: { 'X-User-ID': userId } },
+  );
   if (!res.ok) throw new Error(`the conversations could not be read (HTTP ${res.status})`);
   const body = (await res.json()) as { conversations?: unknown };
   if (!Array.isArray(body?.conversations)) throw new Error('the conversations did not come back as a list');
@@ -106,6 +114,7 @@ export async function listForUser(
       tab: String(c?.tab || 'chat'),
       archived: c?.is_archived === true,
       savedAt: String(c?.updated_at ?? ''),
+      messageCount: Number(c?.message_count ?? 0),
     }))
     .filter((row) => row.id);
 }

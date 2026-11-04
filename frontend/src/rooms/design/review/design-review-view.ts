@@ -193,6 +193,10 @@ export class DesignReviewView extends LitElement {
       const queueBody = await queueRes.json().catch(() => ({}));
       this._queue = Array.isArray(queueBody?.requests) ? queueBody.requests : [];
 
+      /* THE RAIL'S APPROVE ICON PULSES FROM THIS COUNT (owner, 2026-11-03). The seat is the
+         listener; the count is the sessions this person can answer plus the requests waiting. */
+      this._publishApprovalCount();
+
       const wanted =
         this.reviewId || this._selected || this._rows[0]?.session_id || '';
       if (wanted) {
@@ -207,6 +211,22 @@ export class DesignReviewView extends LitElement {
       this._say(`The list of reviews could not be read: ${String((err as Error)?.message ?? err)}`, true);
       this.requestUpdate();
     }
+  }
+
+  /** The count the rail's Approve icon pulses on: answers owed plus requests waiting. */
+  private _publishApprovalCount(): void {
+    const reviews = Array.isArray(this._rows) ? this._rows : [];
+    const requests = Array.isArray(this._queue) ? this._queue : [];
+    const waiting =
+      reviews.filter((row) => (row as { can_answer?: boolean })?.can_answer === true).length +
+      requests.length;
+    this.dispatchEvent(
+      new CustomEvent('design-approval-count', {
+        detail: { waiting },
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 
   private async _open(sessionId: string): Promise<void> {

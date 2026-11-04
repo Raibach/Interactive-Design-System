@@ -9,9 +9,10 @@ repo — it should be at the top level." It was `console/approvals/APPROVAL-PIPE
 comparison are here too (`processmaker-develop.zip`, `Agentic-opensource/`); the analysis of both is in
 the appendix of this file, and the recommendation is our own three gates, not theirs.
 
-**What this document is.** A plan. Nothing in it is built: the tables, the doors and the review surface
-are specified, and every claim carries the verification mark it had when it was written. The running
-record of what changes belongs in [`CHANGELOG.md`](./CHANGELOG.md), beside this file.
+**What this document is.** The detailed plan. Its records, doors and review surface are now partly
+built; the current status is in [`plans/02-APPROVALS.md`](../plans/02-APPROVALS.md) and the running
+record is in [`CHANGELOG.md`](./CHANGELOG.md) beside this file. Every claim below keeps the
+verification mark it had when it was written.
 
 ---
 
@@ -165,6 +166,22 @@ draft: it checks that the actor is the person the draft is waiting on, it append
 and it writes the new state and the new waiting person — all in one transaction. Nothing else may
 write `state`. So the trail and the state cannot part, and "what is waiting for me" is a read of
 one indexed column rather than a reconstruction of history.
+
+### The trail is a running log, not a signature (owner, 2026-11-03)
+
+An approval is not a click of a button; it is a process of reviewing activity and approving the
+outcome. A card may be worked on by different people at different times, and every visit that changes
+it, every save, every request for changes and every answer is an event with a person and a time. The
+review queue reads that log; it does not replace it. A second approval stands after the first and
+never overwrites it, because `draft_reviews` is append-only. The card's face says what is happening
+now; the queue and the review surface say what happened and who did it.
+
+**To do, from the note.**
+
+- The card carries its latest key activity and its stage, not only the stage.
+- The review surface draws the whole trail, newest first, with the person and the time of each event.
+- The card `output-footer-area import` is the test: one person works and saves it, another opens and
+  saves it again, and the same log names both people, both times, and every decision between them.
 
 ### Why this shape, and not the reference application's
 

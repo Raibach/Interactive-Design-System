@@ -12,16 +12,18 @@
  * stays in the seat is what a person sees and what this seat asks for: its greeting, its send, its
  * scroll record, its own controls.
  *
- * THIS SEAT FOLLOWS THE ROW. A conversation carries the tab it was filed under, and the console
- * reads every conversation the person has (`conversationScope = "all"`), so opening a row also
- * opens the process that row belongs to.
+ * THIS SEAT FOLLOWS THE ROW, WITHIN THE DESIGN ROOM. The scope decides whose rows are read:
+ * `design` (the Design Chat's) reads every design tab's and kept design session's conversations;
+ * `package` (a tab's) reads its own. `all` is the whole person's and is not a seat's list. The
+ * owner, 2026-11-03: *"the chat seat for design would only be the all of the design chats … it's
+ * already pre-filtered to design chat."*
  *
  * A PLAIN MODULE, NOT AN ELEMENT. Every function takes the seat as `this`, so the bodies below are
  * the seat's own text, MOVED — no rule changed, no number touched. `ChatConversationHost` states
  * what the conversation may reach; a member it does not name cannot be reached from here.
  */
 import { logger } from '@/lib/logger';
-import { create, listForPackage, listForUser, pointPackageAt, remove, type ConversationRow } from '@/shared/conversations';
+import { create, listForDesign, listForPackage, pointPackageAt, remove, type ConversationRow } from '@/shared/conversations';
 
 /** One turn as the seat draws it. The same shape the seats already carry. */
 export interface ConversationTurn {
@@ -58,7 +60,7 @@ export interface ChatConversationHost extends HTMLElement {
    * console's reach — every conversation the person has, so tools work is openable from the
    * console. Absent reads as `package`, which is the safe answer for a seat that never said.
    */
-  conversationScope?: 'package' | 'all';
+  conversationScope?: 'package' | 'design';
   requestUpdate(): void;
 }
 
@@ -161,14 +163,14 @@ export async function loadHistory(this: ChatConversationHost): Promise<void> {
  * a claim only a successful empty read can make.
  */
 export async function readPackageConversations(this: ChatConversationHost, userId: string): Promise<void> {
-  /* THE CONSOLE READS THE WHOLE PERSON'S WORK; A TAB READS ITS OWN PACKAGE (owner, 2026-11-02). */
-  const all = this.conversationScope === 'all';
-  if (!all && !this.sessionId) return;
+  /* THE DESIGN CHAT READS ALL OF DESIGN; A TAB READS ITS OWN PACKAGE (owner, 2026-11-03). */
+  const design = this.conversationScope === 'design';
+  if (!design && !this.sessionId) return;
   try {
     let rows: ConversationRow[];
     try {
-      rows = all
-        ? await listForUser({ sessionId: this.sessionId ?? '', userId })
+      rows = design
+        ? await listForDesign({ sessionId: this.sessionId ?? '', userId })
         : await listForPackage({ sessionId: this.sessionId!, userId });
     } catch {
       this._conversationsRead = true;
@@ -176,14 +178,34 @@ export async function readPackageConversations(this: ChatConversationHost, userI
     }
     /* THE LIST IS REDRAWN WHEN IT CHANGES, AND THE COMPARISON IS MADE BEFORE THE ASSIGNMENT. */
     const rowsChanged = JSON.stringify(rows) !== JSON.stringify(this._conversationRows ?? []);
+    const firstRead = !this._conversationsRead;
     this._conversationRows = rows;
     this._conversationsRead = true;
 
     /*
-     * IF THERE IS A CONVERSATION, LOAD THE LAST ONE. The server answers `ORDER BY updated_at DESC`,
-     * so the first row is the thread last written to — "the last one" as a person means it.
+     * THE DESIGN CHAT OPENS THE LAST MODIFIED CONVERSATION — AS THE LIST SAYS (owner, 2026-11-03):
+     * *"If it says it's got five conversations, they just load the last modified."*
+     *
+     * The rows are the server's order, newest first. Every one is a conversation; none is skipped
+     * and nothing has to be deleted. An empty conversation is still the conversation that opens,
+     * and the frame's empty state is its content, not a cut thread. A row the person picks after
+     * this first read is theirs; later reads leave it alone. A host that bound a particular
+     * conversation (a card) is not overridden.
      */
-    if (!this.conversationId && rows.length) {
+    if (design && firstRead && !this._adoptedByHost && rows.length) {
+      this._moveSeatTo(rows[0].id, { tab: rows[0].tab });
+      return;
+    }
+
+    /*
+     * A CONVERSATION NOT IN THIS SEAT'S LIST IS NOT THIS SEAT'S. The seat reads every Design
+     * chat, and a bound thread from another scope is stale by that list's own rule; the newest
+     * row replaces it.
+     */
+    const boundIsThisPackages =
+      !!this.conversationId &&
+      rows.some((row) => String(row.id) === String(this.conversationId));
+    if (rows.length && !boundIsThisPackages) {
       this._moveSeatTo(rows[0].id, { tab: rows[0].tab });
       return;
     }
@@ -287,16 +309,18 @@ export async function removeConversation(
     this._listNote = '';
     await readPackageConversations.call(this, userId);
     if (!wasTheOneOnScreen) {
-      this._listNote = 'Removed.';
+      // THE ROW'S DISAPPEARANCE IS THE CONFIRMATION (owner, 2026-11-03). No "Removed." note: the
+      // list redraws without the row, and a note under it is noise, not feedback.
       this.requestUpdate();
       return;
     }
     const live = (this._conversationRows ?? [])
       .filter((r) => !r.archived && String(r.id) !== String(id));
+    /* THE NEXT ROW IS THE NEXT CONVERSATION — the newest remaining, the last modified, exactly as
+       the list reads. No row is skipped, and nothing is deleted to make the app behave. */
     const next = live.length ? String(live[0].id) : '';
     if (next) {
       this._moveSeatTo(next);
-      this._listNote = 'Removed. This chat moved to your other conversation.';
       if (this.sessionId) {
         pointPackageAt({ sessionId: this.sessionId, userId }, next).catch((err) => {
           this._listNote = `Removed, but this package still named the old chat: ${String((err as Error)?.message ?? err)}`;
@@ -305,7 +329,6 @@ export async function removeConversation(
       }
     } else {
       this._moveSeatTo('');
-      this._listNote = 'Removed. Nothing has been said here yet.';
       if (this.sessionId) {
         this._conversationWrite(
           `/api/prompt-sessions/${this.sessionId}`,

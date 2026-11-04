@@ -11,6 +11,20 @@ session holds, what changed, and two buttons — approve, or ask for changes. Ap
 back to the designer marked approved. If it was replacing an approved component, the approval
 replaces it. Nothing is published by this flow; publication is its own act.
 
+## What an approval is (owner, 2026-11-03)
+
+An approval is not a button press. It is a process of reviewing activity and approving the outcome.
+A card may be worked on by different people at different times, and the record must carry all of it:
+who opened it, who saved it, what changed, who asked for changes, who answered and when. The queue is
+that running log, with the key activity indicated, and it is not a one-time decision that a second
+approval replaces. The run of an ingest is part of that log: its steps, its channels and its problems
+are a trace against the session, so the person approving reads what happened before any catalogue
+write. The same trace is what the Governance application reports; one run, one record, two readers.
+
+The saved card `output-footer-area import` is the test card. It is opened, worked on and saved again,
+by one person and then by another; the log must name both people and both times, and no later
+approval may hide the earlier one.
+
 ## The two things you have already settled
 
 - **Any person can be a reviewer.** Not three fixed roles.
@@ -20,13 +34,16 @@ replaces it. Nothing is published by this flow; publication is its own act.
 
 ## What stands
 
-Nothing of the flow. The saved session, its card, and the reopen are built.
+The record, the review surface and the general queue are built and proven; each step says when. The
+saved session, its card and the reopen were already built. The running log is the one requirement
+this plan now carries that no step below has finished.
 
 ## The steps
 
-*Steps 1, 2 and 4 are built as a RECORD, 2026-11-02 — the endpoints and the table writes. The surface
-that a person presses is step 3 and is not built; neither are the catalogue write (5), the pending
-replacement (6) or the general queue (7).*
+*Steps 1, 2 and 4 are built as a RECORD; step 3 (the surface) and step 7 (the queue) are built and
+proven on the running app. What remains are the catalogue write (5), the pending replacement (6), the
+running log (8), the ingest trace (9), the chat's question (10) and the people and their sign-in (11),
+which the owner's notes of 2026-11-03 add.*
 
 1. **A session records what happens in it.** Every action becomes a row against the session, with the
    person who did it. This is the base the rest stands on, and it is also what Save needs. Proof: two
@@ -56,17 +73,44 @@ replacement (6) or the general queue (7).*
    unknown decision word refused (422). The Approve tab draws the waiting requests beside the
    reviews, with Approve and Refuse. Proven on the running app: a font request for "Arial Rounded MT
    Bold" stood under "Waiting for a decision", Approve recorded the decision and the queue emptied.
-   The test rows were removed afterwards. The ingest's missing-face conversation is now this queue's
-   caller, and that remains the open half of plan 01 step 5.
+   The test rows were removed afterwards. The ingest's missing-face conversation now calls this queue;
+   plan 01 is complete.
+
+8. **The approval is a running log, not a one-time click.** Every change of state appends an event
+   with the person and the time, in the same transaction that writes the new state (step 1's rule),
+   and a later answer never rewrites an earlier one. The card shows the latest key activity and the
+   stage; the review surface shows the whole trail, newest first, with the person and the time of
+   each event. Proof: the card `output-footer-area import` is opened and saved by one person, then
+   opened and saved by another; the log names both people, both times, and every answer between
+   them, and the first record still stands after the second approval.
+
+9. **The ingest's run is an approval trace.** Every step the ingest takes — the REST read, the MCP
+   attempt and its absence, the layers, the styled ranges, the fonts, the compile, the person and the
+   time — is written against the session as one event with the run's detail. The review draws it as a
+   trace, so the person approving sees what happened before any catalogue write. The same entries are
+   what the Governance application reports: one run, one record, two readers. Proof: an ingest with a
+   missing face and a styled-range gap writes one trace; the review shows every step; the governance
+   report names the same job and the same counts.
+10. **The chat asks after the trace.** When the run carries problems, the chat asks the person to
+    approve anyway or make corrections. Approve anyway is the preview's own approve, recorded with
+    the problems it accepted; make corrections is the preview returned to the person with the
+    findings, and the next ingest appends to the same trace. Both answers are events, and they lead
+    the next actions. Nothing is hidden because it was inconvenient.
+
+11. **People, and how they sign in.** One user per person: an email, a name and a password through
+    the signup door, with the email verified; the person signs in with their own email and password.
+    The reviewer is addressed by that person; the session's share and the review's answer follow.
+    The directory (`GET /api/auth/users`) is admin-guarded, and its guard is a development stub, so
+    a picker must not be a public directory of accounts. Proof: a second account signs in, sees the
+    card `output-footer-area import`, and answers it.
 
 ## Recommendation
 
-Build step 1 before anything else, because it is not really an approval step: it is the session's own
-record, and Save, the review and the audit trail all read it. Then 2 and 3 together. Steps 4 to 6 are
-one loop and should be built as one. Step 7 last.
-
-Do not start this until the seats are hardened. The whole flow lands in a right column that is still
-two five-thousand-line files.
+Steps 1 to 4 and 7 are built. The last loop is 5 and 6 as one piece — the final approval that writes
+the catalogue and the pending replacement — and step 8's running log is the surface those steps are
+read through. Step 9 is the ingest's trace in that record, and step 10 is the chat's question over it;
+step 11 is the people who answer. The card's face carrying the stage, and sharing and reassignment,
+belong to the console plan.
 
 ## Still open
 

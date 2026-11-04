@@ -52,3 +52,28 @@ the same thing.
    conversation?
 4. The catalogue pin: a design system's card cannot load until the Tools tab stops forcing the prompt
    composer.
+
+## 2026-11-03 — an approval is a running log, not a button
+
+**The owner's note.** *"These cards may be worked on by different people at different times. The
+approval queue should capture that audit log. Approvals are more than a one-time thing — it is a
+running log with key activity indicated. An approval is not a click of a button; an approval is a
+process of reviewing activity and approving the outcome/output."*
+
+**What this changes.** The queue is the audit log of a card's life: each visit that changes it, each
+save, each request for changes and each answer is an event with the person and the time. A later
+approval stands after the earlier ones; it does not replace them. The card says what is happening now,
+and the review surface says what happened and who did it.
+
+**The test card is `output-footer-area import`.** It is worked on and saved by one person, then
+opened and saved by another; the log must name both people and both times, with every answer between
+them.
+
+**To do.**
+
+- The card's face carries the latest key activity and the stage.
+- The review surface draws the whole trail, newest first, with the person and the time.
+- The next save on `output-footer-area import` appends to the same log, not to a new one.
+
+**Where this is recorded.** The requirement is step 8 of `plans/02-APPROVALS.md`, and the rule is
+under "The trail is a running log" in `APPROVAL-PIPELINE.md`.

@@ -71,9 +71,15 @@ class ConversationAPI:
         user_id: str,
         project_id: str | None = None,
         session_id: str | None = None,
-        include_archived: bool = False
+        include_archived: bool = False,
+        design_only: bool = False,
     ) -> list[dict]:
-        """Get all conversations for a user, optionally filtered by project or session"""
+        """Get all conversations for a user, optionally filtered by project or session.
+
+        `design_only` answers with the Design room's own chats: a conversation whose package is a
+        `design_tab` or a `design_session`. The Design Chat lists all of Design; the design
+        catalogues (the system cards) and every other room are not that list.
+        """
         # Try to import debug logger
         try:
             from debug_logger import debug_logger
@@ -87,7 +93,8 @@ class ConversationAPI:
                 "user_id": user_id[:8] + "..." if user_id else None,
                 "project_id": project_id,
                 "session_id": session_id,
-                "include_archived": include_archived
+                "include_archived": include_archived,
+                "design_only": design_only,
             })
         
         conn = None
@@ -107,20 +114,32 @@ class ConversationAPI:
             self.set_user_context(cursor, user_id)
 
             query = """
-                SELECT id, user_id, title, message_count, is_archived,
-                       created_at, updated_at, metadata, project_id,
-                       surface_state_json, surface_updated_at, tab
-                FROM conversations
-                WHERE (user_id = %s OR session_id IN (
+                SELECT c.id, c.user_id, c.title, c.message_count, c.is_archived,
+                       c.created_at, c.updated_at, c.metadata, c.project_id,
+                       c.surface_state_json, c.surface_updated_at, c.tab
+                FROM conversations c
+                WHERE (c.user_id = %s OR c.session_id IN (
                     SELECT session_id FROM session_permissions WHERE user_id = %s))
             """
             params = [user_id, user_id]
 
+            # THE DESIGN CHAT IS ALL OF DESIGN, NOT THE WHOLE SYSTEM (owner, 2026-11-03). The
+            # package a conversation hangs off decides: a design tab's package or a kept design
+            # session. The design catalogues are the system cards, not this list.
+            if design_only:
+                query += """
+                  AND EXISTS (
+                      SELECT 1 FROM prompt_sessions ps
+                      WHERE ps.id = c.session_id
+                        AND ps.metadata->>'session_type' IN ('design_tab', 'design_session')
+                  )
+                """
+
             if not include_archived:
-                query += " AND is_archived = FALSE"
+                query += " AND c.is_archived = FALSE"
 
             if project_id:
-                query += " AND project_id = %s"
+                query += " AND c.project_id = %s"
                 params.append(str(project_id))
             # If no project_id specified, don't filter by project_id (get all conversations)
 

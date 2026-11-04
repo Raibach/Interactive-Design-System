@@ -8,6 +8,10 @@ Two cards on the Design console. One says Carbon and one says Raibach Prompt Com
 opens the tool in that system: its own components, its own list, and its own chat. A third card would
 only exist if there were a third catalogue to draw.
 
+The structure those cards and their lists follow is in [`ARCHITECTURE.md`](../ARCHITECTURE.md): the
+application's own system (Raibach Design System) first, Carbon beneath it in the selector, and under
+each system the global console, the tabs, the components, the child elements and the functionality.
+
 ## What is measured today
 
 Two catalogues exist on disk: `prompt-composer` with 73 components and `carbon` with 58. The console
@@ -41,6 +45,12 @@ three other rows are stubs written by earlier runs of the room, and nothing draw
    the membership decision, and it can wait: the two cards already separate the work that exists.
 4. **Carbon in the repository.** Its catalogue lives only on this machine today. Proof: a fresh clone
    draws Carbon.
+5. **The selector and the tree.** The fixed default becomes a selector: Raibach Design System first,
+   Carbon beneath it; under the chosen system the tree follows the application's architecture — the
+   global console and the tabs, the components, their children and their functionality. The structure
+   is in [`ARCHITECTURE.md`](../ARCHITECTURE.md). Proof: choosing Carbon rebuilds the tree and the work
+   beside it in Carbon; choosing Raibach rebuilds them in the application's own system; the tree opens
+   from a system to its tabs, components, children and functionality.
 
 ## The note on data
 
@@ -51,11 +61,13 @@ about removing rows and naming files, not about building a system.
 ## Recommendation
 
 Do step 1 now — it is three deletes and it removes a false claim from the table. Steps 2 and 4 are
-repository hygiene. Step 3 waits for you, and nothing else waits on it.
+repository hygiene. Step 3 waits for you. Step 5 is the architecture's selector and tree; it is the
+next piece of substance.
 
 ## Still open
 
 - Which components belong to Raibach IDS, if it becomes a system of its own.
 - The name of the one catalogue, if the two ever become one.
-- The 2026-10-26 pin: the room's rule that the official catalogue is the only default and the rail
-  offers no choice. It is explained in the report beside this plan, and it is still the rule today.
+- The 2026-10-26 pin is answered (2026-11-03): the fixed default becomes a selector, with Raibach
+  Design System first and Carbon beneath it. The structure is in `ARCHITECTURE.md`; the build is
+  step 5.

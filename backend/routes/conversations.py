@@ -44,6 +44,7 @@ async def get_conversations(
     projectId: str | None = Query(None),
     session_id: str | None = Query(None),
     include_archived: bool = Query(False),
+    design_only: bool = Query(False),
     x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Get all conversations for a user, optionally for ONE package.
@@ -52,6 +53,10 @@ async def get_conversations(
     list is built from (`get_conversations_by_session`, what the console's assembly reads).
     Without it this answers for the whole USER, which is a different question: the console
     chat's count needs the package's conversations, not every conversation the user has.
+
+    `design_only` answers with the Design room's own chats: the conversations whose package is a
+    `design_tab` or a `design_session`. The Design Chat's list is all of Design and none of the
+    rest of the system; the global console and the other rooms are not design packages.
     """
     if not state.conversation_api:
         raise HTTPException(
@@ -77,6 +82,7 @@ async def get_conversations(
                 uid,
                 project_id=projectId,  # Use projectId from query param
                 include_archived=include_archived,
+                design_only=design_only,
             )
         return {"conversations": conversations}
     except ConnectionError as e:

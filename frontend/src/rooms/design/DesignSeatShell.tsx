@@ -567,16 +567,20 @@ export default function DesignSeatShell({ injected, toolsStanding, onTab }: Desi
       if (!isTools && conversationId) chatInfo.conversationId = conversationId;
       if (!isTools) {
         /*
-         * EACH TAB READS ITS OWN PACKAGE, AND THE CONSOLE READS THEM ALL (owner, 2026-11-02:
-         * *"tools will load a different set of conversations than UX. All conversations should be
-         * reachable from the design console seat."*). Before this the seat inherited the console
-         * package's id on every tab, so UX listed the console's threads.
+         * THE DESIGN CHAT IS ALL OF DESIGN; THE OTHER TABS AND THE GLOBAL CONSOLE ARE THEIR OWN.
+         *
+         * The owner, 2026-11-03: *"the chat seat for design would only be the all of the design
+         * chats so it's already pre-filtered to design chat. The console is only the global console
+         * chats. These chats are not system … they're related to the individual tabs."* The Chat
+         * tab's own package is the design console row (`design_tab | console`); its list is every
+         * design tab's chats and every kept design session's, filtered by the package's type. The
+         * whole system's conversations are not any seat's list.
          */
         const ownPackage =
           seat.tab === "ux" ? packages.ux?.packageId : packages.console?.packageId;
         if (ownPackage) chatInfo.sessionId = ownPackage;
-        (seat.chat as unknown as { conversationScope?: "package" | "all" }).conversationScope =
-          seat.tab === "chat" ? "all" : "package";
+        (seat.chat as unknown as { conversationScope?: "package" | "design" }).conversationScope =
+          seat.tab === "chat" ? "design" : "package";
       }
       for (const [key, value] of Object.entries(chatInfo)) {
         if (value === undefined || key === "collapsed") continue;

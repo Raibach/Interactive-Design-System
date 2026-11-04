@@ -292,16 +292,17 @@ export async function removeConversation(
     this._listNote = '';
     await readPackageConversations.call(this, userId);
     if (!wasTheOneOnScreen) {
-      this._listNote = 'Removed.';
+      // THE ROW'S DISAPPEARANCE IS THE CONFIRMATION (owner, 2026-11-03). No "Removed." note: the
+      // list redraws without the row, and a note under it is noise, not feedback.
       this.requestUpdate();
       return;
     }
     const live = (this._conversationRows ?? [])
       .filter((r) => !r.archived && String(r.id) !== String(id));
+    /* The next row is the next conversation, the last modified; no row is skipped. */
     const next = live.length ? String(live[0].id) : '';
     if (next) {
       this._moveSeatTo(next);
-      this._listNote = 'Removed. This chat moved to your other conversation.';
       if (this.sessionId) {
         pointPackageAt({ sessionId: this.sessionId, userId }, next).catch((err) => {
           this._listNote = `Removed, but this package still named the old chat: ${String((err as Error)?.message ?? err)}`;
@@ -310,7 +311,6 @@ export async function removeConversation(
       }
     } else {
       this._moveSeatTo('');
-      this._listNote = 'Removed. Nothing has been said here yet.';
       if (this.sessionId) {
         this._conversationWrite(
           `/api/prompt-sessions/${this.sessionId}`,

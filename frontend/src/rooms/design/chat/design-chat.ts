@@ -8,8 +8,9 @@
      the look          rooms/design/chat/design-chat.styles.ts
      this file         what only this seat says: its greetings, its words, its scroll record.
 
-   ITS LIST IS THE WHOLE PERSON'S: `conversationScope = 'all'` for the console, so a conversation
-   started in Tools is openable here. A tab's seat reads its own package. */
+   ITS LIST IS ALL OF DESIGN: the Chat tab reads the design tab packages and the kept design
+   sessions — pre-filtered to Design. The whole system's conversations are not this seat's. A tab's
+   own seat reads its package. */
 
 /**
  * <design-chat-panel> — GRACE'S SEAT, DRAWN BY THE SURFACE.
@@ -475,7 +476,7 @@ export class DesignChat extends LitElement {
    * with archived rows included. Until it is read (or if it cannot be), the bar falls back
    * to the surface's list length, which is real data too, just staler.
    */
-  private _conversationRows: Array<{ id: string; title: string; tab: string; archived: boolean; savedAt: string }> | null = null;
+  private _conversationRows: Array<{ id: string; title: string; tab: string; archived: boolean; savedAt: string; messageCount: number }> | null = null;
   /**
    * HAS THIS PACKAGE'S CONVERSATION LIST BEEN READ YET?
    *
@@ -534,6 +535,11 @@ export class DesignChat extends LitElement {
    * Looking at her clears it.
    */
   private _unread = false;
+  /**
+   * THE APPROVE RAIL'S SIGNAL (owner, 2026-11-03): a pending approval or a request in the queue
+   * pulses the Approve icon, the same pulse the chat icon carries when she has something to say.
+   */
+  private _approvalWaiting = false;
   /** The thread length and status line last SEEN, so "new" is a change and not a state. */
   private _seenTurns = -1;
   private _seenStatus: string | null = null;
@@ -635,11 +641,12 @@ export class DesignChat extends LitElement {
   /** The rail's active view. */
   declare activeTab: string;
   /**
-   * WHOSE CONVERSATIONS THIS SEAT LISTS (owner, 2026-11-02: *"All conversations should be
-   * reachable from the design console seat"*). The console reads every conversation the person
-   * has; a tab reads its own package's only. Absent reads as `package`.
+   * WHOSE CONVERSATIONS THIS SEAT LISTS (owner, 2026-11-03: *"the chat seat for design would only
+   * be the all of the design chats … it's already pre-filtered to design chat"*). `design` reads
+   * the design tab packages and the kept design sessions; `package` reads one package's. There is
+   * no whole-system scope. Absent reads as `package`.
    */
-  conversationScope: 'package' | 'all' = 'package';
+  conversationScope: 'package' | 'design' = 'package';
   /** The room owns the rail: a press is navigation for the room, never a switch inside this seat. */
   declare railOwnedByHost: boolean;
   /** True when the chat column is collapsed to its rail. */
@@ -1039,6 +1046,10 @@ export class DesignChat extends LitElement {
     this.addEventListener('chat-action-send', this._onActionSend);
     // The thumb's length depends on the region's height, so a window resize re-measures it.
     window.addEventListener('resize', this._onOutputScroll);
+    // THE APPROVALS' SIGNAL — the Approve icon pulses when the person has something waiting.
+    this.addEventListener('design-approval-count', this._onApprovalCount as EventListener);
+    window.addEventListener('design-approval-changed', this._onApprovalChanged);
+    void this._readApprovalWaiting();
   }
 
   disconnectedCallback(): void {
@@ -1049,6 +1060,8 @@ export class DesignChat extends LitElement {
     window.removeEventListener('a2ui:composer-opened', this._onComposerOpened as EventListener);
     this.removeEventListener('chat-action-send', this._onActionSend);
     window.removeEventListener('resize', this._onOutputScroll);
+    this.removeEventListener('design-approval-count', this._onApprovalCount as EventListener);
+    window.removeEventListener('design-approval-changed', this._onApprovalChanged);
     this._outputRO?.disconnect();
     this._outputRO = null;
     if (this._deleteTimer) {
@@ -2357,6 +2370,19 @@ export class DesignChat extends LitElement {
      * list is only ever assigned from a successful read, so `null` means "this seat could not find
      * out", and "I could not find out" is never a reason to create a conversation.
      */
+    const rowsKnown = Array.isArray(this._conversationRows);
+    const rows = rowsKnown ? this._conversationRows! : [];
+    const currentRow = rows.find((row) => String(row.id) === String(this.conversationId));
+    /*
+     * THE GREETING BELONGS TO A PACKAGE WITH NOTHING TO READ (owner, 2026-11-03). The Chat's list
+     * is every Design chat; an empty newest thread beside eight other chats is not a reason to
+     * introduce her again. It takes no other conversations, or one empty one; a failed list read
+     * is neither.
+     */
+    const onlyConversationIsEmpty =
+      rowsKnown &&
+      (rows.length === 0 ||
+        (rows.length === 1 && !!currentRow && (currentRow.messageCount ?? 0) === 0));
     if (!this._wantsGreeting && this.sessionId && !this.conversationId
       && Array.isArray(this._conversationRows) && this._conversationRows.length === 0) {
       this._historyChecked = true;
@@ -2471,6 +2497,7 @@ export class DesignChat extends LitElement {
      * the package is empty in both senses, which is the case this rule was written for.
      */
     const nothingToRead = kind === 'resume'
+      && onlyConversationIsEmpty
       && (!this.conversationId || !this._packageHasSomething()
           || (this.conversationId && this._historyChecked && !this._historyError
               && !(this.messages?.length)));
@@ -4259,16 +4286,64 @@ export class DesignChat extends LitElement {
     return conversation.readPackageConversations.call(this._conv(), userId);
   }
 
+  /**
+   * THE APPROVE ICON'S SIGNAL: is anything waiting for this person?
+   *
+   * The review list answers the sessions sent to them (`can_answer`); the queue answers the
+   * general requests still pending. A failed read is not a zero: the last signal stands.
+   */
+  private async _readApprovalWaiting(): Promise<void> {
+    try {
+      const headers = { 'X-User-ID': this._userId() };
+      const [reviewsRes, queueRes] = await Promise.all([
+        fetch('/api/design/reviews', { headers }),
+        fetch('/api/design/requests?decision=pending', { headers }),
+      ]);
+      const reviewsBody = await reviewsRes.json().catch(() => ({}));
+      const queueBody = await queueRes.json().catch(() => ({}));
+      const reviews = Array.isArray(reviewsBody?.reviews) ? reviewsBody.reviews : [];
+      const requests = Array.isArray(queueBody?.requests) ? queueBody.requests : [];
+      const waiting =
+        reviews.filter((row: { can_answer?: boolean }) => row?.can_answer === true).length +
+        requests.length;
+      this._setApprovalWaiting(waiting > 0);
+    } catch {
+      // A count that could not be read is not a zero; the last signal stands.
+    }
+  }
+
+  /** The Approve surface has just loaded its list; it knows the answer without a second read. */
+  private _onApprovalCount = (event: Event): void => {
+    const detail = (event as CustomEvent<{ waiting?: boolean }>).detail ?? {};
+    if (typeof detail.waiting === 'boolean') this._setApprovalWaiting(detail.waiting);
+  };
+
+  /** A request was filed or answered somewhere else in the room; read the count again. */
+  private _onApprovalChanged = (): void => {
+    void this._readApprovalWaiting();
+  };
+
+  private _setApprovalWaiting(waiting: boolean): void {
+    if (this._approvalWaiting === waiting) return;
+    this._approvalWaiting = waiting;
+    this.requestUpdate();
+  }
+
   /** The bar's own click: open or close its list. */
   private _toggleConversations = (): void => {
     this._conversationsOpen = !this._conversationsOpen;
-    /* A PRESS SETS THE CARD'S TWO SIZES, AND THE LIST STAYS INSIDE BOTH: open is the card's Default
-       — its bar and one row; closed is the bar alone. */
+    /*
+     * A PRESS OPENS A LIST THAT CAN BE READ. The bar's count is the package's rows, and this seat
+     * carries the console's whole-person read — fifty-odd rows, not one. A 68-pixel card is a
+     * window one row high: the rows were there and could not be seen, which is the defect the
+     * owner reported on 2026-11-03. The open card takes a height that shows several rows, and its
+     * body scrolls for the rest. The closed card is the bar alone.
+     */
     const host = this.renderRoot?.querySelector('[data-slot="conversations"]') as HTMLElement | null;
     const card = host?.shadowRoot?.querySelector('.shell') as HTMLElement | null;
     if (card) {
       card.style.flex = '0 0 auto';
-      card.style.height = this._conversationsOpen ? '68px' : '38px';
+      card.style.height = this._conversationsOpen ? 'min(360px, 40vh)' : '38px';
     }
     /* A NOTE BELONGS TO THE OPEN IT HAPPENED IN. Opening or closing starts a new look, so the note
        starts empty. */
@@ -4672,6 +4747,7 @@ export class DesignChat extends LitElement {
               disabled-tabs=${this.disabledTabs}
               ?collapsed=${this.collapsed}
               ?unread=${this._unread}
+              ?approval-waiting=${this._approvalWaiting}
               @tab-change=${this._onTabChange}
               @collapse-toggle=${this._onCollapseToggle}
             >
@@ -4773,6 +4849,22 @@ export class DesignChat extends LitElement {
                   @click=${this._toggleConversations}
                   @keydown=${this._onConversationsKey}
                 >
+                  <!-- THE NEW-CONVERSATION MARK, BESIDE THE BAR'S OWN (owner, 2026-11-03: *"The
+                       tools has a new chat button … that new chat button should also be on the
+                       chat conversations"*). It starts the same conversation the seat's own
+                       start path starts; the press stops at the button so the bar does not
+                       also fold the card. -->
+                  <button
+                    slot="bar-actions"
+                    class="conv-new"
+                    type="button"
+                    title="New conversation"
+                    aria-label="New conversation"
+                    @click=${(e: Event) => {
+                      e.stopPropagation();
+                      this._startNewConversation();
+                    }}
+                  >+</button>
                   <!-- THE LIST IS ALWAYS INSIDE THE CARD (owner, 2026-10-31: *"you can't hide the
                        conversations when I expand it, they have to expand with the drag"*). A press
                        on the bar and a pull on the dots both resize the card; neither takes the

@@ -2,7 +2,8 @@
 
 *Started 2026-10-31, on the owner's correction. This is the beginning of the record: it states the
 rule, the measured state of the code, and the split that must happen before the approval flow is
-built.*
+built. **Updated 2026-11-03**: Chat and Tools now own their seat and their conversation module; the
+conversations bar's measured state is below.*
 
 ---
 
@@ -86,11 +87,51 @@ A grip that is drawn but cannot be grabbed is the same defect as a control that 
 | Product | `frontend/src/rooms/product/product-chat-panel.ts` | its own |
 | Development | `frontend/src/rooms/development/development-chat-panel.ts` | its own |
 | Governance | `frontend/src/components/lit/evals-chat-panel.ts` | its own |
-| Design — Chat, Tools, UX, Executions, Settings | **one file**: `frontend/src/rooms/design/chat/design-chat.ts` (295 KB) | **five tabs, one seat** |
+| Design — Chat | `frontend/src/rooms/design/chat/design-chat.ts` and its own `chat/conversation.ts` | its own |
+| Design — Tools | `frontend/src/rooms/design/tools/tools-chat.ts` and its own `tools/conversation.ts` | its own |
+| Design — UX, Executions, Settings | the seat split continues under `plans/05-SEATS.md` | not yet |
 
-Inside Design, two tabs already inject their own view into that one seat:
-`grace-tools-chat` for Tools (`rooms/design/tools/GraceToolsChat.ts`) and `ux-chat` for UX
-(`rooms/design/ux/ux-chat.ts`). So the *content* is separate; the *seat* is not.
+Inside Design, Chat and Tools each own their seat and their conversation module; the shared frame is
+`rooms/design/frame/chat-frame.ts`. UX, Executions and Settings are the remaining adoptions in
+`plans/05-SEATS.md`.
+
+## The conversations bar (measured 2026-11-03)
+
+The bar's count and its rows are one read. The seat's `_conversationRows` is the server's list; the
+count is its length, and the list draws `_conversationRowsForList()`. The **Chat** seat's read is all
+of Design: the design tab packages and the kept design sessions, filtered by the server
+(`design_only`). Measured 2026-11-03: 8 design chats, while the table held 26 conversations for the
+whole system. The **Tools** and **UX** seats read their own packages; the global console reads its
+own chats. No seat reads the whole system.
+
+The bar opens a card. The card's height is the window; the list fills the card's body and scrolls
+there. Two failures of 2026-11-03, both in this bar: the Chat seat read the whole person's work (54
+rows, not Design's), and the open card was 68 pixels with the list capped at two rows, so expanding
+showed no readable rows. The rows were never missing. The read is now Design's; the open card is
+`min(360px, 40vh)`; the list fills the body and scrolls. The Tools seat keeps its 68-pixel card
+because its one row fits; the Chat seat's list is the long one.
+
+The bar carries the new-conversation mark (`+`), the same control the Tools bar has (owner,
+2026-11-03). A press starts the seat's conversation and stops there, so the bar does not fold the
+card. Measured: 8 rows before, 9 after, and the bar read "9 Conversations".
+
+## The conversation is contextual (owner, 2026-11-03)
+
+A card is not a chat panel with a generic assistant. Opening a card loads its last conversation and
+its last activity, and the opening is a prompt drawn from that activity — "Where would you like to
+pick up?" — not an introduction repeated on every visit. The shell and the styling components are
+placeholders; the content is injected from the database and the files that call the database's
+activity. The conversation is the surface of the card's work, not an isolated thread.
+
+The Tools flow holds the same rule: pressing Tools loads its last modified conversation, and Grace
+introduces herself only when the package has no other conversation to read — the package is empty, or
+its one conversation is empty. Deleting every conversation brings that state back, a conversation is
+created, and she introduces herself once.
+
+The Design Chat holds it across its list: its first read opens the last Design conversation **that
+holds turns** — empty conversations stay in the list and are not the default, because opening one
+draws the frame's empty state, not a conversation. Measured 2026-11-03: nine Design conversations, the
+newest empty, and the seat opened the last one with turns instead.
 
 And the shared name is still live:
 
@@ -163,6 +204,10 @@ will be alive inside the analytics column. That is the reason this document exis
 approval code does.
 
 ## The order of work
+
+**What stands, 2026-11-03.** Step 1 is built for Chat and Tools: each owns its seat and its
+conversation module. The shared frame is one file. UX, Executions and Settings are the remaining
+adoptions in `plans/05-SEATS.md`; steps 2 to 4 are unchanged.
 
 1. Split the Design seat into one file per tab, with each tab importing its own. No behaviour
    change in the split: the same drawings, the same tabs, the same conversations.

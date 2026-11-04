@@ -405,6 +405,8 @@ export class ChatNavigationBar extends LitElement {
     healthCount: { type: Number, attribute: 'health-count' },
     healthState: { type: String, attribute: 'health-state' },
     unread: { type: Boolean, attribute: 'unread' },
+    /** Something is waiting in the approvals, and the rail is the only place it shows. */
+    approvalWaiting: { type: Boolean, attribute: 'approval-waiting' },
     tabLabels: { type: String, attribute: 'tab-labels' },
     /**
      * DEACTIVATED TABS — comma-separated ids that stay on the rail but cannot be pushed
@@ -439,6 +441,15 @@ export class ChatNavigationBar extends LitElement {
    * the person looks, or does not. Nothing opens her column by itself.
    */
   declare unread: boolean;
+  /**
+   * SOMETHING IS WAITING FOR THIS PERSON IN THE APPROVALS — the same pulse on the Approve icon.
+   *
+   * The owner, 2026-11-03: *"when there is something in the approval queue that's pending approval
+   * the icon should pulse exactly like the icons on the global console page that shows the user
+   * there is a chat or a question active when the chat component is docked to the right."* The seat
+   * raises it from the review list and the pending requests; it falls when they are answered.
+   */
+  declare approvalWaiting: boolean;
   /**
    * Open catalog findings. When above zero the chat tab's ICON pulses red, so
    * the condition is visible on arrival. Set by InteractiveChatInterface from
@@ -486,6 +497,7 @@ export class ChatNavigationBar extends LitElement {
     this.disabledTabs = '';
     this.railOwnedByHost = false;
     this.unread = false;
+    this.approvalWaiting = false;
     this.healthCount = 0;
     this.healthState = 'loading';
   }
@@ -974,7 +986,16 @@ export class ChatNavigationBar extends LitElement {
 
   /** The mark navigates back to the console, like the Console header tab. */
   private _onLogoClick(): void {
-    window.dispatchEvent(new CustomEvent('navigate-console'));
+    /*
+     * THE DESIGN SEAT'S MARK RETURNS TO THE DESIGN CONSOLE (owner, 2026-11-03).
+     *
+     * *"The icon on the design seat … is supposed to take you to the console for design if you're
+     * not the global console."* `navigate-console` is the GLOBAL console's door — the top-level
+     * Console room, handled by `WritingAreaIndex`. This rail belongs to a room, and the room's own
+     * door is `design-console-open`: `DesignRoom` closes the seat and draws the console again. It
+     * is the same door the room's repeated Design press and the notification gate already use.
+     */
+    window.dispatchEvent(new CustomEvent('design-console-open'));
   }
 
   /** Is this tab on the room's `disabled-tabs` list? See the `disabledTabs` property. */
@@ -1199,7 +1220,7 @@ export class ChatNavigationBar extends LitElement {
               type="button"
               data-node-id=${tab.nodeId ?? nothing}
               ?disabled=${this._isTabDisabled(tab.id)}
-              class="nb ${tab.iconSrc || tab.maskSrc ? 'nbc' : ''} ${tab.pinned ? 'pinned' : ''} ${currentTab === tab.id ? 'na' : ''} ${this._isTabDisabled(tab.id) ? 'nd' : ''} ${tab.id === 'chat' ? this._healthClass() : ''} ${tab.id === 'chat' && this.collapsed ? 'nb-closed' : ''} ${tab.id === 'chat' && this.unread && this.collapsed ? 'nb-news' : ''}"
+              class="nb ${tab.iconSrc || tab.maskSrc ? 'nbc' : ''} ${tab.pinned ? 'pinned' : ''} ${currentTab === tab.id ? 'na' : ''} ${this._isTabDisabled(tab.id) ? 'nd' : ''} ${tab.id === 'chat' ? this._healthClass() : ''} ${tab.id === 'chat' && this.collapsed ? 'nb-closed' : ''} ${tab.id === 'chat' && this.unread && this.collapsed ? 'nb-news' : ''} ${tab.id === 'approvals' && this.approvalWaiting && this.collapsed ? 'nb-news' : ''}"
               style=${this._tabStyle(tab)}
               @click=${() => this._handleTabClick(tab.id)}
               title="${tab.tooltip}"

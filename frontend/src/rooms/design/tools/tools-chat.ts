@@ -536,7 +536,7 @@ export class ToolsChat extends LitElement {
    * with archived rows included. Until it is read (or if it cannot be), the bar falls back
    * to the surface's list length, which is real data too, just staler.
    */
-  private _conversationRows: Array<{ id: string; title: string; tab: string; archived: boolean; savedAt: string }> | null = null;
+  private _conversationRows: Array<{ id: string; title: string; tab: string; archived: boolean; savedAt: string; messageCount: number }> | null = null;
   /**
    * HAS THIS PACKAGE'S CONVERSATION LIST BEEN READ YET?
    *
@@ -1130,6 +1130,9 @@ export class ToolsChat extends LitElement {
     window.addEventListener('resize', this._onOutputScroll);
     // The table's filter is part of the state this conversation keeps.
     window.addEventListener('table-query-changed', this._onTableQuery);
+    // THE FACE QUESTION, FROM THE INGEST (plan 1.5). Only this seat listens: the room keeps other
+    // tabs' seats warm, and a general message would put the question in a thread it never touched.
+    window.addEventListener('design-face-offer', this._onFaceOffer as EventListener);
   }
 
   disconnectedCallback(): void {
@@ -1141,6 +1144,7 @@ export class ToolsChat extends LitElement {
     this.removeEventListener('chat-action-send', this._onActionSend);
     window.removeEventListener('resize', this._onOutputScroll);
     window.removeEventListener('table-query-changed', this._onTableQuery);
+    window.removeEventListener('design-face-offer', this._onFaceOffer as EventListener);
     this._outputRO?.disconnect();
     this._outputRO = null;
     if (this._deleteTimer) {
@@ -1264,6 +1268,82 @@ export class ToolsChat extends LitElement {
   }
 
   /**
+   * THE INGEST ASKED A QUESTION ABOUT A FACE (plan 1.5, 2026-11-03).
+   *
+   * The design states a family this system does not ship. The seat wrote the facts; this writes
+   * the question and the two choices into the thread — not as the person's words, and not through
+   * the model. Each family gets its own row, because its own button must name what it asks for.
+   */
+  private _onFaceOffer = (e: Event): void => {
+    const detail = ((e as CustomEvent).detail || {}) as {
+      statement?: string;
+      faces?: Array<{ family?: string; layers?: string[] }>;
+    };
+    const statement = String(detail.statement || '').trim();
+    const faces = Array.isArray(detail.faces) ? detail.faces : [];
+    let added = 0;
+    for (const face of faces) {
+      const family = String(face?.family || '').trim();
+      if (!family) continue;
+      const layers = (Array.isArray(face?.layers) ? face.layers : [])
+        .map((layer) => String(layer))
+        .filter(Boolean)
+        .slice(0, 6);
+      const where = layers.length ? ` (layers: ${layers.join(', ')})` : '';
+      this.messages = [
+        ...this.messages,
+        {
+          role: 'assistant',
+          content:
+            `${statement ? statement + ' ' : ''}"${family}"${where}: ` +
+            `[Use the system's face](action:face-use:${family}) or ` +
+            `[Ask for it to be added](action:face-request:${family}).`,
+        },
+      ];
+      added += 1;
+    }
+    if (added) this.requestUpdate();
+  };
+
+  /** FILE THE FACE IN THE APPROVAL QUEUE (plan 1.5). The queue is the record; the thread says so. */
+  private async _requestFace(family: string): Promise<void> {
+    try {
+      const res = await fetch('/api/design/requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-User-ID': this._userId() },
+        body: JSON.stringify({
+          kind: 'font',
+          subject: family,
+          reason: 'The ingest read a face this system does not ship.',
+          session_id: this.sessionId || '',
+        }),
+      });
+      const answer = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(
+          String((answer as { detail?: string } | null)?.detail || `the server answered ${res.status}`),
+        );
+      }
+      this.messages = [
+        ...this.messages,
+        { role: 'assistant', content: `Asked for "${family}" to be added. It waits in the Approve tab.` },
+      ];
+      /* THE APPROVE ICON'S SIGNAL CROSSES SEATS (owner, 2026-11-03): a request filed here is
+         waiting for a person, and the rail that shows it is another seat's. */
+      window.dispatchEvent(new CustomEvent('design-approval-changed'));
+    } catch (err) {
+      this.messages = [
+        ...this.messages,
+        {
+          role: 'assistant',
+          content: `The request could not be filed: ${err instanceof Error ? err.message : String(err)}`,
+        },
+      ];
+    }
+    this.requestUpdate();
+  }
+
+  /**
    * A chat button was pressed.
    *
    * MOST ACTIONS GO BACK AS A MESSAGE — that is what the retired seat's buttons
@@ -1327,6 +1407,26 @@ export class ToolsChat extends LitElement {
     if (action.startsWith('find-component:')) {
       const tag = action.slice('find-component:'.length).trim();
       if (tag) window.dispatchEvent(new CustomEvent('find-component', { detail: { tag } }));
+      return;
+    }
+    /*
+     * THE FACE QUESTION'S TWO CHOICES (plan 1.5). They are acts, not questions for the model:
+     * "use the system's face" settles it here, and "ask for it to be added" writes the queue row.
+     */
+    if (action.startsWith('face-use:')) {
+      const family = action.slice('face-use:'.length).trim();
+      if (family) {
+        this.messages = [
+          ...this.messages,
+          { role: 'assistant', content: `The system's face stands for "${family}".` },
+        ];
+        this.requestUpdate();
+      }
+      return;
+    }
+    if (action.startsWith('face-request:')) {
+      const family = action.slice('face-request:'.length).trim();
+      if (family) void this._requestFace(family);
       return;
     }
     const edit = parseWriteSeatAction(action);
@@ -2579,6 +2679,24 @@ export class ToolsChat extends LitElement {
      * list is only ever assigned from a successful read, so `null` means "this seat could not find
      * out", and "I could not find out" is never a reason to create a conversation.
      */
+    const rowsKnown = Array.isArray(this._conversationRows);
+    const rows = rowsKnown ? this._conversationRows! : [];
+    const currentRow = rows.find((row) => String(row.id) === String(this.conversationId));
+    /*
+     * THE GREETING BELONGS TO A PACKAGE WITH NOTHING TO READ (owner, 2026-11-03): *"that should
+     * always be the last modified conversation … so we're not gonna continuously introduce
+     * ourselves every single time. That's only if there are no other conversations … if I delete
+     * all the conversations then she introduced herself again. That's the flow."*
+     *
+     * So it takes no other conversations, or one empty one. The row's `messageCount` is the
+     * server's count, not the in-memory thread: the thread is empty for a frame while its history
+     * is in flight, and that frame is where the second greeting in one conversation came from
+     * (measured 2026-11-03: one thread held two introductions).
+     */
+    const onlyConversationIsEmpty =
+      rowsKnown &&
+      (rows.length === 0 ||
+        (rows.length === 1 && !!currentRow && (currentRow.messageCount ?? 0) === 0));
     if (!this._wantsGreeting && this.sessionId && !this.conversationId
       && Array.isArray(this._conversationRows) && this._conversationRows.length === 0) {
       this._historyChecked = true;
@@ -2596,6 +2714,7 @@ export class ToolsChat extends LitElement {
        cannot fire on top of a turn already in flight. */
     if (!this._wantsGreeting && !this._sending && this.sessionId
       && this._conversationsRead && this._historyChecked && !this._historyError
+      && onlyConversationIsEmpty
       && (this.messages?.length ?? 0) === 0 && this._local.length === 0) {
       this._takeArrival('resume');
     }
@@ -2720,6 +2839,7 @@ export class ToolsChat extends LitElement {
      * the package is empty in both senses, which is the case this rule was written for.
      */
     const nothingToRead = kind === 'resume'
+      && onlyConversationIsEmpty
       && (!this.conversationId || !this._packageHasSomething()
           || (this.conversationId && this._historyChecked && !this._historyError
               && !(this.messages?.length)));

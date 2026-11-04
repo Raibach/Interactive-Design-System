@@ -273,11 +273,11 @@ export const designChatStyles = css`
     /* The Conversations dropdown's rows, from "small-dropdown" state=open
        #40001085:2414: a column of white tiles, gap 5, radius 4, height 30,
        label #4E68D2 Semi Bold 600 / 14. */
-    /* A LONG LIST SCROLLS IN ITS OWN SMALL BOX — more than two rows, or a short window,
-       and a slim scrollbar appears inside the dropdown instead of the list stretching the
-       Conversations row down the column. Two rows are always held whole (2×30 + 5 gap =
-       65px); the viewport term only bites on a short window, where the box shrinks further
-       rather than crowding the results area below it. */
+    /* THE LIST FILLS THE CARD'S BODY AND SCROLLS THERE. The two-row cap (min(65px, 20vh)) was a
+       window two rows high, and the Chat seat carries the console's whole-person read — fifty-odd
+       rows. The owner, 2026-11-03: the count said 55 and expanding showed no rows he could read.
+       The open card's height is the window now; the list takes the body and scrolls inside it,
+       with the slim scrollbar below. */
     .conversation-list {
       margin: 0;
       padding: 0;
@@ -285,10 +285,28 @@ export const designChatStyles = css`
       display: flex;
       flex-direction: column;
       gap: 5px;
-      max-height: min(65px, 20vh);
+      flex: 1 1 auto;
+      min-height: 0;
+      max-height: none;
       overflow-y: auto;
       overscroll-behavior: contain;
     }
+    /* THE NEW-CONVERSATION CONTROL, BESIDE THE BAR'S OWN MARK (owner, 2026-11-03: the Tools bar
+       has it; the Chat bar gets it too). One square mark, the bar's own tones, and it never takes
+       the readout's width. */
+    .conv-new {
+      flex: 0 0 auto;
+      width: 22px;
+      height: 22px;
+      padding: 0;
+      border: 1px solid rgba(117, 142, 135, 0.5);
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.5);
+      color: #3D515B;
+      font: 600 16px/1 'IBM Plex Sans', system-ui, sans-serif;
+      cursor: pointer;
+    }
+    .conv-new:hover { background: #fff; }
     /* 6px, and WEBKIT-ONLY ON PURPOSE — a scrollbar-width: thin here would take precedence
        in this app's own browser and draw Chrome's 11px bar instead (measured on the Scout's
        23-row list, 2026-10-02: an 11px gutter). The rest of the app's scrollers style only

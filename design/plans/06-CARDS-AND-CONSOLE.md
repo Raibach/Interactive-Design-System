@@ -9,6 +9,10 @@ opens that session where it was left — its conversation, its screen, its work.
 be picked up by another person and continued. Everything done in it belongs to the person who did it,
 and the session shows who did what.
 
+The console is also the gallery of the activities inside Design: design-system cards, UX cards,
+individual component work, and other work as it appears. The UX tab has several jobs, and each can
+stand as a card. The structure is in [`ARCHITECTURE.md`](../ARCHITECTURE.md).
+
 ## What stands
 
 Cards are read from `prompt_sessions` and drawn by the console. A kept session reopens by its card,
@@ -53,15 +57,26 @@ That is what the next step should prove.
    opens the card, works, and their rows carry their name beside the owner's.
 6. **The readout.** Save and every other act say what happened, in one line, where the person is
    looking.
+7. **The gallery's kinds.** The console draws design-system cards, UX cards, individual component work
+   and other activity cards, and the card's row says which kind it is. The UX tab's jobs each stand
+   as a card. Proof: the console shows at least one card of each kind, pressing each opens its work,
+   and both consoles read the same card.
+8. **A card opens its last conversation and activity, and asks where to pick up.** The card's
+   session, its last conversation and its activity load; the opening is a prompt drawn from that
+   activity — "Where would you like to pick up?" — not an introduction repeated. The shell and the
+   styling components are placeholders; the content comes from the database and the files that call
+   its activity. Proof: opening the card `output-footer-area import` shows its last thread and its
+   last activity, and the question names that work.
 
 ## Recommendation
 
 Step 1 first, and alone. The database is the story you say it is, and the other five plans are waiting
 on knowing which rows exist. I would bring the database read back as a short document with a table of
-tables and the gaps, and only then decide the order of 2 to 6.
+tables and the gaps, and only then decide the order of 2 to 7.
 
 Steps 2 and 3 are the ones that make reopening exact, and they are the ones a person feels. Step 4 is
-the base the approval flow stands on. Step 5 is a decision about sharing that has no code yet.
+the base the approval flow stands on. Step 5 is a decision about sharing that has no code yet. Step 7
+is what makes the console a gallery rather than a flat list.
 
 ## Still open
 
