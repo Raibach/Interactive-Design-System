@@ -46,9 +46,8 @@ what makes it a surface rather than a transcript:
   `_dragEdgeBottom` (`rooms/design/chat/design-chat.ts:1622`, `:1671`) — so the column's edge is
   held, not jumped to.
 - **It can take the middle of the screen.** The owner's requirement is that the column expands
-  across half the screen when the thing in it needs the room. The width is draggable today; a
-  named half-screen stop is not measured in the code, so it is a requirement, not a fact.
-- **The red dots are the grab.** The panel grips are drawn as a row of small dots in a rose red —
+  across half the screen when the thing in it needs the room. The width is draggable today.
+- **The red dots are the gripper.** The panel grips are drawn as a row of small dots in a rose red —
   `rgba(147, 58, 69, 0.5)` — and they are the handle a person takes hold of. Measured:
   - four dots, `#40001119:6385`, dot size 2.16 × 2.05
     (`frontend/src/rooms/design/chat/parts/design-chat-header.ts:26`);
@@ -56,21 +55,10 @@ what makes it a surface rather than a transcript:
     (`frontend/src/rooms/design/chat/parts/design-chat-action-bar.ts:229`);
   - five dots passed to the header at `rooms/design/chat/design-chat.ts:5183`.
 - **Every dot row must grab.** Every grip that is drawn can
-  be taken hold of, and that taking hold of it moves *that panel between the slots* and expands or
+  be taken hold of *that panel between the slots* and expands or
   folds *its own* column, without touching another tab's.
 
 ## The measured state — who draws the right column, today
-
-| tab | what draws the column | shared? |
-|---|---|---|
-| Console | `frontend/src/rooms/console/console-chat-panel.ts` | its own |
-| Composer | `frontend/src/rooms/composer/composer-chat-panel.ts` | its own |
-| Product | `frontend/src/rooms/product/product-chat-panel.ts` | its own |
-| Development | `frontend/src/rooms/development/development-chat-panel.ts` | its own |
-| Governance | `frontend/src/components/lit/evals-chat-panel.ts` | its own |
-| Design — Chat | `frontend/src/rooms/design/chat/design-chat.ts` and its own `chat/conversation.ts` | its own |
-| Design — Tools | `frontend/src/rooms/design/tools/tools-chat.ts` and its own `tools/conversation.ts` | its own |
-| Design — UX, Executions, Settings | the seat split continues under `plans/05-SEATS.md` | not yet |
 
 Inside Design, Chat and Tools each own their seat and their conversation module; the shared frame is
 `rooms/design/frame/chat-frame.ts`. UX, Executions and Settings are the remaining adoptions in
