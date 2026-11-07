@@ -29,10 +29,6 @@ This project follows the **React Shell + AI Surface** pattern — the emerging i
 
 The user opens a tab and finds the work they left there, not a chat box waiting for a general question. The conversation opens the last conversation the tab lists, shows the last activity, and asks where the user would like to pick up. It does not introduce itself on every visit, and it does not offer a general chat that could belong to any tab.
 
-The design has four parts: the tab's own conversation and its list; the frame every tab shares, whose view slot holds whatever the tab puts there; the conversations bar, which carries the count, the last saved time and the new and remove controls; and the console in the left column, with the design-system selector, the application's tree and the activity cards.
-
-The conversation manages that surface. The user's selection in the left column is its context; a card opens its last conversation and last activity, and the question it asks comes from that work. Each tab owns its conversation, and no tab reads the whole system's chats. The conversation does not sit apart as a general assistant; it carries the work in the surface forward. The column that carries the conversation is a surface too, not a chat transcript: it can serve text, an image, instructions, or an interface with cards and buttons. The user sees a chat's face because the user already knows how to read it and how to type into it; underneath, it is the output surface of the tab's work, and the tab decides what the column is for.
-
 The rule is in [`design/ONE-CHAT-PER-TAB.md`](design/ONE-CHAT-PER-TAB.md), the console's structure in [`design/ARCHITECTURE.md`](design/ARCHITECTURE.md), and the open work in [`design/plans/05-SEATS.md`](design/plans/05-SEATS.md) and [`design/plans/06-CARDS-AND-CONSOLE.md`](design/plans/06-CARDS-AND-CONSOLE.md). The Approve tab follows the same rule: the surface in the column is the review, not a separate dashboard. The detailed state is in those documents.
 
 GOVERNANCE
