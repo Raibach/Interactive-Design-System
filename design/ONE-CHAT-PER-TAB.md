@@ -14,8 +14,6 @@ conversations bar's measured state is below.*
 > serve an image. It can serve instructions. It can serve an interface."*
 > — owner, 2026-10-31
 
-> *"It still looks like a chat interface, but it is not."*
-
 That sentence is the whole document. The column on the right wears a chat's face because a person
 already knows how to read it and how to type into it. What it *is*, underneath, is a place where
 the system puts something for a person to look at: a paragraph, a picture, a set of instructions,
