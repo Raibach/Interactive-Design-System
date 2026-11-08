@@ -5578,6 +5578,27 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
                 "and the node can be re-ingested once the renderer can place it."
             ),
         )
+    # ── THE COMPONENT'S OWN SIZE, BEFORE THE PREVIEW ──────────────────────────────────────────
+    # The measured-spec gate above cannot see how many characters the renderer will produce. This
+    # design's measured spec passed the 200,000-character check, and the component it draws is
+    # 446,820 characters. The component is the work the limit is about, so it is measured here,
+    # before the fidelity pass, the child patterns, the preview and the response. The refusal is
+    # the chat's message: the preview is not opened, the third column has nothing to draw, and no
+    # 5.8 MB answer is sent.
+    rendered_chars = len(rendered)
+    if rendered_chars > INGEST_MAX_SPEC_CHARS:
+        rendered_tokens = rendered_chars // 4
+        detail = (
+            "We could not bring this in for a preview or analysis because it is too large.\n"
+            f"The component this design produces is {rendered_chars:,} characters "
+            f"(about {rendered_tokens:,} tokens), over the limit of "
+            f"{INGEST_MAX_SPEC_CHARS:,} characters "
+            f"(about {INGEST_MAX_SPEC_CHARS // 4:,} tokens).\n"
+            "Nothing was drawn, nothing was written, and the preview was not opened. "
+            "Ingest a smaller node (a frame rather than a page), or raise the limit deliberately."
+        )
+        _step(job_id, "The component is too large for a preview; the run is refused.")
+        raise HTTPException(status_code=413, detail=detail)
     # ── THE DRAWING IS SHOWN EVEN WHEN ITS TYPED BLOCK OR BROWSER MODULE DOES NOT PASS ─────
     # The compile verdict travels with the result, the preview and the chat; the component still
     # stands so the designer can see what was built and what failed. The earlier rule removed the
