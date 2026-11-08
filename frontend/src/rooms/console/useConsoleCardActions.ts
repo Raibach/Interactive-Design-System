@@ -42,7 +42,19 @@ export function useConsoleCardActions({ assembledConsoleCards, setConsoleTree }:
       const elementKey = String((openedCard as any)?.element_key || '');
       window.dispatchEvent(new CustomEvent('navigate-tab', { detail: { tabId: 'design' } }));
       window.requestAnimationFrame(() => {
-        window.dispatchEvent(new CustomEvent('design-tools-open', { detail: { openTag: elementKey } }));
+        /*
+         * THE DESIGN CARD OPENS ITS OWN RECORD. A design system's card carries `system:<name>`
+         * and opens the tool in that system; a kept session's card carries no element key and
+         * opens by its session id; an element card, if one ever stands here, opens the element.
+         * Passing an empty openTag for a session is what made the click a new session instead
+         * of the card's own.
+         */
+        const detail = elementKey.startsWith('system:')
+          ? { openSystem: elementKey.slice('system:'.length) }
+          : elementKey
+            ? { openTag: elementKey }
+            : { openSession: sessionId };
+        window.dispatchEvent(new CustomEvent('design-tools-open', { detail }));
       });
       return;
     }

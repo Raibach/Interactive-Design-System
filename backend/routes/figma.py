@@ -1,6 +1,7 @@
 """Auto-extracted route module from main.py — zero behavior change."""
 import asyncio
 import base64
+import contextvars
 import hashlib
 import html
 import json
@@ -11,6 +12,8 @@ import shutil
 import socket
 import subprocess
 import time
+import traceback
+import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta
 from typing import Any
@@ -30,19 +33,22 @@ from pydantic import BaseModel
 from deps import (
     a2ui_catalog,
 )
-from design_renderer import SHAPE_TYPES, accepted_unrendered, render_spec
+from card_lifecycle import card_state_of, is_card_locked, locked_state_message
+from design_renderer import SHAPE_TYPES, accepted_unrendered, render_module, render_spec
 from design_renderer import unrendered_keys as unrendered_spec_keys
+from design_parameters import ParameterTypeError, typecheck_module
 
 # THE PROOF, AND THE GATE BUILT ON IT. `figma_fidelity` reads this module's own measurement
 # (`_figma_spec_for_model`) and its renderer, so it is imported here rather than beside them —
 # and it imports THIS module only inside functions, which is what keeps the two from cycling.
-from figma_fidelity import fidelity_gate, fidelity_report
+from figma_fidelity import fidelity_gate, fidelity_report, key_coverage
 import figma_facts
 import figma_twopass
 from figma_service import (
     get_cached_spec,
     get_component,
     get_component_descriptions,
+    get_component_names,
     get_dev_resources,
     get_file,
     get_file_versions,
@@ -601,6 +607,7 @@ async def api_figma_spec(file_key: str, node_id: str, refresh: bool = Query(Fals
     allow_stale_fallback it also serves a stale cache row when a live pull
     fails, so an authoring read survives a Figma outage.
     """
+    _IMAGE_FILE_KEY.set(file_key)
     spec, err, source = get_cached_spec(
         file_key, node_id, refresh=refresh, allow_stale_fallback=True,
     )
@@ -763,7 +770,7 @@ INGEST_CATALOG_PIPELINE = os.getenv("FIGMA_INGEST_CATALOG", "prompt-composer")
 # I want the system to stop them and send a message telling them that's too large." These are
 # the stop. They bound the prompt (and therefore the spend) rather than the reply, because a
 # reply that is cut off is money already spent on an answer that cannot be used.
-INGEST_MAX_SPEC_CHARS = int(os.getenv("FIGMA_INGEST_MAX_SPEC_CHARS", "40000"))
+INGEST_MAX_SPEC_CHARS = int(os.getenv("FIGMA_INGEST_MAX_SPEC_CHARS", "200000"))
 INGEST_MAX_NODES = int(os.getenv("FIGMA_INGEST_MAX_NODES", "400"))
 
 # Generated sources that have NOT been committed. Ingesting returns drafts; nothing
@@ -921,6 +928,20 @@ def _drop_preview(job_id: str) -> None:
     ingest_preview_abandoned.pop(job_id, None)
     figma_facts.forget(job_id)
     _drop_preview_files(job_id)
+
+
+def _forget_attempt(job_id: str) -> None:
+    """Clear one failed attempt's preview, and leave the job's status where it is.
+
+    A failed attempt leaves nothing behind: its module is not the preview, and its measurement is
+    not the baseline the next read compares against. The job keeps its step list so the attempts
+    stay readable while the next one runs.
+    """
+    ingest_drafts.pop(job_id, None)
+    ingest_draft_validation.pop(job_id, None)
+    ingest_job_meta.pop(job_id, None)
+    ingest_preview_abandoned.pop(job_id, None)
+    figma_facts.forget(job_id)
 
 
 # ── WHERE A PREVIEW LIVES: A TEMPORARY FILE IN ITS OWN FOLDER ────────────────
@@ -1119,10 +1140,9 @@ def _remember_drafts(
     if meta is not None:
         ingest_job_meta[job_id] = meta
     _keep_preview(job_id)
-    # AND THE PREVIEW GETS ITS FILE. Written here, at the one moment a preview comes into being,
-    # and written where `_drop_preview` will find it to delete. A new ingest empties the folder
-    # first, so the file on disk is always the one thing being looked at.
-    _write_preview_files(job_id, drafts)
+    # THE PREVIEW STAYS IN MEMORY. It is not written to a folder: the module travels in the answer,
+    # the screen builds a blob from it, and nothing survives a failed run or an unaccepted preview.
+    # The permanent copy is made by the promotion gate when the designer saves or approves.
 
 
 def _find_array_close(text: str, start: int) -> int:
@@ -1555,6 +1575,22 @@ def _register_element_row(tag: str, meta: dict, actor: str) -> str:
         # three identifiers travel with it: file key, node id, label.
         with api.get_db() as conn:
             cur = conn.cursor()
+            # THE RECORD'S OWN DATE IS THE RE-APPROVAL'S FACT. `get_or_create_design_container`
+            # leaves an existing row untouched, so a component approved again kept its first
+            # date and stayed where it was in every list. Every list is read last modified first;
+            # this is the write that makes that true for the catalogue's own rows.
+            cur.execute(
+                """UPDATE prompt_sessions
+                      SET title = %s, description = %s,
+                          updated_at = NOW(), last_accessed_at = NOW()
+                    WHERE id = %s AND user_id = %s""",
+                (
+                    label,
+                    f"Figma component {label} ({node_id}) approved from the Design room.",
+                    row["id"],
+                    user_id,
+                ),
+            )
             cur.execute(
                 """INSERT INTO design_element_activity (element_id, user_id, actor, action, detail)
                    VALUES (%s, NULL, 'figma-ingest', 'element-registered', %s::jsonb)""",
@@ -1733,6 +1769,86 @@ def _validate_generated_module(code: str) -> dict[str, Any]:
     if proc.returncode != 0:
         return {"ok": False, "error": (proc.stderr or proc.stdout or "esbuild failed").strip()[:600]}
     return {"ok": True}
+
+
+def _validate_typed_module(code: str) -> dict[str, Any]:
+    """Compile AND type-check one generated module.
+
+    esbuild answers whether the file parses; the TypeScript compiler answers whether every
+    declared parameter and every use of it is exact. Both must pass. A missing compiler is a
+    failure, not a skipped check: a component that was not type-checked must not be shown.
+    """
+    compiled = _validate_generated_module(code)
+    if not compiled.get("ok"):
+        return compiled
+    try:
+        report = typecheck_module(code)
+    except RuntimeError as error:
+        return {"ok": False, "error": str(error)}
+    if report.get("ok"):
+        return {"ok": True, "diagnostics": []}
+    diagnostics = report.get("diagnostics") or []
+    lines = [
+        f"line {d.get('line')}:{d.get('column')} TS{d.get('code')} {d.get('message')}"
+        for d in diagnostics[:12]
+    ]
+    return {
+        "ok": False,
+        "error": "TypeScript refused the module: " + "; ".join(lines),
+        "diagnostics": diagnostics,
+    }
+
+
+def _transpile_module(code: str) -> dict[str, Any]:
+    """The generated module as JavaScript, for the browser's blob import.
+
+    The generated source is TypeScript: `export interface DesignParameters` and the type
+    annotations are the record of every value. A browser cannot parse them, so the preview loads
+    this compiled form. The TypeScript source travels beside it for the record and the promotion.
+    """
+    esbuild = _esbuild_binary()
+    if esbuild is None:
+        return {
+            "ok": False,
+            "error": "no esbuild binary was found, so the module cannot be compiled for the browser",
+        }
+    try:
+        proc = subprocess.run(
+            [esbuild, "--loader=ts", "--format=esm", "--target=es2020"],
+            input=code,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except Exception as e:
+        return {"ok": False, "error": f"esbuild could not run ({e})"}
+    if proc.returncode != 0:
+        return {"ok": False, "error": (proc.stderr or proc.stdout or "esbuild failed").strip()[:600]}
+    # THE SEAM IS INERT IN A PREVIEW, AND IT IS INLINED HERE. The source imports the hand-written
+    # behaviour loader; a preview binds nothing and dispatches nothing, and a blob module has no
+    # directory to resolve a relative import against. The compiled form therefore carries the three
+    # no-op exports itself. The TypeScript source keeps the real import for the record and the
+    # promotion; only the browsable form is made self-contained.
+    script = proc.stdout
+    inlined = re.sub(
+        r"^import\s*\{\s*attachBehaviour,\s*detachBehaviour,\s*behaviourProperties\s*\}\s*"
+        r"from\s*['\"]\./behaviour/attach['\"];?\s*$",
+        "const attachBehaviour = () => {};\n"
+        "const detachBehaviour = () => {};\n"
+        "const behaviourProperties = () => ({});",
+        script,
+        count=1,
+        flags=re.MULTILINE,
+    )
+    if inlined == script:
+        return {
+            "ok": False,
+            "error": (
+                "the compiled module has no seam import, so its inert preview form cannot be "
+                "built. Nothing is shown."
+            ),
+        }
+    return {"ok": True, "script": inlined}
 
 
 # A preview job id is a UUID written by the ingest; a preview file name is a tag or the seam.
@@ -2186,6 +2302,33 @@ def _log_ingest(record: dict[str, Any], to_db: bool = True) -> None:
     # activity panel filled with identical approvals. BEFORE APPROVAL THERE IS NO ROW.
     if to_db:
         _activity_insert(stamped)
+
+
+# TERMINAL OUTCOMES ARE LOGGED ONCE, WHERE THEY ARE DECIDED. A refusal raised deep in the job is
+# recorded against the session there; the endpoint's own handler sees the same exception and must
+# not add a second row for the same job.
+_INGEST_TERMINAL_LOGGED: set[str] = set()
+
+
+def _log_terminal_ingest(job_id: str, record: dict[str, Any]) -> None:
+    """Record a failed or refused run against its session, in the file and the database.
+
+    The failure is evidence, not a preview: it changes nothing in the catalogue, and it must
+    survive the page that made it. The session id is the Tools tab's own row — the row a Save
+    relabels into the card — so the record can be found again from the card's activity.
+    """
+    key = str(job_id or "") or (
+        f"{record.get('kind')}:{record.get('nodeId')}:{str(record.get('error') or '')[:80]}"
+    )
+    if key in _INGEST_TERMINAL_LOGGED:
+        return
+    _INGEST_TERMINAL_LOGGED.add(key)
+    # The set is a guard for the jobs of this process, not a history. A thousand terminal runs
+    # is more than the in-memory job table keeps, and clearing only risks a duplicate row for a
+    # job that has already left the table.
+    if len(_INGEST_TERMINAL_LOGGED) > 1000:
+        _INGEST_TERMINAL_LOGGED.clear()
+    _log_ingest(record, to_db=True)
 
 
 _ASSET_URI_RE = re.compile(r"data:image/(?:svg\+xml|png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\s]{40,}", re.IGNORECASE)
@@ -2896,8 +3039,71 @@ def _figma_gradient(fill: dict[str, Any]) -> str | None:
     return None
 
 
-def _figma_paint(fill: dict[str, Any]) -> str | None:
-    """Any Figma paint as CSS the browser can actually read: a flat colour, or a gradient.
+# ── AN IMAGE FILL IS A DRAWING, NOT A COLOUR ─────────────────────────────────────────────────
+# Figma states an image as `{type: "IMAGE", imageRef: …}`. There is no colour to write, so the
+# spec used to drop it and the proof refused the whole design with "stated and never reached the
+# spec" — the logo was stated, the drawing had nothing, and the instrument was right about the
+# gap. The asset is part of the design, so it is read and carried: Figma renders the node itself,
+# and the bytes travel in the spec as a data URI the renderer writes as the background.
+#
+# WHICH FILE AND WHICH NODE. The spec builder is synchronous and is called from the request's own
+# task, so the file key travels in a ContextVar — not a module global, which two concurrent
+# ingests would overwrite. The cache is keyed by both, because an imageRef is stable but a node's
+# render is per file; a repeat measure of the same design pays nothing.
+_IMAGE_FILE_KEY: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "figma_image_file_key", default=""
+)
+_IMAGE_FILLS: dict[tuple[str, str], str | None] = {}
+# THE RENDER BOUNDARY'S OWN WORDS. An image render that fails is not turned into a generic
+# "not drawn": the exception, its type and its stack trace are kept here and carried into the
+# spec as `imageError`, so the fidelity row and the diagnostic show what the boundary raised.
+_IMAGE_FILL_ERRORS: dict[tuple[str, str], str] = {}
+
+
+def _rendered_image_fill(node_id: str | None) -> str | None:
+    """An IMAGE fill, rendered by Figma and carried as a data URI the browser can draw.
+
+    A render that fails is reported and returns None: the fact then stays a named gap, exactly as
+    a colour the engine cannot write does. Nothing is invented and no placeholder stands in for
+    the design's own asset.
+    """
+    file_key = _IMAGE_FILE_KEY.get()
+    if not file_key or not node_id:
+        return None
+    cache_key = (file_key, str(node_id))
+    if cache_key in _IMAGE_FILLS:
+        return _IMAGE_FILLS[cache_key]
+    token = os.getenv("FIGMA_TOKEN")
+    value: str | None = None
+    if token:
+        try:
+            url = (
+                f"https://api.figma.com/v1/images/{file_key}"
+                f"?ids={urllib.parse.quote(str(node_id))}&format=png&scale=1"
+            )
+            request = urllib.request.Request(url, headers={"X-Figma-Token": token})
+            with urllib.request.urlopen(request, timeout=30) as answer:
+                rendered = json.loads(answer.read().decode("utf-8"))
+            address = (rendered.get("images") or {}).get(str(node_id))
+            if rendered.get("err") or not address:
+                raise ValueError(rendered.get("err") or "Figma returned no image address")
+            with urllib.request.urlopen(address, timeout=30) as image:
+                body = image.read()
+            value = "url('data:image/png;base64," + base64.b64encode(body).decode("ascii") + "')"
+        except Exception as error:  # noqa: BLE001 — the gap is named with the boundary's own words
+            _IMAGE_FILL_ERRORS[cache_key] = (
+                f"{type(error).__name__}: {error}\n\n{traceback.format_exc()}"
+            )
+            print(
+                f"[figma-image] node {node_id} could not be rendered: "
+                f"{type(error).__name__}: {error}\n{traceback.format_exc()}"
+            )
+    _IMAGE_FILLS[cache_key] = value
+    return value
+
+
+def _figma_paint(fill: dict[str, Any], node_id: str | None = None) -> str | None:
+    """Any Figma paint as CSS the browser can actually read: a colour, a gradient, or an image.
 
     NOTHING IS APPENDED AS PROSE. A suffix such as `(gradient, 2 stops)` or `(fill opacity 0.5)`
     makes the whole declaration invalid, so the browser drops the paint and the layer draws with
@@ -2912,7 +3118,8 @@ def _figma_paint(fill: dict[str, Any]) -> str | None:
         return _figma_color(fill, fill.get("opacity"))
     if kind.startswith("GRADIENT"):
         return _figma_gradient(fill)
-    # An IMAGE fill's asset arrives over the other channel; there is no CSS colour to write for it.
+    if kind == "IMAGE":
+        return _rendered_image_fill(node_id)
     return None
 
 
@@ -2999,6 +3206,10 @@ _RENDER_FIELDS = {
     "styleOverrideTable": "runs",
     "effects": "effects",
     "fills": "fill",
+    # the three facts that now have a named spec field
+    "arcData": "arcData",
+    "componentProperties": "componentProperties",
+    "maxWidth": "maxWidth",
 }
 
 
@@ -3137,6 +3348,9 @@ _CONSUMED_KEYS = {
     # artwork — `fillGeometry`/`strokeGeometry` become `paths` and the fitted `svg`, and
     # `relativeTransform` is the matrix `_svg_for_vector` composes to place that artwork
     "fillGeometry", "strokeGeometry", "relativeTransform",
+    # the three facts with a drawing mapping: the arc geometry, the variant properties, and the
+    # maximum width. They are carried as named spec fields, not as `stated`.
+    "arcData", "componentProperties", "maxWidth",
     # the MCP channel's own additions
     "mcp_reference_code", "mcp_description",
 }
@@ -3148,6 +3362,10 @@ _NOT_A_FACT_KEYS = {
     "layoutVersion", "pluginData", "sharedPluginData", "devStatus", "exportSettings",
     "measurements", "componentPropertyDefinitions", "componentPropertyReferences",
     "isMask", "maskType", "stickConstraints", "scrollBehaviorVersion", "explicitVariableModes",
+    # THE NAME THE FILE'S COMPONENT LIST GIVES THE INSTANCE'S COMPONENT. It is a fact the file
+    # states, but it is not a key on the node; the ingest attaches it so the variant check can
+    # compare the instance's stated property to the component's own name.
+    "component_name",
 }
 
 
@@ -3208,7 +3426,10 @@ def _figma_spec_for_model(node: dict[str, Any], depth: int | None = None) -> dic
     if layout:
         spec["layout"] = layout
 
-    fill = next((_figma_paint(f) for f in node.get("fills", []) if f.get("visible", True)), None)
+    fill = next(
+        (_figma_paint(f, node.get("id")) for f in node.get("fills", []) if f.get("visible", True)),
+        None,
+    )
     if fill:
         spec["fill"] = fill
     # THE PAINT'S OWN OPACITY IS PART OF THE COLOUR. Figma carries a stroke's transparency on the
@@ -3218,6 +3439,23 @@ def _figma_spec_for_model(node: dict[str, Any], depth: int | None = None) -> dic
     stroke = next((_figma_color(s, s.get("opacity")) for s in node.get("strokes", []) if s.get("visible", True) and s.get("type") == "SOLID"), None)
     if stroke:
         spec["stroke"] = {"color": stroke, "weight": node.get("strokeWeight")}
+    # ── THE THREE FACTS THAT NOW HAVE A DRAWING MAPPING ────────────────────────────────────────
+    # `arcData` is the ellipse's stated angles and inner radius; the renderer draws Figma's own
+    # geometry and the check verifies the full ellipse against these values. `maxWidth` is a CSS
+    # declaration. `componentProperties` is the variant the instance selected; its measured
+    # children are the resolved variant, and `componentName` (from the file's component list) is
+    # the name the check compares the value to.
+    if node.get("arcData"):
+        arc = node["arcData"]
+        spec["arcData"] = {
+            key: arc.get(key)
+            for key in ("startingAngle", "endingAngle", "innerRadius")
+            if arc.get(key) is not None
+        }
+    if node.get("componentProperties"):
+        spec["componentProperties"] = node["componentProperties"]
+    if node.get("maxWidth") is not None:
+        spec["maxWidth"] = float(node["maxWidth"])
     # A DRAWN SHAPE'S OUTLINE IS ITS PATH, and nothing else in this spec is the shape. It comes from
     # Figma's own `fillGeometry`/`strokeGeometry`, asked for with `geometry=paths` (see
     # _fetch_figma_nodes). Without it the model has a box and a fill and must invent the rest — which
@@ -3313,10 +3551,29 @@ def _figma_spec_for_model(node: dict[str, Any], depth: int | None = None) -> dic
     if node.get("rotation") is not None and abs(float(node["rotation"])) > 0.001:
         spec["rotation"] = round(float(node["rotation"]), 3)
     # EVERY VISIBLE PAINT, not only the first: Figma stacks fills and the order is the drawing.
-    fills = [_figma_paint(f) for f in node.get("fills", []) if f.get("visible", True)]
+    fills = [
+        _figma_paint(f, node.get("id")) for f in node.get("fills", []) if f.get("visible", True)
+    ]
     fills = [f for f in fills if f]
     if len(fills) > 1:
         spec["fills"] = fills
+    # THE IMAGE'S RENDER FAILURE IS A FACT, NOT AN EMPTY FILL. The image paint exists and produced
+    # no value; the boundary's exact exception and stack travel on the spec so the fidelity row
+    # and the diagnostic name them instead of saying only "a paint not drawn."
+    _image_paint = next(
+        (
+            f
+            for f in node.get("fills", [])
+            if f.get("visible", True) and str(f.get("type") or "").upper() == "IMAGE"
+        ),
+        None,
+    )
+    if _image_paint:
+        _image_error = _IMAGE_FILL_ERRORS.get(
+            (_IMAGE_FILE_KEY.get(), str(node.get("id")))
+        )
+        if _image_error:
+            spec["imageError"] = _image_error
     # STROKE, WITH THE PARTS THAT DECIDE WHERE IT LANDS. `strokeAlign` is the difference between a
     # border inside the box and one drawn outside it, and `individualStrokeWeights` is a stroke
     # that is not the same on all four sides.
@@ -3570,37 +3827,16 @@ def _node_by_id(root: dict[str, Any], node_id: Any) -> dict[str, Any] | None:
 def _component_set(target_node: dict[str, Any]) -> list[dict[str, Any]]:
     """EVERY CHILD THAT STANDS AS A PATTERN — named, with the occurrence it was measured in.
 
-    THE NAME DECIDES IDENTITY. `existing` is the catalogue component with this exact layer name, if
-    one exists: when it is set, this child IS that component and the approval replaces it. When it
-    is null, the child is a new pattern and gets the tag derived from its own node.
+    THE NAME IS THE IDENTITY, AND THE CATALOGUE IS NOT READ HERE. A child's tag is derived from its
+    own node; whether that name already exists in the catalogue, and therefore whether an approval
+    replaces something, is the approval's question and is answered there. The preview is blind to
+    what exists.
 
     THE OCCURRENCE IS KEPT BESIDE IT: the path of the parent it was found under, and its own
     annotations from that place. An annotation describes how a child behaves inside its parent; the
     same button in another parent can behave differently, and its words are recorded there.
     """
     out: list[dict[str, Any]] = []
-    # THE DESIGN SYSTEM'S OWN COMPONENTS, READ ONCE. An INSTANCE of one of these is the design
-    # reusing its design system — `_name_instances` states it and nothing is written for it. It is
-    # not a pattern, and listing it as one (with a tag nothing can write) put four phantom entries
-    # in the approval list for one true fact, measured 2026-10-26 on `System_Role`.
-    system_index = _name_index()
-    shipped_ids = {
-        str(entry.get("figmaNodeId") or "")
-        for entry in system_index.values()
-        if entry.get("figmaNodeId")
-    }
-
-    def is_shipped_instance(node: dict[str, Any]) -> bool:
-        """AN INSTANCE WHOSE COMPONENT IS ONE THIS SYSTEM SHIPS — the design using itself.
-
-        The test is the component reference, not the occurrence: an instance's own node id is the
-        place it is drawn, while `componentId` names the thing it is. A shipped component drawn here
-        is `_name_instances` — stated, and nothing written — never a pattern.
-        """
-        component = str(node.get("componentId") or "")
-        if not component:
-            return False
-        return any(node_ids_match(shipped, component) for shipped in shipped_ids)
 
     def annotations_of(node: dict[str, Any]) -> list[dict[str, Any]]:
         found: list[dict[str, Any]] = []
@@ -3623,13 +3859,10 @@ def _component_set(target_node: dict[str, Any]) -> list[dict[str, Any]]:
         here = f"{path} / {name}" if path else name
         kind = str(node.get("type") or "").upper()
         if path and kind in _PATTERN_TYPES:
-            if kind == "INSTANCE" and is_shipped_instance(node):
-                # Its children belong to the component the system ships, not to this design.
-                return
-            existing = _existing_by_layer_name(name)
             out.append({
-                # THE TAG: the existing pattern's tag when the name matches, otherwise this node's.
-                "tag": (existing or {}).get("tag") or f"-".join(["f", str(node.get("id") or "").replace(":", "-")]),
+                # THE TAG IS DERIVED FROM THE NODE, NEVER FROM THE CATALOGUE. The preview is blind
+                # to what exists; whether this pattern replaces one is the approval's question.
+                "tag": f"-".join(["f", str(node.get("id") or "").replace(":", "-")]),
                 "name": name,
                 "path": here,
                 "nodeId": node.get("id"),
@@ -3640,8 +3873,8 @@ def _component_set(target_node: dict[str, Any]) -> list[dict[str, Any]]:
                 "parent": path or None,
                 # A CHILD THAT IS AN INSTANCE STATES ITS COMPONENT; a frame is its own pattern.
                 "componentId": node.get("componentId"),
-                "existing": existing,
-                "replaces": bool(existing),
+                "existing": None,
+                "replaces": False,
                 "annotations": annotations_of(node),
             })
         # THE INTERNALS OF AN INSTANCE ARE THAT COMPONENT'S OWN DRAWING, NOT THIS DESIGN'S PATTERNS.
@@ -4296,7 +4529,10 @@ def _svg_for_vector(node: dict[str, Any], root: dict[str, Any] | None = None) ->
         box = (measured.get("x", 0), measured.get("y", 0), width, height)
     if width <= 0 or height <= 0:
         return None
-    fill = next((_figma_paint(f) for f in node.get("fills", []) if f.get("visible", True)), None)
+    fill = next(
+        (_figma_paint(f, node.get("id")) for f in node.get("fills", []) if f.get("visible", True)),
+        None,
+    )
     stroke = next(
         (_figma_color(s, s.get("opacity")) for s in node.get("strokes", []) if s.get("visible", True) and s.get("type") == "SOLID"),
         None,
@@ -4430,15 +4666,23 @@ def _svg_for_vector(node: dict[str, Any], root: dict[str, Any] | None = None) ->
         f'<svg width="{width}" height="{height}" viewBox="{round(drawn[0], 4)} {round(drawn[1], 4)} '
         f'{round(drawn[2], 4)} {round(drawn[3], 4)}" fill="none" xmlns="http://www.w3.org/2000/svg">'
     ]
+    # A STROKE-ONLY VECTOR IS DRAWN FROM ITS STROKE GEOMETRY. `strokeGeometry` is the outline the
+    # stroke occupies, generated by Figma with the design's alignment already applied. Filling that
+    # path draws the stroke exactly; stroking it again would draw a second, centred stroke on top of
+    # the first and put the colour on the wrong side of the edge.
+    stroke_geometry = not node.get("fillGeometry") and bool(node.get("strokeGeometry"))
     for out in paths_out:
         attrs = [f'd="{out}"']
-        if fill:
-            attrs.append(f'fill="{fill}"')
+        if stroke_geometry and stroke:
+            attrs.append(f'fill="{stroke}"')
         else:
-            attrs.append('fill="none"')
-        if stroke:
-            attrs.append(f'stroke="{stroke}"')
-            attrs.append(f'stroke-width="{round(float(node.get("strokeWeight") or 1), 4)}"')
+            if fill:
+                attrs.append(f'fill="{fill}"')
+            else:
+                attrs.append('fill="none"')
+            if stroke:
+                attrs.append(f'stroke="{stroke}"')
+                attrs.append(f'stroke-width="{round(float(node.get("strokeWeight") or 1), 4)}"')
         if winding and winding != "NONZERO":
             attrs.append(f'fill-rule="{winding.lower()}"')
         parts.append(f'<path {" ".join(attrs)}/>')
@@ -4951,13 +5195,8 @@ def _compliance_warnings(node: dict[str, Any], spec: dict[str, Any], code: str, 
             "and the element draws none of them."
         )
 
-    mapped = _figma_map_lookup(node.get("id", ""))
-    if mapped and mapped.get("litComponent") != tag:
-        warnings.append(
-            f"This Figma node is already mapped to <{mapped.get('litComponent')}> in the Figma map "
-            f"({mapped.get('figmaName')}). The design system says compose that element rather than ship a "
-            "second one — check the map before approving, and reuse the mapped element if it is the same design."
-        )
+    # THE FIGMA MAP IS NOT READ HERE. The preview compares nothing to the catalogue; the approval is
+    # where a layer is checked against an existing component.
     return warnings
 
 
@@ -4977,6 +5216,9 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
     esbuild checks are synchronous, so they run in threads — a paste must not stall the
     event loop that is also serving the previews of the other drafts.
     """
+    # THE IMAGE FILLS ARE RENDERED FROM THIS FILE, and the spec builder runs in threads. The key
+    # travels in the task's context so two ingests cannot read each other's assets.
+    _IMAGE_FILE_KEY.set(file_key)
     # Initialize job status
     job = ingest_jobs.get(job_id)
     _step(job_id, f"Reading node {node_id} from Figma…")
@@ -5036,6 +5278,21 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
         raise Exception(f"Target node {node_id} not found in Figma response")
     
     target_node = target_node_data["document"]
+
+    # ── THE COMPONENT'S OWN NAME, FOR THE VARIANT CHECK ────────────────────────────────────────
+    # An instance states which variant it selects in `componentProperties`. The file's component
+    # list states the component's name (`state=closed`, `state=Send`, …). The check compares the
+    # two; a missing name is "not measured" and refuses, never a match.
+    component_names = await asyncio.to_thread(get_component_names, file_key)
+
+    def _name_instances(node: dict[str, Any]) -> None:
+        component_id = node.get("componentId")
+        if component_id and component_names.get(component_id):
+            node["component_name"] = component_names[component_id]
+        for child in node.get("children") or []:
+            _name_instances(child)
+
+    _name_instances(target_node)
 
     # THE NODES ARE INDEXED BY ID BEFORE ANYTHING IS MEASURED. A vector carries its path in its
     # OWN coordinates and is placed by the chain of transforms above it, so drawing it needs the
@@ -5138,9 +5395,9 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
             tag = f"f-{comp_id.replace(':', '-')}"
             component_tags.append(tag)
             child_code = await asyncio.to_thread(
-                render_spec, _figma_spec_for_model(comp_node), tag, {}
+                render_module, _figma_spec_for_model(comp_node), tag, {}
             )
-            if child_code and (await asyncio.to_thread(_validate_generated_module, child_code)).get("ok"):
+            if child_code and (await asyncio.to_thread(_validate_typed_module, child_code)).get("ok"):
                 drafts[tag] = child_code
             else:
                 print(
@@ -5183,7 +5440,10 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
         too_big.append(f"it contains {node_count:,} nodes (limit {INGEST_MAX_NODES:,})")
     if too_big:
         detail = _refusal_detail(target_node, spec_for_model, spec_chars, node_count, token_estimate, too_big)
-        _log_ingest({
+        # A REFUSAL WRITES NO COMPONENT, AND IT DOES WRITE ITS RECORD. The reason travels in the
+        # answer and on the screen, and the activity row keeps it against the session so it can
+        # be read after the page is gone. Nothing is added to the catalogue.
+        refusal_record = {
             "kind": "ingest-refused",
             "sessionId": session_id,
             "sessionTitle": session_title,
@@ -5196,10 +5456,37 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
             "nodes": node_count,
             "tokenEstimate": token_estimate,
             "error": detail,
+            "reason": "the measured design is larger than the ingest limits",
             "nextStep": "ingest a smaller node (a frame rather than a page), or raise the limits deliberately",
-        })
+        }
+        _log_terminal_ingest(job_id, refusal_record)
         print(f"⛔ [figma-ingest] refused node {node_id}: {spec_chars:,} chars, {node_count:,} nodes — nothing sent to the model")
         raise HTTPException(status_code=413, detail=detail)
+
+    # ── THE VALIDATION INVARIANT — A REFUSAL, NOT A REPORT ──────────────────────────────────────
+    # A key the Figma file states that no examination covers is a real gap. The profile names it
+    # and the ingest stops before the renderer runs. Nothing is drawn and nothing is written: a
+    # drawing beside a warning is a screen that looks whole while a stated fact was never read.
+    _coverage = await asyncio.to_thread(key_coverage, spec_for_model)
+    _unparsed_keys = list(_coverage.get("omissions") or [])
+    _validation_failure: dict[str, Any] | None = None
+    if _unparsed_keys:
+        _failed_node = str(
+            target_node.get("id") or node_id or target_node.get("name") or "unnamed"
+        )
+        _profile = (
+            "[ERROR_TYPE]: INGEST_VALIDATION_FAILURE\n"
+            f"[FAILED_NODE]: {_failed_node}\n"
+            f"[MISSING_OR_UNPARSED_KEYS]: [{', '.join(_unparsed_keys)}]\n"
+            "[STATUS]: Pipeline incomplete. Representation accuracy is below 100%."
+        )
+        _step(
+            job_id,
+            "Validation failure: "
+            + ", ".join(_unparsed_keys)
+            + ". The ingest is refused; nothing is drawn or written.",
+        )
+        raise HTTPException(status_code=422, detail=_profile)
 
     # ── THE DESIGN IS RENDERED FROM ITS MEASUREMENTS, NOT INTERPRETED ────────
     # The component is written by `design_renderer.render_spec` from the spec that was measured:
@@ -5258,9 +5545,18 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
             ),
         )
 
-    rendered = await asyncio.to_thread(
-        render_spec, spec_for_model, target_tag, composed
-    )
+    parameter_error: dict[str, Any] | None = None
+    try:
+        rendered = await asyncio.to_thread(
+            render_module, spec_for_model, target_tag, composed
+        )
+    except ParameterTypeError as error:
+        # THE DRAWING IS STILL SHOWN. The typed parameter block could not be built exactly; the
+        # renderer's drawing is kept, and the parameter error is reported in the preview and the
+        # chat. Refusing here removed the drawing and the error together, which is the opposite of
+        # what the designer needs to see what went wrong.
+        parameter_error = error.as_dict()
+        rendered = await asyncio.to_thread(render_spec, spec_for_model, target_tag, composed)
     generated_by = "renderer"
     rejected: list[str] = []
 
@@ -5282,13 +5578,17 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
                 "and the node can be re-ingested once the renderer can place it."
             ),
         )
-    # ── THE COMPILE CHECK DOES NOT GATE THE PREVIEW (owner, 2026-10-09) ──────
-    # The rendered component is written to the preview and SHOWN, even when it does not compile.
-    # The owner's ruling: the design is evaluated in the preview state in the middle, and any error
-    # is reported THERE — the designer then fixes it, or the system fails at APPROVE. The compile
-    # verdict is still computed below (`validation`) and returned with the answer, and the approve
-    # step still refuses code that does not compile (`api_figma_commit`). Refusing here would write
-    # NOTHING, which hides the component the designer is meant to look at.
+    # ── THE DRAWING IS SHOWN EVEN WHEN ITS TYPED BLOCK OR BROWSER MODULE DOES NOT PASS ─────
+    # The compile verdict travels with the result, the preview and the chat; the component still
+    # stands so the designer can see what was built and what failed. The earlier rule removed the
+    # preview on a compile failure, which hid both the drawing and the reason.
+    root_validation = await asyncio.to_thread(_validate_typed_module, rendered)
+    compiled_for_preview = await asyncio.to_thread(_transpile_module, rendered)
+    preview_script = (
+        str(compiled_for_preview.get("script") or "")
+        if compiled_for_preview.get("ok")
+        else ""
+    )
     drafts[target_tag] = rendered
 
     # The model is not called anywhere in this pipeline any more. `assembled` stays as a shape the
@@ -5313,21 +5613,9 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
     # design is never something to be discovered on screen later.
     render_gaps = await asyncio.to_thread(accepted_unrendered, spec_for_model)
     render_gaps = list(render_gaps) + list(design_gaps)
-    existing_path = os.path.join(FRONTEND_COMPONENTS_DIR, f"{target_tag}.ts")
+    # THE PREVIEW IS BLIND TO THE CATALOGUE. Whether this tag already exists, and what approving
+    # would replace, is the approval's question; nothing here reads a component file or a register.
     already_in_catalogue = None
-    if os.path.exists(existing_path):
-        stat = os.stat(existing_path)
-        already_in_catalogue = {
-            "file": f"frontend/src/components/lit/{target_tag}.ts",
-            "bytes": stat.st_size,
-            "writtenAt": datetime.utcfromtimestamp(stat.st_mtime).isoformat(timespec="seconds") + "Z",
-        }
-        compliance.append(
-            f"{target_tag} is ALREADY in the catalogue ({already_in_catalogue['file']}, "
-            f"{already_in_catalogue['bytes']} bytes, last written {already_in_catalogue['writtenAt']}). "
-            "Approving replaces that file with this draft — the previous source is not kept, and the "
-            "registries will not add a second entry. Discard if this was not meant to be an update."
-        )
 
     # One sentence per fact: a note that repeats the error is noise in a panel the designer
     # has to read, and it is what made the record look hard-coded.
@@ -5358,7 +5646,7 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
             continue
         pattern_report = await asyncio.to_thread(fidelity_report, node, tag)
         pattern_gate = await asyncio.to_thread(fidelity_gate, pattern_report)
-        code = await asyncio.to_thread(render_spec, _figma_spec_for_model(node), tag, {})
+        code = await asyncio.to_thread(render_module, _figma_spec_for_model(node), tag, {})
         compiled = bool(code) and (await asyncio.to_thread(_validate_generated_module, code)).get("ok", False)
         if compiled:
             drafts[tag] = code
@@ -5373,6 +5661,30 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
         })
 
     validation = {tag: await asyncio.to_thread(_validate_generated_module, code) for tag, code in drafts.items()}
+    # THE TYPED AND BROWSER VERDICTS ARE PART OF THE COMPILE ANSWER. The esbuild check above can
+    # pass while the typed block or the browser module failed; the client reads this dict to say
+    # what stopped. The drawing is still in `drafts`, so the preview shows it.
+    if parameter_error:
+        validation[target_tag] = {
+            "ok": False,
+            "error": (
+                "the typed parameter block: "
+                f"{parameter_error.get('layer')} · {parameter_error.get('parameter')}: "
+                f"{parameter_error.get('reason')}"
+            ),
+        }
+    elif not root_validation.get("ok"):
+        validation[target_tag] = {
+            "ok": False,
+            "error": "the typed module did not type-check: "
+                     + str(root_validation.get("error") or "the compiler gave no reason"),
+        }
+    elif not compiled_for_preview.get("ok"):
+        validation[target_tag] = {
+            "ok": False,
+            "error": "the browser module did not compile: "
+                     + str(compiled_for_preview.get("error") or "the compiler gave no reason"),
+        }
     _remember_drafts(
         job_id,
         drafts,
@@ -5389,14 +5701,6 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
             "componentTags": component_tags,
             "targetNode": target_node,
             "contract": _component_contract(target_node),
-            # Layers whose NAME the design system already has on a DIFFERENT component — the
-            # copy case. Held with the job so the commit can act on the designer's answer, and
-            # returned with the ingest so the form can ask before anything is written.
-            "nameCollisions": _name_collisions(spec_for_model),
-            # And the layers that ARE a component already shipped, in another place. No question,
-            # no write: said so the screen can show the design reusing its own design system
-            # instead of a reader having to work out which of two identical names is which.
-            "nameInstances": _name_instances(spec_for_model),
             # THE ARTWORK TRAVELS WITH THE JOB. It is captured here, from the MCP reply, and the
             # APPROVE step is where the component and the record are written — so without this
             # the vectors are used for one model call and then lost, which is how a component
@@ -5435,9 +5739,20 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
         job_id,
         f"Checked {len(fidelity['rows'])} rows: {fidelity['exactness']['exact']} exact, "
         f"{fidelity['exactness']['compared'] - fidelity['exactness']['exact']} not exact, "
+        f"{fidelity['exactness'].get('unexamined', 0)} stated key(s) with no examination, "
         f"{fidelity['counts'].get('accepted', 0)} ask for no drawing.",
     )
     gate = await asyncio.to_thread(fidelity_gate, fidelity)
+    if gate.get("blocks"):
+        _step(
+            job_id,
+            "The fidelity gate blocked this design; nothing is drawn or written.",
+        )
+        raise HTTPException(
+            status_code=422,
+            detail="The fidelity gate blocked this design. Nothing was written.\n\n"
+                   + "\n".join(gate.get("blocking") or []),
+        )
 
     # ── THE FACTS OF THIS INGEST, KEPT FOR THE NEXT ONE ────────────────────────────────────────
     # Every layer, every fact, both values. Without this the previous measurement is gone the
@@ -5460,7 +5775,9 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
         "No earlier measurement is held for this node — nothing to compare against.",
     )
     changes = figma_facts.compare(previous_facts, facts_record) if previous_facts else None
-    facts_path = await asyncio.to_thread(figma_facts.write, facts_record)
+    # THE MEASUREMENT STAYS IN MEMORY. It is not a record yet: only a saved or approved preview
+    # becomes the baseline the next read compares against.
+    await asyncio.to_thread(figma_facts.remember, facts_record)
 
 
     # ── DOES THIS LAYER NAME ALREADY EXIST IN THE CATALOGUE? ──────────────────────────────────
@@ -5468,9 +5785,13 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
     # name — so the designer learns that this design already has a component and which tag it wears.
     # Its measured values are never read here: comparing them would be the AI interpreting one
     # design against another, which this system does not do.
-    existing_name = await asyncio.to_thread(_existing_by_layer_name, target_node.get("name") or "")
+    # THE FIGMA MAP IS NOT READ HERE. The preview is blind; the lookup that compares this layer to
+    # an existing catalogue entry happens at approval.
+    existing_name = None
 
-    _log_ingest({
+    # THE RUN'S RECORD STAYS IN MEMORY. A preview writes no file and no row; the promotion gate
+    # writes the record when the designer saves or approves.
+    ingest_record = {
         "kind": "ingested",
         "sessionId": session_id,
         "sessionTitle": session_title,
@@ -5537,18 +5858,19 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
         "read": read_record,
         "drafts": {tag: {"chars": len(code), "compiles": validation.get(tag, {}).get("ok")} for tag, code in drafts.items()},
         "rawReply": assembled.get("rawReply", ""),
-    }, to_db=False)
+    }
 
-    catalog_warning = "" if _catalog_component_names() else (
-        "The A2UI catalogue could not be read, so this component was built without the design system in "
-        "front of the model and cannot be checked against it. What to do: see backend/deps.py for the "
-        "path it loads, or set A2UI_CATALOG_PATH."
-    )
+    # NOTHING IS READ FROM THE A2UI CATALOGUE HERE. The preview reads the Figma file and nothing else.
+    catalog_warning = ""
 
     # WHAT THE DESIGNER WROTE, COUNTED FROM WHERE IT ACTUALLY COMES FROM — see _channel_report,
     # which both this result and the record use, so the two can never disagree.
     return {
         "tag": target_tag,
+        # THE VALIDATION PROFILE, WHEN THE FILE STATES A KEY NO EXAMINATION COVERS. The component
+        # is drawn anyway; this is the report that travels with the drawing, the conversation and
+        # the activity row. Null means every gated key was covered.
+        "validationFailure": _validation_failure,
         # ── AND WHERE THE DRAFT ITSELF IS ────────────────────────────────────────
         # The tag alone is NOT an address. A re-ingest of a node the catalogue already holds
         # builds a fresh draft under the same tag as the approved element, so a client left to
@@ -5557,7 +5879,12 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
         # the result: the job, the tag, and the temporary file the ingest just wrote, so the
         # surface can load exactly that file and nothing else. It is the same folder the deletion
         # rules already act on; nothing new is stored and nothing is registered by it.
-        "preview": {"jobId": job_id, "tag": target_tag, **_preview_module(job_id, target_tag)},
+        "preview": {
+            "jobId": job_id,
+            "tag": target_tag,
+            "module": drafts.get(target_tag, ""),
+            "script": preview_script,
+        },
         "components": component_tags,
         "drafts": drafts,
         "validation": validation,
@@ -5620,7 +5947,7 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
             "exactness": facts_record["exactness"],
             "layers": facts_record["layers"],
             "rows": len(facts_record["rows"]),
-            "file": os.path.relpath(facts_path, REPO_ROOT),
+            "file": "memory — the preview has written nothing",
         },
         # THE LAYER'S NAME, AND WHETHER THE CATALOGUE ALREADY HAS IT. Three facts only — the tag,
         # the node it came from, when it was approved — and no measured value from the approved
@@ -6021,12 +6348,63 @@ async def api_figma_ingest(request: IngestRequest, http_request: Request):
     compile-check them, and POST /api/figma/commit lands the ones they keep.
     """
     job_id = request.jobId
-    
+    actor = http_request.headers.get("X-User-ID", "")
+
+    # ── THE VAULT LOCK, BEFORE A JOB EXISTS ────────────────────────────────────────────────────
+    # A card in the Supervisor Queue is read-only to its owner, and an ingest is an execution
+    # right. The card is resolved first: a session that cannot be read is not a reason to run
+    # the ingest anyway. A live Tools row is Open and passes.
+    if request.sessionId:
+        if not actor:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "X-User-ID is required: the session's card must be resolved before an "
+                    "ingest can run. Nothing was ingested."
+                ),
+            )
+        try:
+            import services as state
+
+            sessions = state.prompt_sessions_api
+            if not sessions:
+                raise RuntimeError("the session store is not available")
+            session_row = await asyncio.to_thread(
+                lambda: sessions.get_session(
+                    session_id=request.sessionId, user_id=actor
+                )
+            )
+            if not session_row:
+                raise RuntimeError(
+                    f"no session {request.sessionId} is readable for this person"
+                )
+            if is_card_locked(session_row):
+                raise HTTPException(
+                    status_code=423,
+                    detail=locked_state_message(card_state_of(session_row)),
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    f"INGEST LOCK CHECK FAILURE: the session {request.sessionId} could not be "
+                    f"read: {type(e).__name__}: {e}. Nothing was ingested."
+                ),
+            ) from e
+
     # Initialize job
     ingest_jobs[job_id] = JobStatus(status="processing")
     
     try:
-        # Process the Figma node
+        # ── ONE READ, AND THE DRAWING IS SHOWN WITH WHATEVER IT COULD NOT MATCH ────────────────
+        #
+        # A difference is a fact to report, not a reason to remove the component. The designer
+        # sees what was built, the facts that did not match, and the run's log beside it. The
+        # earlier five-read refusal discarded the drawing, closed the third column and left no
+        # preview to inspect — which is the behavior this restores.
+        _step(job_id, "Reading both channels and drawing the design.")
         result = await _process_ingest_job(
             job_id,
             request.fileKey,
@@ -6035,7 +6413,42 @@ async def api_figma_ingest(request: IngestRequest, http_request: Request):
             request.sessionTitle,
             http_request.headers.get("X-User-ID", ""),
         )
-        
+        blocking = list(((result.get("fidelity") or {}).get("blocking")) or [])
+        if blocking:
+            _validation_keys = set(
+                (result.get("validationFailure") or {}).get("keys") or []
+            )
+            # THE PROFILE NAMES THE GATED KEYS; the gate's own sentence for the same three is
+            # not repeated in the record. The other differences remain, with their facts.
+            _reported_blocking = [
+                one for one in blocking
+                if not any(f"`{key}`" in one for key in _validation_keys)
+            ]
+            _step(job_id, f"The design was drawn with {len(blocking)} named difference(s).")
+            # THE OUTCOME IS RECORDED. The component is shown with its differences; the activity
+            # row carries the same facts, so the run can be read again after the page is gone.
+            _log_terminal_ingest(job_id, {
+                "kind": "ingest-failed",
+                "sessionId": request.sessionId,
+                "sessionTitle": request.sessionTitle,
+                "actor": _resolve_actor(http_request),
+                "jobId": job_id,
+                "fileKey": request.fileKey,
+                "nodeId": request.nodeId,
+                # THE MECHANICAL PROFILE LEADS THE RECORD. The fidelity verdict is the plain
+                # sentence beside it; the exact validation failure is what the hard check wrote.
+                "error": (result.get("validationFailure") or {}).get("profile")
+                         or (result.get("fidelity") or {}).get("verdict")
+                         or "the design was drawn with differences",
+                "validationFailure": result.get("validationFailure"),
+                "rejected": _reported_blocking,
+                "reason": "the drawing differs from the design in the named facts",
+                "note": "the component is shown with the differences; nothing was written to the catalogue",
+                "verdict": f"{len(blocking)} fact(s) did not match",
+            })
+        else:
+            _step(job_id, "The design was drawn; every stated fact matched.")
+
         # Update job status
         ingest_jobs[job_id] = JobStatus(status="done", result=result)
 
@@ -6047,21 +6460,42 @@ async def api_figma_ingest(request: IngestRequest, http_request: Request):
         # A layer that is the SAME component in another location is not a question: it is the
         # design using a component it already ships, and it is returned beside the question so
         # the screen can say which of the two a reader is looking at.
-        result["nameCollisions"] = (ingest_job_meta.get(job_id) or {}).get("nameCollisions") or []
-        result["nameInstances"] = (ingest_job_meta.get(job_id) or {}).get("nameInstances") or []
-
         return {"ok": True, "jobId": job_id, "result": result, "drafts": result.get("drafts", {})}
-    except HTTPException:
+    except HTTPException as exc:
         # A refusal already carries its own status and a message written for a person (the size
         # gate's 413, for one). Re-wrapping it as a 500 buried the message and labelled a
-        # deliberate stop as a crash.
+        # deliberate stop as a crash. It is still a terminal outcome, so it is recorded against
+        # the session here unless the place that decided it already did.
+        _log_terminal_ingest(job_id, {
+            "kind": "ingest-failed" if exc.status_code >= 500 else "ingest-refused",
+            "sessionId": request.sessionId,
+            "sessionTitle": request.sessionTitle,
+            "actor": _resolve_actor(http_request),
+            "jobId": job_id,
+            "fileKey": request.fileKey,
+            "nodeId": request.nodeId,
+            "error": str(exc.detail),
+            "reason": f"the run stopped with HTTP {exc.status_code}",
+            "note": "nothing was written; the design can be re-ingested",
+        })
         raise
     except Exception as e:
+        # THE LOW-LEVEL BOUNDARY, UNMAPPED. No generic "failed to ingest" stands between the
+        # exception and the person: the exception's own type and string, and the full traceback
+        # the interpreter raised, go into the job's error, the activity record and the response.
+        # The token counts, buffer limits and allocation failures the runtime reports are the
+        # ones shown; nothing is rephrased for a layout.
         error_msg = str(e)
-        ingest_jobs[job_id] = JobStatus(status="error", error=error_msg)
+        trace = traceback.format_exc()
+        ingest_jobs[job_id] = JobStatus(
+            status="error",
+            error=f"{type(e).__name__}: {error_msg}\n\n{trace}",
+        )
         # A failure nobody hears is a failure nobody fixes: it goes in the record with enough
         # to find the design again, so it can be raised later even if the designer moved on.
-        _log_ingest({
+        # A FAILURE WRITES NO COMPONENT, AND IT DOES WRITE ITS RECORD. The run changes nothing
+        # in the catalogue; the row keeps the reason against the session so it survives the page.
+        failure_record = {
             "kind": "ingest-failed",
             "sessionId": request.sessionId,
             "sessionTitle": request.sessionTitle,
@@ -6069,11 +6503,23 @@ async def api_figma_ingest(request: IngestRequest, http_request: Request):
             "jobId": job_id,
             "fileKey": request.fileKey,
             "nodeId": request.nodeId,
-            "error": error_msg,
+            "error": f"{type(e).__name__}: {error_msg}\n\n{trace}",
+            "reason": "the run stopped with an unhandled failure",
             "nextStep": "re-ingest this node once the cause is fixed; nothing was written",
-        })
-        print(f"[X] [figma-ingest] job {job_id} node {request.nodeId} FAILED: {error_msg}")
-        raise HTTPException(status_code=500, detail=error_msg)
+        }
+        _log_terminal_ingest(job_id, failure_record)
+        print(
+            f"[X] [figma-ingest] job {job_id} node {request.nodeId} FAILED: "
+            f"{type(e).__name__}: {error_msg}\n{trace}"
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": error_msg,
+                "type": type(e).__name__,
+                "traceback": trace,
+            },
+        )
 
 
 @router.get("/api/figma/ingest/{job_id}")
@@ -6849,8 +7295,9 @@ async def _remove_component(
             total = None
     _op_step(op_id, "Re-deriving the catalogue's counts…")
     outcome["counts"] = await asyncio.to_thread(_sync_catalog_claims, total) if total is not None else "catalog unreadable"
-    _op_step(op_id, "Running the catalogue gate…")
-    check = await asyncio.to_thread(_catalog_check)
+    # THE REPOSITORY-WIDE CATALOG AUDIT IS NOT A REMOVAL STEP. It is a development audit with its
+    # own command; running it here delayed the removal and attributed a catalogue-declaration
+    # finding to an act that only removed one component.
     _op_step(
         op_id,
         f"Removed {tag}: its file, Figma map entry, allowlist entry, catalogue entry and layer record.",
@@ -6862,11 +7309,10 @@ async def _remove_component(
         "tag": tag,
         "reason": reason,
         "outcome": outcome,
-        "verdict": check.get("verdict"),
     })
     print(f"🗑️ [figma-ingest] {tag} removed from the catalogue by {actor or 'unknown'} — file and registrations deleted, {outcome['record']}")
 
-    return {"ok": True, "tag": tag, "outcome": outcome, "catalogCheck": check}
+    return {"ok": True, "tag": tag, "outcome": outcome}
 
 
 _ELEMENT_TAG_RE = re.compile(r"<([a-z][a-z0-9]*-[a-z0-9-]+)[\s/>]")
@@ -7667,6 +8113,7 @@ async def api_figma_ask(request: AskRequest):
 
     drafts = ingest_drafts.get(request.jobId, {})
     meta = ingest_job_meta.get(request.jobId, {})
+    _IMAGE_FILE_KEY.set(str(meta.get("fileKey") or ""))
     if not drafts:
         raise HTTPException(status_code=404, detail=f"No draft held for job {request.jobId}")
     # Asking about a preview is looking at it, and the answer can take a while — so the sign of
@@ -7774,8 +8221,9 @@ async def api_figma_commit(request: CommitRequest, http_request: Request):
     Registration is what makes the result usable rather than merely present: the Figma
     map records which node it came from, the allowlist says it may be rendered and lets
     the AI emit it, and the pipeline catalog is the schema the server validates those
-    emissions against. The repository's own gate (`npm run catalog:check`) is run and
-    its verdict returned, because that verdict is what "in the catalogue" means here.
+    emissions against. The repository-wide audit (`npm run catalog:check`) is a development
+    check of those declarations and is not run here: an approval answers for the component
+    it registered, not for the whole catalogue's paperwork.
     """
     drafts = ingest_drafts.get(request.jobId)
     if not drafts:
@@ -7847,6 +8295,35 @@ async def api_figma_commit(request: CommitRequest, http_request: Request):
     # An approval is the strongest possible sign of life: the preview was just looked at, and
     # this is the request that ends it. Nothing about a commit waits for a heartbeat.
     _keep_preview(request.jobId)
+
+    # ── THE COMPARISON TO WHAT EXISTS IS MADE HERE, AT APPROVAL, AND NOWHERE EARLIER ────────────
+    # The preview read only the Figma file. Approving is the first moment the catalogue is read:
+    # the layer's name and the layers around it are compared here, and a replacement is refused
+    # until the designer answers with `overwriteTag`. Nothing is written by the comparison.
+    approval_meta = ingest_job_meta.get(request.jobId) or {}
+    approval_node = approval_meta.get("targetNode") or {}
+    _IMAGE_FILE_KEY.set(str(approval_meta.get("fileKey") or ""))
+    if approval_node:
+        approval_spec = _figma_spec_for_model(approval_node)
+        existing = _existing_by_layer_name(approval_node.get("name") or "")
+        collisions = _name_collisions(approval_spec)
+        instances = _name_instances(approval_spec)
+        if existing and not request.overwriteTag:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "EXISTS",
+                    "message": (
+                        f"The catalogue already has {existing.get('tag')} for the layer named "
+                        f"{approval_node.get('name')}. Approving replaces it; answer with "
+                        "overwriteTag set to that tag to say so. Nothing was written."
+                    ),
+                    "existing": existing,
+                    "collisions": collisions,
+                    "instances": instances,
+                    "nextStep": "Approve again with overwriteTag set to the tag to replace.",
+                },
+            )
 
     tags = request.tags if request.tags else list(drafts)
     # ── THE TICKED PATTERNS ARE THE WHOLE WRITE SET ─────────────────────────
@@ -7981,7 +8458,6 @@ async def api_figma_commit(request: CommitRequest, http_request: Request):
     _drop_preview(request.jobId)
 
     registration: dict[str, Any] = {}
-    catalog_check: dict[str, Any] = {}
     if request.addToCatalogue and meta:
         target_tag = meta.get("targetTag")
         if target_tag in tags:
@@ -8009,8 +8485,12 @@ async def api_figma_commit(request: CommitRequest, http_request: Request):
                     registration["countClaims"] = await asyncio.to_thread(_sync_catalog_claims, total)
                 except Exception as e:
                     registration["countClaims"] = f"could not re-read the catalog ({e})"
-            _op_step(request.opId, "Running the catalogue gate…")
-            catalog_check = await asyncio.to_thread(_catalog_check)
+
+            # THE REPOSITORY-WIDE CATALOG AUDIT IS NOT AN APPROVAL STEP. It checks the catalogue's
+            # own declarations against the tag registry, the elements and the docs; it is a
+            # development audit with its own manual command (`npm run catalog:check`). Running it
+            # here put a ~2s subprocess in the approval, and returned a blocking count for a
+            # README line beside a successful component. The approval answers for the component.
 
             # THE LAYER RECORD, written with the rest of the registrations and from the same
             # node this component was built from. Approve is the ONLY place it is written: a
@@ -8143,8 +8623,6 @@ async def api_figma_commit(request: CommitRequest, http_request: Request):
         "written": written,
         "replaced": replaced,
         "registration": registration,
-        "verdict": catalog_check.get("verdict"),
-        "blocking": sum(1 for f in (catalog_check.get("findings") or []) if f.startswith("[blocking]")),
     })
 
     failures = [msg for step, result in registration.items()
@@ -8179,13 +8657,11 @@ async def api_figma_commit(request: CommitRequest, http_request: Request):
                 + ". Fix the registry files and approve again — nothing is hidden."
             ),
         )
-    if catalog_check and catalog_check.get("ran") is False:
-        print(f"❌ [figma-ingest] job {request.jobId}: the catalog gate did not run — {catalog_check.get('summary')}")
-
     _op_step(
         request.opId,
         f"Approved {(meta or {}).get('targetTag') or request.jobId}: "
-        f"{len(written)} file(s) written, {len(registration.get('patterns', {}).get('added') or [])} "
+        f"{len(written)} file(s) written, "
+        f"{len(registration.get('patterns', {}).get('added') or [])} "
         f"pattern(s) added, {len(registration.get('patterns', {}).get('replaced') or [])} replaced.",
     )
     return {
@@ -8195,7 +8671,6 @@ async def api_figma_commit(request: CommitRequest, http_request: Request):
         "replaced": replaced,
         "tags": tags,
         "registration": registration,
-        "catalogCheck": catalog_check,
     }
 
 

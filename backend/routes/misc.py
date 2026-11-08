@@ -4,7 +4,7 @@ import os
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, Header, HTTPException, UploadFile
 from pydantic import BaseModel
 
 import services as state
@@ -13,8 +13,10 @@ from deps import (
     REASONING_TRACE_PATH,
     a2ui_catalog_surfaces,
     a2ui_registry_for,
+    get_user_id_from_header,
 )
 from grace_gui import (
+    _DEEPSEEK_PRICING,
     evaluate_source,
     query_llm,
     retrieve_memory_context,
@@ -138,6 +140,153 @@ async def governance_usage(limit: int = 50):
             "a measured cache split is used when the provider reported one, and every input token "
             "is billed at the cache-miss price otherwise)"
         ),
+    }
+
+
+@router.get("/api/governance/usage/summary")
+async def governance_usage_summary(
+    conversation_id: str | None = None,
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
+):
+    """THE SEAT'S OWN USAGE READOUT — one conversation's tokens, calls, cost and pricing.
+
+    Langfuse v4 in this deployment is `events_only` and no longer serves its sessions endpoint
+    (measured: 404, "not available on deployments running in Langfuse v4 events_only mode"), so
+    the readout reads the app's own per-call ledger — the same numbers the model calls reported,
+    which is what Langfuse receives. The scope is the CONVERSATION, never the session and never
+    the user: a seat that cannot attribute a call says `attributed: false` rather than showing
+    another scope's numbers.
+    """
+    if state.prompt_sessions_api is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+    if not conversation_id:
+        raise HTTPException(
+            status_code=400,
+            detail="the usage readout needs a conversation id; a seat with none has no usage to read",
+        )
+    try:
+        uid = get_user_id_from_header(x_user_id)
+        with state.prompt_sessions_api.get_db() as conn:
+            cursor = conn.cursor()
+
+            def summary(where: str, params: tuple) -> dict[str, Any]:
+                cursor.execute(
+                    f"""
+                    SELECT COUNT(*) AS calls,
+                           COALESCE(SUM((metadata->>'total_tokens')::bigint), 0) AS total_tokens,
+                           SUM((metadata->>'est_cost_usd')::numeric) AS est_cost_usd,
+                           COUNT(DISTINCT NULLIF(metadata->>'conversation_id', '')) AS conversations
+                      FROM usage_metrics
+                     WHERE metric_type = 'llm_call' AND user_id = %s {where}
+                    """,
+                    (uid, *params),
+                )
+                row = cursor.fetchone() or {}
+                cursor.execute(
+                    f"""
+                    SELECT metadata, created_at
+                      FROM usage_metrics
+                     WHERE metric_type = 'llm_call' AND user_id = %s {where}
+                     ORDER BY created_at DESC
+                     LIMIT 1
+                    """,
+                    (uid, *params),
+                )
+                last = cursor.fetchone()
+                cursor.execute(
+                    f"""
+                    SELECT metadata->>'model' AS model, COUNT(*) AS calls,
+                           COALESCE(SUM((metadata->>'total_tokens')::bigint), 0) AS total_tokens,
+                           SUM((metadata->>'est_cost_usd')::numeric) AS est_cost_usd
+                      FROM usage_metrics
+                     WHERE metric_type = 'llm_call' AND user_id = %s {where}
+                     GROUP BY 1
+                     ORDER BY calls DESC
+                     LIMIT 8
+                    """,
+                    (uid, *params),
+                )
+                models = cursor.fetchall()
+                meta: dict[str, Any] = {}
+                at = ""
+                if last:
+                    raw_meta = last.get("metadata") or {}
+                    meta = json.loads(raw_meta) if isinstance(raw_meta, str) else raw_meta
+                    created = last.get("created_at")
+                    at = created.isoformat() if created else ""
+                cost = row.get("est_cost_usd")
+                last_name = " · ".join(
+                    part
+                    for part in [str(meta.get("model") or ""), str(meta.get("mode") or "")]
+                    if part
+                )
+                # THE RATES THE COST WAS ESTIMATED FROM — the same table `_estimate_cost` bills
+                # with, for the last call's model and the band the clock selected. The metadata
+                # says the band in words; the table holds the numbers.
+                basis = str(meta.get("cost_basis") or "")
+                band = (
+                    "off_peak"
+                    if "off-peak" in basis.lower()
+                    else "peak"
+                    if "peak" in basis.lower()
+                    else ""
+                )
+                rates = (
+                    (_DEEPSEEK_PRICING.get(str(meta.get("model") or "")) or {}).get(band)
+                    if band
+                    else None
+                )
+                return {
+                    "calls": int(row.get("calls") or 0),
+                    "totalTokens": int(row.get("total_tokens") or 0),
+                    "cost": float(cost) if cost is not None else None,
+                    "sessions": int(row.get("conversations") or 0),
+                    "pricing": basis,
+                    "rateBand": band,
+                    "rates": rates,
+                    "lastSession": (
+                        {
+                            "name": last_name or "(unknown call)",
+                            "durationSeconds": float(meta.get("elapsed_s") or 0),
+                            "tokens": int(meta.get("total_tokens") or 0),
+                            "calls": 1,
+                            "cost": (
+                                float(meta["est_cost_usd"])
+                                if meta.get("est_cost_usd") is not None
+                                else None
+                            ),
+                            "lastSeen": at,
+                        }
+                        if last
+                        else None
+                    ),
+                    "byModel": [
+                        {
+                            "model": str(m.get("model") or "(unknown)"),
+                            "calls": int(m.get("calls") or 0),
+                            "tokens": int(m.get("total_tokens") or 0),
+                            "cost": (
+                                float(m["est_cost_usd"])
+                                if m.get("est_cost_usd") is not None
+                                else None
+                            ),
+                        }
+                        for m in models
+                    ],
+                }
+
+            conversation = summary(
+                "AND metadata->>'conversation_id' = %s",
+                (conversation_id,),
+            )
+    except Exception as read_error:
+        raise HTTPException(
+            status_code=503,
+            detail=f"the usage readout could not be read: {read_error}",
+        )
+    return {
+        "attributed": bool(conversation.get("calls")),
+        **conversation,
     }
 
 

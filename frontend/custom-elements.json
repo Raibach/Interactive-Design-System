@@ -649,6 +649,17 @@
             },
             {
               "kind": "field",
+              "name": "statusColor",
+              "privacy": "public",
+              "type": {
+                "text": "string"
+              },
+              "description": "THE STATE'S OWN COLOUR (owner, 2026-11-07). The footer's word is the card's STATE, and the\nsurface that emits the card states the colour with it. The card therefore draws a state\nwithout knowing any state's name: a record that carries a colour is drawn in it, and a\nrecord that carries none keeps the card's resting treatment.",
+              "default": "''",
+              "attribute": "status-color"
+            },
+            {
+              "kind": "field",
               "name": "likes",
               "privacy": "public",
               "type": {
@@ -707,6 +718,17 @@
               },
               "description": "DESIGN CARDS HAVE NO DELETE (2026-10-18). The card's trash control deletes a PROMPT\nPACKAGE. A design element is a catalogue record, not a package — its card comes from\nthe design room's own `design_master` rows — so the control would dispatch a delete\nfor something that is not a package. The grid sets this for `room_domain: 'design'`.",
               "attribute": "nodelete"
+            },
+            {
+              "kind": "field",
+              "name": "markSrc",
+              "privacy": "public",
+              "type": {
+                "text": "string"
+              },
+              "description": "THE MARK OF THE AREA THE CARD CAME FROM (owner, 2026-10-27): *\"update the logos on\nthe cards now to match the area they come from\"*. The grid sets one of the seat marks;\na card with no mark keeps the chat's own mark.",
+              "default": "''",
+              "attribute": "mark-src"
             },
             {
               "kind": "field",
@@ -849,6 +871,15 @@
               "fieldName": "status"
             },
             {
+              "name": "status-color",
+              "type": {
+                "text": "string"
+              },
+              "description": "THE STATE'S OWN COLOUR (owner, 2026-11-07). The footer's word is the card's STATE, and the\nsurface that emits the card states the colour with it. The card therefore draws a state\nwithout knowing any state's name: a record that carries a colour is drawn in it, and a\nrecord that carries none keeps the card's resting treatment.",
+              "default": "''",
+              "fieldName": "statusColor"
+            },
+            {
               "name": "likes",
               "type": {
                 "text": "number"
@@ -896,6 +927,15 @@
               },
               "description": "DESIGN CARDS HAVE NO DELETE (2026-10-18). The card's trash control deletes a PROMPT\nPACKAGE. A design element is a catalogue record, not a package — its card comes from\nthe design room's own `design_master` rows — so the control would dispatch a delete\nfor something that is not a package. The grid sets this for `room_domain: 'design'`.",
               "fieldName": "nodelete"
+            },
+            {
+              "name": "mark-src",
+              "type": {
+                "text": "string"
+              },
+              "description": "THE MARK OF THE AREA THE CARD CAME FROM (owner, 2026-10-27): *\"update the logos on\nthe cards now to match the area they come from\"*. The grid sets one of the seat marks;\na card with no mark keeps the chat's own mark.",
+              "default": "''",
+              "fieldName": "markSrc"
             },
             {
               "name": "_deleteArmed",
@@ -4288,6 +4328,28 @@
             },
             {
               "kind": "field",
+              "name": "seatLabel",
+              "privacy": "public",
+              "type": {
+                "text": "string"
+              },
+              "description": "The seat's name, written by the room that draws this rail. See the property note.",
+              "default": "''",
+              "attribute": "seat-label"
+            },
+            {
+              "kind": "field",
+              "name": "seatMenu",
+              "privacy": "public",
+              "description": "Whether the mark's fly-out is open.",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false",
+              "attribute": "seatMenu"
+            },
+            {
+              "kind": "field",
               "name": "_previousTab",
               "type": {
                 "text": "TabId | ''"
@@ -4304,7 +4366,13 @@
                   "text": "void"
                 }
               },
-              "description": "The mark navigates back to the console, like the Console header tab."
+              "description": "The mark opens the section's fly-out (owner, 2026-10-27). The Console door lives in\nthe fly-out's own row now, so the press still has a way back."
+            },
+            {
+              "kind": "field",
+              "name": "_goConsole",
+              "privacy": "private",
+              "description": "The fly-out's Console row — the door the mark used to be."
             },
             {
               "kind": "method",
@@ -4475,6 +4543,24 @@
               "description": "The room's `disabled-tabs` list. See the property note.",
               "default": "''",
               "fieldName": "disabledTabs"
+            },
+            {
+              "name": "seat-label",
+              "type": {
+                "text": "string"
+              },
+              "description": "The seat's name, written by the room that draws this rail. See the property note.",
+              "default": "''",
+              "fieldName": "seatLabel"
+            },
+            {
+              "name": "seatMenu",
+              "description": "Whether the mark's fly-out is open.",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false",
+              "fieldName": "seatMenu"
             }
           ],
           "superclass": {
@@ -7951,6 +8037,13 @@
             },
             {
               "kind": "field",
+              "name": "_patternChecked",
+              "privacy": "private",
+              "default": "new Set<string>()",
+              "description": "WHICH CHILD PATTERNS THE DESIGNER HAS TICKED. New patterns start ticked; an existing pattern\nstarts unticked, because replacing a component is a deliberate act and never a default. The\nset belongs to one preview and is rebuilt when the preview's tag changes."
+            },
+            {
+              "kind": "field",
               "name": "_confirmingApprove",
               "type": {
                 "text": "boolean"
@@ -7975,6 +8068,44 @@
                   "default": "false"
                 }
               ]
+            },
+            {
+              "kind": "method",
+              "name": "_togglePattern",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "tag",
+                  "type": {
+                    "text": "string"
+                  }
+                },
+                {
+                  "name": "checked",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "_writes",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "p",
+                  "type": {
+                    "text": "PreviewState"
+                  }
+                }
+              ],
+              "description": "WHAT APPROVING WILL WRITE, STATED BEFORE ANY PRESS — the root and every child pattern.\n\nOwner, 2026-10-26: *\"I'm trying to replace it. I might be trying to replace it… it should show\nme what's there, what's being overwritten.\"* The root's line names the component and its\napproval date; each pattern is a row with a checkbox, so replacing a child is a choice the\ndesigner makes here rather than a consequence of pressing Approve. The block renders nothing\nwhen nothing exists and no pattern is drafted — an empty frame is a claim that there is\nsomething to show."
             },
             {
               "kind": "method",
@@ -8024,6 +8155,34 @@
                   "name": "overwriteTag",
                   "type": {
                     "text": "string"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "field",
+              "name": "_pendingObserver",
+              "type": {
+                "text": "ResizeObserver | null"
+              },
+              "privacy": "private",
+              "default": "null",
+              "description": "Keeps the pending pane the size of the column it sits in, without CSS guessing."
+            },
+            {
+              "kind": "method",
+              "name": "_sizeToParent",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "active",
+                  "type": {
+                    "text": "boolean"
                   }
                 }
               ]
@@ -12363,6 +12522,42 @@
     },
     {
       "kind": "javascript-module",
+      "path": "src/components/lit/f-40001177-2477.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "description": "text-input-area — measured from Figma node 40001177:2477\nand rendered from the measurements. Every declaration below comes from the design; there is no\ninterpretation in this file, and re-ingesting the same node produces this same file.\n\nTHE ONE THING HERE THAT IS NOT THE DESIGN'S is the seam: `behaviourProperties` on the line above\nthe styles, and the two lifecycle calls under it. They are the same bytes in every generated\nelement, and they hand this instance to the behaviour written for `f-40001177-2477` — a hand-written file no\ningest can write. Everything that is not a drawing lives there: extra props, listeners,\ndispatched events, slot fills. This file holds the drawing and the opening.",
+          "name": "TextInputArea",
+          "members": [],
+          "superclass": {
+            "name": "LitElement",
+            "package": "lit"
+          },
+          "tagName": "f-40001177-2477",
+          "customElement": true
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "TextInputArea",
+          "declaration": {
+            "name": "TextInputArea",
+            "module": "src/components/lit/f-40001177-2477.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "name": "f-40001177-2477",
+          "declaration": {
+            "name": "TextInputArea",
+            "module": "src/components/lit/f-40001177-2477.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
       "path": "src/components/lit/f-40001204-5752.ts",
       "declarations": [
         {
@@ -12635,6 +12830,16 @@
           "members": [
             {
               "kind": "field",
+              "name": "title",
+              "privacy": "public",
+              "type": {
+                "text": "string"
+              },
+              "default": "''",
+              "attribute": "title"
+            },
+            {
+              "kind": "field",
               "name": "url",
               "privacy": "public",
               "type": {
@@ -12679,6 +12884,12 @@
             },
             {
               "kind": "method",
+              "name": "_announceFields",
+              "privacy": "private",
+              "description": "THE FIELDS AS THEY ARE TYPED, for the seat that saves. Submit is not the only moment a value\nmatters: a person names the work above the Figma URL and presses SAVE at the foot of the\ncolumn without submitting anything, and the title they typed is the name the session is kept\nunder. Nothing is decided here — the three values travel as typed, exactly as they do on\nsubmit."
+            },
+            {
+              "kind": "method",
               "name": "_onSubmit",
               "privacy": "private",
               "parameters": [
@@ -12693,6 +12904,12 @@
           ],
           "events": [
             {
+              "name": "ingest-field-change",
+              "type": {
+                "text": "CustomEvent"
+              }
+            },
+            {
               "name": "ingest-submit",
               "type": {
                 "text": "CustomEvent"
@@ -12700,6 +12917,14 @@
             }
           ],
           "attributes": [
+            {
+              "name": "title",
+              "type": {
+                "text": "string"
+              },
+              "default": "''",
+              "fieldName": "title"
+            },
             {
               "name": "url",
               "type": {
@@ -12780,6 +13005,7 @@
               "type": {
                 "text": "string"
               },
+              "default": "'prompt-composer'",
               "attribute": "pipeline"
             },
             {
@@ -12860,6 +13086,16 @@
             },
             {
               "kind": "field",
+              "name": "query",
+              "privacy": "public",
+              "type": {
+                "text": "string"
+              },
+              "description": "THE FILTER, AS A SETTING (owner, 2026-11-02). The search box writes the same field, so a\nperson typing and an assistant naming a component drive one filter, not two lists.",
+              "attribute": "query"
+            },
+            {
+              "kind": "field",
               "name": "open",
               "privacy": "public",
               "type": {
@@ -12919,25 +13155,6 @@
             {
               "kind": "field",
               "name": "_catalogError",
-              "type": {
-                "text": "string"
-              },
-              "privacy": "private",
-              "default": "''"
-            },
-            {
-              "kind": "field",
-              "name": "_catalogues",
-              "type": {
-                "text": "CatalogHead[]"
-              },
-              "privacy": "private",
-              "default": "[]",
-              "description": "EVERY catalogue in the repository — the level above the one being viewed.\n\nThis level is not a container in any file. The catalogues are not nested in anything:\nthey are three separate documents that happen to live in one folder, and nothing declares\na parent. So this row is drawn as what it is — a list of the catalogues that exist, with\nthe one being viewed marked — rather than as a node the data says is above them."
-            },
-            {
-              "kind": "field",
-              "name": "_cataloguesError",
               "type": {
                 "text": "string"
               },
@@ -13045,6 +13262,16 @@
             },
             {
               "kind": "field",
+              "name": "_query",
+              "type": {
+                "text": "string"
+              },
+              "privacy": "private",
+              "default": "''",
+              "description": "THE FILTER TYPED ABOVE THE LIST. It narrows what is drawn and changes nothing the catalogue\nholds — the owner's word for it: *\"that would change what's listed in the data tree it's a\nfilter.\"*\n\nIT MATCHES THE NAME, THE TAG AND THE FIGMA LAYER — the three things a row can be known by. Not\na meaning-based search: there is no index of these components anywhere, so a box that claimed\nto understand \"the button we use to approve\" would be inventing an answer. This says what it\ndoes in the count line under it."
+            },
+            {
+              "kind": "field",
               "name": "_toggled",
               "type": {
                 "text": "boolean"
@@ -13130,6 +13357,16 @@
               "description": "Guards against a slow read for one pipeline landing after a faster one for another."
             },
             {
+              "kind": "field",
+              "name": "_catalogToken",
+              "type": {
+                "text": "number"
+              },
+              "privacy": "private",
+              "default": "0",
+              "description": "Read the catalogue this pipeline's components live in — the level above them.\n\nA failure here is REPORTED, never omitted: dropping the top level silently would say\n\"there is no catalogue above these\", which is a different claim from \"it could not be\nread\", and the whole point of this view is that those two are never the same picture.\n\nAND A READ THAT ANOTHER READ REPLACED IS NOT A FAILURE (owner, 2026-11-02, opening the tool in\nCarbon: *\"we get that error message and then it seems to load… that error message popped up for\nsome reason\"*). Opening the tab runs this read, and the seat's own rebuild runs it again; the\ntwo race, the older one can fail after the newer one has already answered, and its failure used\nto land last — painting the red block over a catalogue that had loaded. Now only the newest\nread may write the block's state, and a superseded read returns without a word."
+            },
+            {
               "kind": "method",
               "name": "_loadCatalog",
               "privacy": "private",
@@ -13137,8 +13374,7 @@
                 "type": {
                   "text": "Promise<void>"
                 }
-              },
-              "description": "Read the catalogue this pipeline's components live in — the level above them.\n\nA failure here is REPORTED, never omitted: dropping the top level silently would say\n\"there is no catalogue above these\", which is a different claim from \"it could not be\nread\", and the whole point of this view is that those two are never the same picture."
+              }
             },
             {
               "kind": "method",
@@ -13158,17 +13394,6 @@
                 }
               ],
               "description": "Read a catalogue FRESH, rather than through a module import.\n\nTHE IMPORT IS CACHED, AND THAT IS THE BUG THIS EXISTS TO FIX. The declared list was read\nfrom an ES module, so every re-render reused the copy the browser already had: approving a\ncomponent changed the file on disk and the list went on showing the old count until the\npage was reloaded. A reader that cannot see what was just written is worse than no reader.\n\nSo it FETCHES the file the dev server serves, which is source and therefore current. The\nimport stays as the fallback for a build, where `/src/` is not a URL — and the fallback is\nsound there because a build's bundle is the catalogue as of that build, not a stale cache."
-            },
-            {
-              "kind": "method",
-              "name": "_loadCatalogues",
-              "privacy": "private",
-              "return": {
-                "type": {
-                  "text": "Promise<void>"
-                }
-              },
-              "description": "Every catalogue that exists, read from the files themselves. Failures are listed."
             },
             {
               "kind": "method",
@@ -13209,6 +13434,36 @@
                 }
               ],
               "description": "What to call a component in the list.\n\nA GENERATED component is named after its node — `f-<node id>` — so it has no word of its\nown and the map supplies the Figma layer it came from. A HAND-BUILT component is already\nnamed with a word, and the map can hold several Figma origins for one of those, so it\nkeeps its own key. When neither yields a name the key is shown: a row with no label at all\nwould be worse than a row labelled with an id."
+            },
+            {
+              "kind": "method",
+              "name": "_matches",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "name",
+                  "type": {
+                    "text": "string"
+                  }
+                }
+              ],
+              "description": "Does this row answer the typed words? Its name, its tag, or the Figma layer behind it."
+            },
+            {
+              "kind": "method",
+              "name": "_renderSearch",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "TemplateResult"
+                }
+              },
+              "description": "THE SEARCH BOX, ABOVE THE CATALOGUE IT FILTERS.\n\nOwner, 2026-10-26: *\"add a search box for that data table at the top… it's a filter.\"* It sits\nabove the catalogue's own block and the rows beneath it, and it says how many rows it is\nshowing out of how many, so a short list is understood as a filter rather than as a catalogue\nthat lost its components."
             },
             {
               "kind": "method",
@@ -13354,7 +13609,7 @@
                   }
                 }
               ],
-              "description": "WHEN THIS COMPONENT LAST CHANGED, for ordering the list.\n\nOwner, 2026-10-26: *\"The list should be organized by last modified.\"* The approval date is the\nonly date the record states for a component, so it is the one used; a component with no\nrecorded approval sorts below every dated one, and the list falls back to its catalogue order\nfor those. `0` is not a date — it is \"no date\", and it is placed last on purpose."
+              "description": "WHEN THIS COMPONENT LAST CHANGED, for ordering the list.\n\nOwner, 2026-10-26: *\"The list should be organized by last modified.\"* The approval date is the\nonly date the record states for a component, so it is the one used; a component with no\nrecorded approval sorts below every dated one, and the list falls back to its catalogue order\nfor those. `0` is not a date — it is \"no date\", and it is placed last on purpose.\n\nTHE FILE'S OWN WRITE TIME WAS TRIED AND REMOVED THE SAME DAY. It is not the component's date\nwhen the program is being worked on: the three rows at the top of the list became\n`component-preview`, `figma-layers-view` and `figma-ingest-form` because those files were being\nedited, which is not a design change and not something the designer did. A component with no\napproval has no date this system recorded, and that is what it says."
             },
             {
               "kind": "method",
@@ -13373,25 +13628,6 @@
                   }
                 }
               ]
-            },
-            {
-              "kind": "method",
-              "name": "_selectPipeline",
-              "privacy": "private",
-              "return": {
-                "type": {
-                  "text": "void"
-                }
-              },
-              "parameters": [
-                {
-                  "name": "id",
-                  "type": {
-                    "text": "string"
-                  }
-                }
-              ],
-              "description": "Move to another catalogue. The host is told too, so a screen showing both can follow."
             },
             {
               "kind": "method",
@@ -13764,36 +14000,6 @@
             },
             {
               "kind": "method",
-              "name": "_nodeTitle",
-              "privacy": "private",
-              "return": {
-                "type": {
-                  "text": "string"
-                }
-              },
-              "parameters": [
-                {
-                  "name": "id",
-                  "type": {
-                    "text": "string"
-                  }
-                }
-              ],
-              "description": "What a node id means, said in the row's own title.\n\nThe two halves are different facts and the row shows them as one string, so the title is\nwhere the split is stated: the component part is what this layer IS, and the occurrence is\nonly the location the instance sits in. A reader who takes the whole string for the\ncomponent's name is how a second instance came to look like a second component."
-            },
-            {
-              "kind": "method",
-              "name": "_renderCatalogueSet",
-              "privacy": "private",
-              "return": {
-                "type": {
-                  "text": "TemplateResult"
-                }
-              },
-              "description": "THE LEVEL ABOVE THE CATALOGUE — the catalogues that exist, and which one is being read.\n\nDrawn as a list rather than as a parent node, because a list is what the data has: three\ndocuments side by side with nothing holding them. The heading names the three fields every\ncatalogue carries, so the level says what identifies one.\n\nA catalogue that failed to read is REPORTED here, not dropped from the list: a list that\nquietly loses one says \"there are two\", which is a different claim from \"there are three\nand one could not be read\"."
-            },
-            {
-              "kind": "method",
               "name": "_renderRecord",
               "privacy": "private",
               "return": {
@@ -13801,7 +14007,7 @@
                   "text": "TemplateResult"
                 }
               },
-              "description": "THE MEASURED LAYERS — the designs actually approved into this catalogue.\n\nDistinct from the declared list above and labelled as such: that section is what the\ncatalogue SAYS it allows, this one is what has been through an ingest and written down. A\ncatalogue with nothing ingested into it is not empty — it is a catalogue whose designs have\nnot been measured — and this says exactly that rather than showing a blank."
+              "description": "What a node id means, said in the row's own title.\n\nThe two halves are different facts and the row shows them as one string, so the title is\nwhere the split is stated: the component part is what this layer IS, and the occurrence is\nonly the location the instance sits in. A reader who takes the whole string for the\n/**\nTHE MEASURED LAYERS — the designs actually approved into this catalogue.\n\nDistinct from the declared list above and labelled as such: that section is what the\ncatalogue SAYS it allows, this one is what has been through an ingest and written down. A\ncatalogue with nothing ingested into it is not empty — it is a catalogue whose designs have\nnot been measured — and this says exactly that rather than showing a blank."
             },
             {
               "kind": "method",
@@ -13834,7 +14040,7 @@
               }
             },
             {
-              "name": "catalog-change",
+              "name": "layers-query",
               "type": {
                 "text": "CustomEvent"
               }
@@ -13864,6 +14070,7 @@
               "type": {
                 "text": "string"
               },
+              "default": "'prompt-composer'",
               "fieldName": "pipeline"
             },
             {
@@ -13927,6 +14134,14 @@
               "description": "The catalogue name of the component the host has open in the preview.",
               "default": "''",
               "fieldName": "selected"
+            },
+            {
+              "name": "query",
+              "type": {
+                "text": "string"
+              },
+              "description": "THE FILTER, AS A SETTING (owner, 2026-11-02). The search box writes the same field, so a\nperson typing and an assistant naming a component drive one filter, not two lists.",
+              "fieldName": "query"
             },
             {
               "name": "open",
@@ -14732,6 +14947,16 @@
             },
             {
               "kind": "field",
+              "name": "_expanded",
+              "type": {
+                "text": "boolean"
+              },
+              "privacy": "private",
+              "default": "false",
+              "description": "The readout is opened by a press: the box grows to the full readout height."
+            },
+            {
+              "kind": "field",
               "name": "SAMPLE",
               "type": {
                 "text": "string"
@@ -14751,6 +14976,12 @@
               "privacy": "private",
               "description": "Data: the seat's status, and the usage figures it is handed. Failure: unattributed.",
               "readonly": true
+            },
+            {
+              "kind": "field",
+              "name": "_onReadoutClick",
+              "privacy": "private",
+              "description": "THE BOX OPENS ON A PRESS — the full readout height. A second press closes it. The frame also\nwires this face to reset the box; this press stops that one so the click and the drag are the\ntwo ways to the same result, and neither removes the other."
             }
           ],
           "attributes": [

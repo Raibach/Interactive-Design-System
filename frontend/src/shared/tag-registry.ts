@@ -2416,6 +2416,24 @@ export const TAG_REGISTRY = {
     },
     events: [],
   },
+  // Ingested from Figma — prompt-textarea-container-system (40001177:2476)
+  'f-40001177-2476': {
+    tag: 'f-40001177-2476',
+    surface: 'composer',
+    description: 'Generated from Figma node 40001177:2476 (prompt-textarea-container-system). Implemented by <f-40001177-2476> in src/components/lit/f-40001177-2476.ts.',
+    props: {
+    },
+    events: [],
+  },
+  // Ingested from Figma — text-input-area (40001177:2477)
+  'f-40001177-2477': {
+    tag: 'f-40001177-2477',
+    surface: 'composer',
+    description: 'Generated from Figma node 40001177:2477 (text-input-area). Implemented by <f-40001177-2477> in src/components/lit/f-40001177-2477.ts.',
+    props: {
+    },
+    events: [],
+  },
 } as const;
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2533,6 +2551,8 @@ export const AI_PLAYGROUND_TAGS: TagName[] = [
   'f-40001207-3497',
   'f-40001207-3559',
   'f-40001206-2888',
+  'f-40001177-2476',
+  'f-40001177-2477',
 ];
 
 /** Tags belonging to the shell — AI must never touch these */

@@ -5,7 +5,7 @@ import re
 import time
 from typing import Any
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, Header, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from pydantic import AliasChoices, BaseModel, Field
 
@@ -29,6 +29,9 @@ class TeacherQueryRequest(BaseModel):
     question: str
     context: str | None = None
     conversation_id: str | None = None
+    # THE DESIGN ROOM'S OWN TAB (`design` or `tools`). When it is present, the turn is written
+    # to `raibach_design` and the legacy package path below is not touched at all.
+    design_tab: str | None = None
     # The prompt package this chat belongs to. Conversations roll up under it
     # (conversations.session_id is NOT NULL), so it is required to persist chat.
     session_id: str | None = None
@@ -190,9 +193,103 @@ def _tool_seat_text(context: str) -> str:
     return "\n".join(p for p in parts if p).strip()
 
 
+async def _design_turn(request: TeacherQueryRequest, uid: str, query_llm):
+    """THE DESIGN ROOM'S TURN — its own tables, its own conversation, its own writes.
+
+    It runs before the legacy route body and outside its try/except. A failure here raises raw.
+    The tab is resolved from `design_tabs`; the conversation is the id the seat holds. A
+    conversation is created only on the person's own first turn, with the first words as its
+    title. A silent greeting with no conversation is answered and written nowhere.
+    """
+    from routes.raibach_design import (
+        append_message_row,
+        create_conversation_row,
+        design_connection,
+        resolve_tab,
+    )
+
+    resolve_tab(request.design_tab, uid)
+    db = design_connection()
+    try:
+        conv_id = request.conversation_id or ''
+        if not conv_id:
+            if not request.person_turn:
+                # THE ZERO STATE IS NOT A RESTING STATE (owner, 2026-11-07): when the tab holds
+                # no conversation, Grace's hello creates the tab's first one — a real row, written
+                # once, holding the introduction. It is never answered into nothing.
+                title = 'New Chat'
+                conv_id = create_conversation_row(db, request.design_tab, uid, title)["id"]
+                result = await asyncio.to_thread(
+                    query_llm,
+                    context=request.context or '',
+                    question=request.question,
+                    reasoning=request.reasoning,
+                    reasoning_style=request.reasoning_style,
+                    temperature=request.temperature,
+                    self_reflection=request.self_reflection,
+                    editorial=request.editorial,
+                    mode='chat',
+                    trace_session=request.session_id,
+                )
+                append_message_row(db, request.design_tab, uid, conv_id, 'assistant', result)
+                LAST_USAGE["conversation_id"] = str(conv_id)
+                return {
+                    "content": result,
+                    "error": None,
+                    "conversation_id": conv_id,
+                    "usage": dict(LAST_USAGE),
+                    "tool_warnings": [],
+                    "tool_results": [],
+                    "persistence_error": None,
+                    "warnings": [],
+                }
+            title = (request.question or 'New Chat')[:80]
+            conv_id = create_conversation_row(db, request.design_tab, uid, title)["id"]
+
+        if request.person_turn:
+            append_message_row(
+                db, request.design_tab, uid, conv_id, 'user', request.question, request.metadata,
+            )
+        result = await asyncio.to_thread(
+            query_llm,
+            context=request.context or '',
+            question=request.question,
+            reasoning=request.reasoning,
+            reasoning_style=request.reasoning_style,
+            temperature=request.temperature,
+            self_reflection=request.self_reflection,
+            editorial=request.editorial,
+            mode='chat',
+            trace_session=request.session_id,
+        )
+        append_message_row(db, request.design_tab, uid, conv_id, 'assistant', result)
+        LAST_USAGE["conversation_id"] = str(conv_id)
+        return {
+            "content": result,
+            "error": None,
+            "conversation_id": conv_id,
+            "usage": dict(LAST_USAGE),
+            "tool_warnings": [],
+            "tool_results": [],
+            "persistence_error": None,
+            "warnings": [],
+        }
+    finally:
+        db.close()
+
+
 @router.post("/api/teacher/query")
-async def api_teacher_query(request: TeacherQueryRequest):
+async def api_teacher_query(
+    request: TeacherQueryRequest,
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
+):
     """Main AI query endpoint — context-aware with conversation persistence"""
+    if request.design_tab:
+        # THE DESIGN ROOM'S TURN — its own tables, its own conversation, its own writes.
+        # It runs before the legacy body and outside its try/except; a failure raises raw.
+        from grace_gui import query_llm
+
+        return await _design_turn(request, get_user_id_from_header(x_user_id), query_llm)
     try:
         from grace_gui import query_llm
 

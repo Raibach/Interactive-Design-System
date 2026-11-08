@@ -20,7 +20,7 @@
  */
 import { LitElement, html, css, nothing } from 'lit';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
-import { asPlainText, stripControlTags } from '@/shared/plainText';
+import { stripControlTags } from '@/shared/plainText';
 import { renderMarkdown } from '@/shared/richText';
 import { HER_ANSWERS, BUILD_WIREFRAME, EDIT_NODE } from '@/shared/actionLink';
 import { resultsAreTheReading } from '@/shared/chatScroll';
@@ -195,7 +195,7 @@ export class ChatMessages extends LitElement {
   }
 
   static styles = [figureStyles, css`
-    :host { display: flex; flex-direction: column; min-height: 0; }
+    :host { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
     /* IT DOES NOT SCROLL. The column does — see chat-panel's .content-scroll — so this
        thread is as tall as its turns and the one scrollbar belongs to the column. An
        inner scroller here would be a second one for the same movement. */
@@ -204,6 +204,7 @@ export class ChatMessages extends LitElement {
       display: flex;
       flex-direction: column;
       gap: 6px;
+      min-width: 0;
       /* NO HORIZONTAL PADDING OF ITS OWN — the card carries the drawing's 10px — but TEN
          EXTRA PIXELS UNDER THE LAST LINE, so the newest turn does not sit on the card's
          edge: the owner, 2026-09-19: "can you add an extra 10 pixels to the bottom so it's
@@ -238,6 +239,7 @@ export class ChatMessages extends LitElement {
        Nothing was fixed — the template was writing a paragraph break into it. */
     .turn {
       align-self: stretch;
+      min-width: 0;
       word-break: break-word;
       line-height: 1.5;
       padding: 10px 14px;
@@ -249,8 +251,32 @@ export class ChatMessages extends LitElement {
       transition: background 0.12s, outline-color 0.12s;
       outline: 2px solid transparent;
     }
-    /* The message itself: pre-wrap, so the newlines a person typed are theirs. */
-    .turn .body { white-space: pre-wrap; }
+    /* The message itself: the app's own face at 13, and the lines the person wrote are kept. */
+    .turn .body {
+      white-space: normal;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .turn .body .hd { font-size: 14px; font-weight: 700; margin: 0 0 6px; }
+    .turn .body .line { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .turn .body .gap { height: 6px; }
+    .turn .body ul, .turn .body ol { margin: 4px 0 8px; padding-left: 18px; }
+    .turn .body li { margin: 2px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .turn .body strong { font-weight: 700; }
+    .turn .body .raw {
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      background: rgba(0, 0, 0, 0.04);
+      border-left: 2px solid rgba(0, 0, 0, 0.15);
+      padding: 6px 8px;
+      margin: 4px 0 8px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12px;
+    }
     /* A RUN'S RESULT WEARS RENDERED MARKDOWN'S OWN TYPE — the owner named the stack
        (marked + github-markdown-css, 2026-09-24) and the size (72ch of line, 16px,
        1.6), so the output reads as the output rather than as more conversation. */
@@ -288,7 +314,7 @@ export class ChatMessages extends LitElement {
     .turn.result details.fold .fold-title { font-family: 'IBM Plex Mono', 'IBM Plex Mono', monospace; }
     /* The small note above a linked turn: which part of the flow this is about. */
     .turn .note {
-      font-size: 13px;
+      font-size: 12px;
       text-transform: uppercase;
       letter-spacing: 0.06em;
       color: #6c757d;
@@ -518,15 +544,79 @@ export class ChatMessages extends LitElement {
   }
 
   /**
+   * A HOST MESSAGE'S LINES AS STRUCTURE — headers, bold, bullets, numbered steps, and a fenced
+   * block for the raw error. The text is interpolated as values, never as HTML.
+   */
+  private _richText(text: string): unknown {
+    const out: unknown[] = [];
+    let list: 'ul' | 'ol' | null = null;
+    let items: unknown[] = [];
+    let fence: string[] | null = null;
+    const flush = () => {
+      if (!list) return;
+      out.push(list === 'ol' ? html`<ol>${items}</ol>` : html`<ul>${items}</ul>`);
+      list = null;
+      items = [];
+    };
+    const inline = (line: string): unknown[] =>
+      line.split(/(\*\*[^*]+\*\*)/g).map((part) => {
+        const bold = part.match(/^\*\*([^*]+)\*\*$/);
+        return bold ? html`<strong>${bold[1]}</strong>` : part;
+      });
+    for (const line of String(text ?? '').split('\n')) {
+      if (line.trim().startsWith('```')) {
+        if (fence) {
+          out.push(html`<pre class="raw">${fence.join('\n')}</pre>`);
+          fence = null;
+        } else {
+          flush();
+          fence = [];
+        }
+        continue;
+      }
+      if (fence) {
+        fence.push(line);
+        continue;
+      }
+      const bullet = line.match(/^\s*[-•]\s+(.*)$/);
+      if (bullet) {
+        if (list !== 'ul') { flush(); list = 'ul'; }
+        items.push(html`<li>${inline(bullet[1])}</li>`);
+        continue;
+      }
+      const numbered = line.match(/^\s*\d+\.\s+(.*)$/);
+      if (numbered) {
+        if (list !== 'ol') { flush(); list = 'ol'; }
+        items.push(html`<li>${inline(numbered[1])}</li>`);
+        continue;
+      }
+      flush();
+      if (!line.trim()) {
+        out.push(html`<div class="gap"></div>`);
+        continue;
+      }
+      const header = line.match(/^#{1,3}\s+(.*)$/) || line.match(/^\*\*([^*]+)\*\*$/);
+      if (header) {
+        out.push(html`<div class="hd">${inline(header[1])}</div>`);
+        continue;
+      }
+      out.push(html`<div class="line">${inline(line)}</div>`);
+    }
+    flush();
+    if (fence) out.push(html`<pre class="raw">${fence.join('\n')}</pre>`);
+    return out;
+  }
+
+  /**
    * GRACE'S WORDS AS A PERSON PRINTS THEM — and the buttons those words carry. The control
-   * tags come out (pipeline instructions, see shared/plainText), the markers are made plain,
-   * and every `[label](action:…)` link becomes a button. The user's own words are left
-   * exactly as typed; those are theirs.
+   * tags come out (pipeline instructions, see shared/plainText), the markers stay so the
+   * renderer can give the lines their structure, and every `[label](action:…)` link becomes
+   * a button. The user's own words are left exactly as typed; those are theirs.
    */
   private _segmentsOf(m: ChatMessage): Array<{ text?: string; label?: string; action?: string }> {
     const isAssistant = this._roleOf(m) === 'assistant';
     const raw = String(m.content ?? '');
-    const shown = isAssistant ? asPlainText(stripControlTags(raw)) : raw;
+    const shown = isAssistant ? stripControlTags(raw) : raw;
     return shown.split(/(\[.*?\]\(action:[^)]+\))/g).map((part) => {
       const match = part.match(/^\[(.*?)\]\(action:([^)]+)\)$/);
       return match ? { label: match[1], action: match[2] } : { text: part };
@@ -678,7 +768,7 @@ export class ChatMessages extends LitElement {
     return html`
       <div class="thread" role="log" aria-live="polite">
         ${turns.length
-          ? turns.map((m) => html`<div class="turn ${this._roleOf(m)} ${m.alert ? 'alert' : ''} ${m.result ? 'result' : ''} ${m.nodeId ? 'linked' : ''} ${m.nodeId && m.nodeId === this.highlightNodeId ? 'hl' : ''}" data-node-id=${m.nodeId ?? nothing} title=${m.nodeId ? 'The note on the canvas this is about — click to point at it' : nothing} @click=${() => this._onTurnClick(m)}>${m.label ? html`<div class="note">${m.label}</div>` : nothing}${this._roleOf(m) === 'user' ? html`<user-response-bubble .text=${String(m.content ?? '')}></user-response-bubble>` : (m.result ? html`<div class="body markdown-body">${unsafeHTML(renderMarkdown(String(m.content ?? '')))}</div>` : html`<span class="body">${this._segmentsOf(m).map((seg) => (seg.action !== undefined ? this._actionButton(seg.label, seg.action, String(m.content ?? '')) : seg.text))}</span>`)}</div>`)
+          ? turns.map((m) => html`<div class="turn ${this._roleOf(m)} ${m.alert ? 'alert' : ''} ${m.result ? 'result' : ''} ${m.nodeId ? 'linked' : ''} ${m.nodeId && m.nodeId === this.highlightNodeId ? 'hl' : ''}" data-node-id=${m.nodeId ?? nothing} title=${m.nodeId ? 'The note on the canvas this is about — click to point at it' : nothing} @click=${() => this._onTurnClick(m)}>${m.label ? html`<div class="note">${m.label}</div>` : nothing}${this._roleOf(m) === 'user' ? html`<user-response-bubble .text=${String(m.content ?? '')}></user-response-bubble>` : (m.result ? html`<div class="body markdown-body">${unsafeHTML(renderMarkdown(String(m.content ?? '')))}</div>` : html`<div class="body">${this._segmentsOf(m).map((seg) => (seg.action !== undefined ? this._actionButton(seg.label, seg.action, String(m.content ?? '')) : this._richText(seg.text ?? '')))}</div>`)}</div>`)
           : nothing}
         ${this.sending || this._workMs !== null
           ? html`

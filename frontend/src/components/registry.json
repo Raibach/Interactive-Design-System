@@ -888,6 +888,18 @@
     "behavior": "generated",
     "generator": "figma ingest \u2014 approve step"
   }
+},
+{
+  "figmaName": "text-input-area",
+  "figmaNodeId": "40001177:2477",
+  "litComponent": "f-40001177-2477",
+  "file": "frontend/src/components/lit/f-40001177-2477.ts",
+  "status": "built",
+  "provenance": {
+    "litComponent": "generated",
+    "behavior": "generated",
+    "generator": "figma ingest \u2014 approve step"
+  }
 }
 ]
 }

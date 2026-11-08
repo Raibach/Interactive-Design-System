@@ -94,7 +94,17 @@ export function belongsToPackage(this: ToolsConversationHost, id: string): boole
 export async function loadHistory(this: ToolsConversationHost): Promise<void> {
   if (this.messages?.length) { this._historyChecked = true; return; }
   if (!this.conversationId) return;
-  if (!belongsToPackage.call(this, this.conversationId)) { this._historyChecked = true; return; }
+  if (!belongsToPackage.call(this, this.conversationId)) {
+    /* A DENIAL IS LOUD (zero-suppression mode). A conversation that does not belong to this
+       seat must never draw as a blank or empty thread: the refusal is written on the screen,
+       which is also the audit record for the person using it. */
+    this._historyError =
+      `This conversation is not this seat's: ${String(this.conversationId).slice(0, 8)}… ` +
+      'belongs to another tab. Nothing was read.';
+    this._historyChecked = true;
+    this.requestUpdate();
+    return;
+  }
   try {
     const resp = await fetch(`/api/conversations/${this.conversationId}/messages?limit=200`, {
       headers: { 'X-User-ID': this._userId() },
@@ -126,18 +136,44 @@ export async function loadHistory(this: ToolsConversationHost): Promise<void> {
       }
     }
     this._inspectionReports = reports;
+    /*
+     * THE STEPS ARE THE THIRD COLUMN'S, NOT THE CONVERSATION'S. Earlier runs wrote their step
+     * lines under the conversation id; the history reader drops them so the thread keeps the
+     * results, the failures and the person's own words. The rows stay in the database as the
+     * run's record; the chat is not a second copy of the step disclosure.
+     */
+    const stepLine = /^(Reading node |Figma answered\.|Read twice:|Checking every stated fact|Checked layer:|Checked \d+ rows:|No earlier measurement|Comparing with the previous|Attempt \d+ of 5|Figma did not answer|MCP unavailable)/;
     this.messages = rows
       .filter((row) => (row as { metadata?: { kind?: string } }).metadata?.kind !== 'inspection')
+      .filter((row) => !(row.role === 'assistant' && stepLine.test(String(row.content ?? '').trim())))
       .map((m) => {
-        const meta = (m as { metadata?: { kind?: string } }).metadata;
+        const meta = (m as {
+          metadata?: { kind?: string; alert?: boolean; result?: boolean };
+        }).metadata;
         /* A RUN'S RESULTS KEEP THEIR MARK ACROSS A RELOAD: the conversation the run filed them in
-           carries kind 'tool-answer' / 'run-result', and the thread draws those as results. */
+           carries kind 'tool-answer' / 'run-result', and the thread draws those as results.
+           THE ERROR STATE IS PART OF THE TURN TOO. `alert` is stored with the line; dropping it
+           on reload drew a failure as an ordinary answer — the record said error, the screen did
+           not. The flag is carried, so the alarm is the same after a reload as it was live. */
         return {
           role: m.role,
           content: m.content,
-          result: meta?.kind === 'tool-answer' || meta?.kind === 'run-result',
+          result:
+            meta?.kind === 'tool-answer' || meta?.kind === 'run-result' || meta?.result === true,
+          alert: meta?.alert === true,
         };
       });
+    /*
+     * THE OPENING POSITION IS THE NEWEST TURN. A saved conversation keeps a scroll position for
+     * the person's return, but a session that is being opened must land on its last entry: the
+     * failure or the result that ended the work is the thing they came back to read.
+     */
+    const seat = this as unknown as {
+      updateComplete?: Promise<unknown>;
+      _scrollThreadToBottom?: () => void;
+    };
+    await seat.updateComplete;
+    seat._scrollThreadToBottom?.();
   } catch (err) {
     this._historyError = 'This conversation could not be read — the server did not answer.';
     this._historyChecked = true;

@@ -76,6 +76,35 @@ export class DesignLeftFooter extends LitElement {
       background: linear-gradient(to left, #d4991f 0%, #e0b830 100%);
       cursor: wait;
     }
+    /* THE TWO ACTIONS SIT TOGETHER AT THE FOOT: the next session, then the save. */
+    .actions {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    .new {
+      height: 43px;
+      min-width: 128px;
+      padding: 0 14px;
+      border: 1px solid rgba(35, 67, 84, 0.28);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.55);
+      color: #234354;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    .new:hover {
+      background: rgba(255, 255, 255, 0.82);
+      border-color: rgba(35, 67, 84, 0.45);
+    }
+    .new:disabled { opacity: 0.6; cursor: not-allowed; }
     /* Runtime state, not in the design — the Composer's own spinner. */
     .spinner {
       display: inline-block;
@@ -117,20 +146,41 @@ export class DesignLeftFooter extends LitElement {
     this.dispatchEvent(new CustomEvent('design-left-save', { bubbles: true, composed: true }));
   }
 
+  /*
+   * THE SECOND CONTROL: START THE NEXT SESSION HERE. The press ends the session that stands —
+   * the seat asks the same Save or Discard question the tab's leave asks, then builds the next
+   * Tools session in place — and this element only says that the press happened.
+   */
+  private _onNew() {
+    if (this.busy) return;
+    this.dispatchEvent(new CustomEvent('design-left-new', { bubbles: true, composed: true }));
+  }
+
   render() {
     return html`
       ${this.result ? html`<span class="result">${this.result}</span>` : nothing}
-      <button
-        class="save ${this.busy ? 'saving' : ''}"
-        type="button"
-        ?disabled=${this.busy}
-        title="Save"
-        @click=${this._onSave}
-      >
-        ${this.busy
-          ? html`<span class="spinner"></span> <span>Saving...</span>`
-          : 'SAVE'}
-      </button>
+      <div class="actions">
+        <button
+          class="new"
+          type="button"
+          ?disabled=${this.busy}
+          title="Create new session"
+          @click=${this._onNew}
+        >
+          Create new
+        </button>
+        <button
+          class="save ${this.busy ? 'saving' : ''}"
+          type="button"
+          ?disabled=${this.busy}
+          title="Save"
+          @click=${this._onSave}
+        >
+          ${this.busy
+            ? html`<span class="spinner"></span> <span>Saving...</span>`
+            : 'SAVE'}
+        </button>
+      </div>
     `;
   }
 }

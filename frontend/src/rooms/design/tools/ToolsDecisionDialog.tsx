@@ -17,6 +17,8 @@
  * THE ROOM DRAWS IT, THE SEAT DECIDES. The seat renders nothing when it is headless, which is how
  * this room uses it, so the dialog stands here and the seat is told the answer.
  */
+import { createPortal } from "react-dom";
+
 export interface ToolsDecision {
   message: string;
   actions: Array<{ id: string; label: string; variant: "primary" | "destructive" | "plain" }>;
@@ -29,7 +31,7 @@ export interface ToolsDecisionDialogProps {
 
 export function ToolsDecisionDialog({ decision, onAction }: ToolsDecisionDialogProps) {
   if (!decision) return null;
-  return (
+  const dialog = (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md mx-4 animate-in zoom-in-95 duration-300">
         <div className="flex items-start gap-3 mb-6">
@@ -62,4 +64,16 @@ export function ToolsDecisionDialog({ decision, onAction }: ToolsDecisionDialogP
       </div>
     </div>
   );
+  /*
+   * THE QUESTION IS DRAWN AT THE DOCUMENT ROOT, NOT INSIDE THE ROOM.
+   *
+   * The room's stage is a positioned subtree with its own stacking context. A fixed overlay
+   * rendered beside it is a SIBLING CONTEXT, so its `z-50` is compared with that subtree's
+   * z-index — and the stage wins, whatever number the overlay carries. Measured 2026-11-07: the
+   * question about the session (Save / Accept / Discard) was drawn UNDER the design stage, no
+   * button could be clicked, and the tab press that asked it waited forever. A portal to the
+   * body puts the question above every room, which is where a question about leaving the room
+   * belongs.
+   */
+  return typeof document === "undefined" ? dialog : createPortal(dialog, document.body);
 }

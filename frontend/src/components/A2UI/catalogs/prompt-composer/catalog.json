@@ -2437,7 +2437,7 @@
         },
         {
           "type": "object",
-          "description": "The design room's column footer, and its one action: Save. The Composer bar's plate — same height, fill, corner and inner shadow — carrying one control in the Composer's RUN treatment (control-bar.ts, `.btn-run`, node 40000761:267): the same gradient, black bold label at 18, 43 by 142 with the same drop shadow. Apply Carbon stood here and is gone (owner, 2026-10-31). IT DRAWS AND DISPATCHES ONLY: a press raises `design-left-save` and the seat that holds the session answers it. `busy` and `result` are the host's.",
+          "description": "The design room's column footer, and its one action: Save. The Composer bar's plate \u2014 same height, fill, corner and inner shadow \u2014 carrying one control in the Composer's RUN treatment (control-bar.ts, `.btn-run`, node 40000761:267): the same gradient, black bold label at 18, 43 by 142 with the same drop shadow. Apply Carbon stood here and is gone (owner, 2026-10-31). IT DRAWS AND DISPATCHES ONLY: a press raises `design-left-save` and the seat that holds the session answers it. `busy` and `result` are the host's.",
           "properties": {
             "component": {
               "const": "design-left-footer"
@@ -2548,6 +2548,54 @@
       "required": [
         "component",
         "children"
+      ]
+    },
+    "f-40001177-2476": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "$ref": "#/$defs/CatalogComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "Lit web component <f-40001177-2476>, generated from Figma node 40001177:2476 (prompt-textarea-container-system) and rendered from src/components/lit/f-40001177-2476.ts. Ingested, then approved into the catalogue.",
+          "properties": {
+            "component": {
+              "const": "f-40001177-2476"
+            }
+          },
+          "required": [
+            "component"
+          ],
+          "unevaluatedProperties": false
+        }
+      ]
+    },
+    "f-40001177-2477": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "$ref": "#/$defs/CatalogComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "Lit web component <f-40001177-2477>, generated from Figma node 40001177:2477 (text-input-area) and rendered from src/components/lit/f-40001177-2477.ts. Ingested, then approved into the catalogue.",
+          "properties": {
+            "component": {
+              "const": "f-40001177-2477"
+            }
+          },
+          "required": [
+            "component"
+          ],
+          "unevaluatedProperties": false
+        }
       ]
     }
   },
@@ -2753,6 +2801,12 @@
         },
         {
           "$ref": "#/components/f-40001206-2888"
+        },
+        {
+          "$ref": "#/components/f-40001177-2476"
+        },
+        {
+          "$ref": "#/components/f-40001177-2477"
         }
       ],
       "discriminator": {

@@ -24,13 +24,16 @@ from __future__ import annotations
 import json
 import os
 import time
+from datetime import datetime
 from typing import Any
 
 import psycopg2
 import psycopg2.extras
 from fastapi import APIRouter, Header, HTTPException
+from pydantic import BaseModel
 
 import services as state
+from card_lifecycle import LOCKED_STATES, CardState, card_state_of, is_card_locked, locked_state_message
 from deps import A2UI_CATALOG_ID, a2ui_catalog_for, validate_a2ui_components
 from grace_gui import LAST_USAGE, query_llm
 from prompt_sessions_api import DESIGN_SYSTEM_DESCRIPTION
@@ -43,6 +46,94 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://localhost:5432/railway")
 # The one category the design cards carry, in both consoles (the design console and the primary
 # console's category row). Read from the registry, never invented here.
 DESIGN_CONSOLE_CATEGORY = "Design System"
+
+# ── THE CARD'S STATE IS THE RECORD'S OWN ───────────────────────────────────────────────────────
+# The lifecycle is `card_lifecycle.CardState`: Open, Closed, Pending_Approval, Queued_For_Share.
+# The review stage adds the words the footer shows for a completed card. The label and its colour
+# travel with the state, so the card draws what the record says and the card element never learns
+# a state's name. A state that carries no colour keeps the card's own resting treatment.
+def _card_status(row: dict[str, Any], state: CardState | None) -> tuple[str, str]:
+    """The footer's word and colour for a card's lifecycle and review stage."""
+    meta = row.get("metadata") or {}
+    if isinstance(meta, str):
+        try:
+            meta = json.loads(meta) if meta.strip() else {}
+        except (json.JSONDecodeError, ValueError):
+            meta = {}
+    stage = str((meta if isinstance(meta, dict) else {}).get("review_stage") or "")
+    if state == CardState.PENDING_APPROVAL:
+        return "Pending Approval", "#8BE0A4"
+    if state == CardState.QUEUED_FOR_SHARE:
+        return "Queued for Share", "#8BE0A4"
+    if stage == "approved":
+        return "Approved", "#5FD688"
+    if stage == "changes-requested":
+        return "Changes Requested", "#8BE0A4"
+    if state == CardState.OPEN:
+        return "Open", ""
+    if state == CardState.CLOSED:
+        return "Closed", ""
+    return str(row.get("status") or "Saved"), ""
+
+
+def design_card(
+    *,
+    card_id: str,
+    element_key: str,
+    title: str,
+    description: str,
+    status: str,
+    created_at: Any,
+    last_used: Any,
+    status_color: str = "",
+    state: str = "",
+    locked: bool = False,
+    routing: dict[str, Any] | None = None,
+    reviewer: str = "",
+    category_color: str = "",
+    category_title_color: str = "",
+    category_text_color: str = "",
+) -> dict[str, Any]:
+    """One card in the Design console's shape. THE ONLY BUILDER OF THIS SHAPE.
+
+    The console's grid, the single-card read and the save's answer all call this one function, so
+    a card cannot wear one state and one set of colours on the grid and another after a save. The
+    card's state is the record's own; the colour travels with it, and the card knows no name for
+    either. `state` is the lifecycle enum; `locked` is the state machine's own answer, so no
+    surface has to re-derive whether a card may be changed.
+    """
+    return {
+        "id": card_id,
+        "element_key": element_key,
+        "title": title,
+        "description": description,
+        # THE STATE, DRAWN IN THE FOOTER BESIDE THE VERSION. It is the record's own state;
+        # `status_color` travels with it so the card is not asked to know what a state means.
+        "status": status,
+        "status_color": status_color,
+        # THE LIFECYCLE, IN THE STATE MACHINE'S OWN WORD. `status` is the footer's label; this
+        # is the exact state the console filters, the queues route on, and the lockout reads.
+        "state": state,
+        "locked": locked,
+        "routing": routing or {},
+        "reviewer": reviewer,
+        "category": DESIGN_CONSOLE_CATEGORY,
+        # THE CARD'S AREA (owner, 2026-10-27): every card this console lists is the design
+        # seat's, so it wears the design seat's mark.
+        "seat": "design",
+        "category_color": category_color,
+        "category_title_color": category_title_color,
+        "category_text_color": category_text_color,
+        "version": 1,
+        "likes": 0,
+        "model_name": "",
+        "team_name": "",
+        "avatar_url": "",
+        "username": "",
+        "createdAt": created_at.isoformat() if created_at else "",
+        "lastUsed": last_used.isoformat() if last_used else "",
+        "message_count": 0,
+    }
 
 # THE DESIGN CONSOLE'S RAIL — THE ROOM'S OWN LIST, not the primary console's. The console's FILE
 # is copied; its MENU is not. Every button the design room had stays here — Trace, Executions,
@@ -62,6 +153,18 @@ advise on them: what each one says, what is missing, which to work on next.
 
 The design system itself is Figma's: its own section, its own conversation, its own work. You do
 not speak for it here, and you do not edit an element from this room.
+"""
+
+# THE DESIGN CHAT TAB'S OWN WORDS — not the console's, and not the design system's. The Chat tab is
+# the room's conversation: the person talks with Grace here about the design work and the cards the
+# console lists. It answers in prose and asks for no surface command; the console's script belongs
+# to the console's own seat.
+DESIGN_CHAT_TAB_GRACE_INSTRUCTIONS = """\
+You are Grace, in the Design room's Chat tab. This is the room's own conversation: the person
+talks with you here about the design work and the cards on the left. Answer in prose, in the
+person's own terms, and answer only what they asked. The cards and the packages are the room's;
+speak about them from what they hold. Do not answer as the console operator, do not emit surface
+commands, and do not invent actions.
 """
 
 
@@ -295,6 +398,33 @@ def design_console(x_user_id: str | None = Header(None, alias="X-User-ID")) -> l
         "conversationId": design_console_tab["conversationId"],
     }
 
+    # ── THE TOOLS TAB IS A TAB TOO, AND IT IS RESOLVED HERE LIKE THE OTHER TWO ─────────────────
+    #
+    # The map above is read from whatever rows exist, so the Tools tab had no entry whenever its
+    # row was a kept session (a save relabels it) or had been discarded — and the Tools seat, whose
+    # whole identity is that row, had no package to read or send with. The Chat and Console tabs
+    # are resolved on demand below and above for exactly this reason; Tools was the one tab left
+    # to chance. Resolving it here is the same writer, the same one-per-tab guarantee, and the same
+    # shape the console hands every other seat.
+    try:
+        design_tools_tab = state.prompt_sessions_api.get_or_create_design_tab(
+            user_id=x_user_id, tab="tools"
+        )
+    except Exception as e:  # noqa: BLE001 — a failure to resolve is stated with its cause
+        raise HTTPException(
+            status_code=503,
+            detail=f"DESIGN CONSOLE FAILURE: the Tools tab's package could not be resolved — {e}",
+        ) from e
+    if not design_tools_tab:
+        raise HTTPException(
+            status_code=503,
+            detail="DESIGN CONSOLE FAILURE: the Tools tab's package did not resolve (not created).",
+        )
+    design_packages["tools"] = {
+        "packageId": design_tools_tab["packageId"],
+        "conversationId": design_tools_tab["conversationId"],
+    }
+
     # ── THE DESIGN SYSTEMS ARE ROWS, AND THEIR CARDS ARE READ LIKE EVERY OTHER CARD ────────────
     #
     # One row per design system per person: `metadata.session_type = 'design_catalogue'` with
@@ -340,7 +470,7 @@ def design_console(x_user_id: str | None = Header(None, alias="X-User-ID")) -> l
                            created_at, last_accessed_at
                       FROM prompt_sessions
                      WHERE user_id = %s AND metadata->>'session_type' = 'design_master'
-                     ORDER BY metadata->>'element_key'
+                     ORDER BY updated_at DESC NULLS LAST, created_at DESC
                     """,
                     (x_user_id,),
                 )
@@ -353,15 +483,28 @@ def design_console(x_user_id: str | None = Header(None, alias="X-User-ID")) -> l
                 # be two answers to "what am I working on".
                 cur.execute(
                     """
-                    SELECT id::text AS id, title, description, is_archived, metadata,
-                           created_at, last_accessed_at, updated_at
-                      FROM prompt_sessions
-                     WHERE user_id = %s
-                       AND metadata->>'session_type' = 'design_session'
-                       AND is_archived IS NOT TRUE
-                     ORDER BY updated_at DESC
+                    SELECT ps.id::text AS id, ps.title, ps.description, ps.status,
+                           ps.is_archived, ps.metadata, ps.created_at, ps.last_accessed_at,
+                           ps.updated_at
+                      FROM prompt_sessions ps
+                     WHERE (
+                            ps.user_id = %s
+                         OR EXISTS (
+                                SELECT 1 FROM session_permissions sp
+                                WHERE sp.session_id = ps.id AND sp.user_id = %s
+                            )
+                       )
+                       AND (
+                            ps.metadata->>'session_type' = 'design_session'
+                         OR (
+                                ps.metadata->>'session_type' = 'design_tab'
+                            AND ps.metadata->>'design_tab' = 'tools'
+                            )
+                       )
+                       AND ps.is_archived IS NOT TRUE
+                     ORDER BY ps.updated_at DESC
                     """,
-                    (x_user_id,),
+                    (x_user_id, x_user_id),
                 )
                 session_rows = cur.fetchall()
 
@@ -455,40 +598,14 @@ def design_console(x_user_id: str | None = Header(None, alias="X-User-ID")) -> l
     console_conversation = str((design_conversations[0] if design_conversations else {}).get("id") or "")
 
 
-    def _design_card(
-        *,
-        card_id: str,
-        element_key: str,
-        title: str,
-        description: str,
-        status: str,
-        created_at: Any,
-        last_used: Any,
-    ) -> dict[str, Any]:
-        """One card in this console's shape. The grid reads these fields and nothing else."""
-        return {
-            "id": card_id,
-            "element_key": element_key,
-            "title": title,
-            "description": description,
-            "status": status,
-            "category": DESIGN_CONSOLE_CATEGORY,
-            # THE CARD'S AREA (owner, 2026-10-27): every card this console lists is the design
-            # seat's, so it wears the design seat's mark.
-            "seat": "design",
-            "category_color": cat.get("color") or "",
-            "category_title_color": cat.get("title_color") or "",
-            "category_text_color": cat.get("text_color") or "",
-            "version": 1,
-            "likes": 0,
-            "model_name": "",
-            "team_name": "",
-            "avatar_url": "",
-            "username": "",
-            "createdAt": created_at.isoformat() if created_at else "",
-            "lastUsed": last_used.isoformat() if last_used else "",
-            "message_count": 0,
-        }
+    def _design_card(**card: Any) -> dict[str, Any]:
+        """The console's own call of the one card builder, with this console's category colours."""
+        return design_card(
+            **card,
+            category_color=cat.get("color") or "",
+            category_title_color=cat.get("title_color") or "",
+            category_text_color=cat.get("text_color") or "",
+        )
 
     cards: list[dict[str, Any]] = []
 
@@ -504,7 +621,9 @@ def design_console(x_user_id: str | None = Header(None, alias="X-User-ID")) -> l
                 element_key=f"system:{_system_id}",
                 title=(_system_row.get("title") or _system_id).strip(),
                 description=(_system_row.get("description") or "").strip(),
-                status="catalogue",
+                # THE RECORD'S OWN STATE. "catalogue" described the card's kind, not its state,
+                # and the footer is the state.
+                status=str(_system_row.get("status") or "Active"),
                 created_at=_system_row.get("created_at"),
                 last_used=_system_row.get("created_at"),
             )
@@ -514,7 +633,13 @@ def design_console(x_user_id: str | None = Header(None, alias="X-User-ID")) -> l
         _meta = _row.get("metadata") or {}
         if isinstance(_meta, str):
             _meta = json.loads(_meta) if _meta.strip() else {}
-        _kept = str(_meta.get("kept_at") or "")
+        _card_state = card_state_of(_row)
+        # ── EVERY SAVED CARD IS DRAWN, INCLUDING ONE IN THE SUPERVISOR QUEUE ─────────────────────
+        # A queued card is still the person's card. It is drawn here with its state and its lock,
+        # so the work never vanishes from the room that made it; the lock, not the list, is what
+        # stops it being changed. The queue read remains the supervisor's own view.
+        _state_word, _state_color = _card_status(_row, _card_state)
+        _routing = _meta.get("routing") if isinstance(_meta.get("routing"), dict) else {}
         cards.append(
             _design_card(
                 card_id=str(_row.get("id") or ""),
@@ -523,7 +648,12 @@ def design_console(x_user_id: str | None = Header(None, alias="X-User-ID")) -> l
                 # Untitled, which is a true statement about it rather than a blank card.
                 title=(_row.get("title") or "").strip() or "Untitled",
                 description=(_row.get("description") or "").strip(),
-                status="saved" if _kept else "open",
+                status=_state_word,
+                status_color=_state_color,
+                state=_card_state.value if _card_state else "",
+                locked=is_card_locked(_row),
+                routing=_routing,
+                reviewer=str(_meta.get("reviewer") or ""),
                 created_at=_row.get("created_at"),
                 last_used=_row.get("updated_at") or _row.get("last_accessed_at"),
             )
@@ -706,6 +836,7 @@ Output ONLY this exact JSON (no markdown, no extra text):
                         "session_id": design_console_tab["packageId"],
                         "conversation_id": console_conversation or "",
                         "grace_instructions": DESIGN_CONSOLE_GRACE_INSTRUCTIONS,
+                        "chat_tab_grace_instructions": DESIGN_CHAT_TAB_GRACE_INSTRUCTIONS,
                         "design_packages": design_packages,
                         "conversations": [
                             {
@@ -726,6 +857,408 @@ Output ONLY this exact JSON (no markdown, no extra text):
             },
         },
     ]
+
+
+@router.get("/api/design/cards/{session_id}")
+def design_card_read(
+    session_id: str,
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
+) -> dict[str, Any]:
+    """ONE SAVED CARD, IN THE CONSOLE'S OWN SHAPE, READ BY ITS RECORD'S ID.
+
+    The save's answer is not a second card shape. After a save the page asks this door for the
+    card the console itself would draw, and places exactly that card; the browser invents no
+    state and no colour. A row that is not this person's kept session is refused with the reason,
+    because a working visit is not a card and must never be drawn as one.
+    """
+    if not x_user_id:
+        raise HTTPException(
+            status_code=400, detail="X-User-ID is required: the card is the user's own."
+        )
+    if not state.prompt_sessions_api:
+        raise HTTPException(
+            status_code=503, detail="DESIGN CARD FAILURE: Database not available"
+        )
+    row = state.prompt_sessions_api.get_session(session_id=session_id, user_id=x_user_id)
+    if not row:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No card {session_id} exists for this person.",
+        )
+    meta = row.get("metadata") or {}
+    if isinstance(meta, str):
+        try:
+            meta = json.loads(meta) if meta.strip() else {}
+        except (json.JSONDecodeError, ValueError):
+            meta = {}
+    if not isinstance(meta, dict):
+        meta = {}
+    if str(meta.get("session_type") or "") != "design_session":
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"Session {session_id} is not a saved card; it is a working visit. "
+                "A working visit is not drawn as a card."
+            ),
+        )
+    # THE STATE IS THE RECORD'S OWN, exactly as the console's grid reads it. The read is also
+    # how the save learns that the card it just wrote is now in the Supervisor Queue: `locked`
+    # is the state machine's answer, not the save's assumption.
+    card_state = card_state_of(row)
+    state_word, state_color = _card_status(row, card_state)
+    routing = meta.get("routing") if isinstance(meta.get("routing"), dict) else {}
+    return {
+        "card": design_card(
+            card_id=str(row.get("id") or ""),
+            element_key="",
+            # A SESSION IS NEVER WITHOUT A NAME ON SCREEN: an untitled one is drawn as Untitled.
+            title=(row.get("title") or "").strip() or "Untitled",
+            description=(row.get("description") or "").strip(),
+            status=state_word,
+            status_color=state_color,
+            state=card_state.value if card_state else "",
+            locked=is_card_locked(row),
+            routing=routing,
+            reviewer=str(meta.get("reviewer") or ""),
+            created_at=row.get("created_at"),
+            last_used=row.get("updated_at") or row.get("last_accessed_at"),
+            # THE CATEGORY'S COLOURS COME FROM THE RECORD'S OWN JOIN, not a second read.
+            category_color=row.get("category_color") or "",
+            category_title_color=row.get("category_title_color") or "",
+            category_text_color=row.get("category_text_color") or "",
+        )
+    }
+
+
+@router.get("/api/design/queue")
+def design_queue(
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
+) -> dict[str, Any]:
+    """THE SUPERVISOR QUEUE — the cards the designer's workspace must not draw.
+
+    A card in Pending_Approval or Queued_For_Share is read here, and only here. The read is
+    permission-aware the same way every other card read is: the owner, or a person holding a
+    `session_permissions` row (the reviewer a card was addressed to). The row is not deactivated
+    and nothing is purged; the queue is a routing fact, not a second copy of the card.
+    """
+    if not x_user_id:
+        raise HTTPException(
+            status_code=400, detail="X-User-ID is required: the queue belongs to a person."
+        )
+    if not state.prompt_sessions_api:
+        raise HTTPException(
+            status_code=503, detail="DESIGN QUEUE FAILURE: Database not available"
+        )
+    try:
+        with psycopg2.connect(DATABASE_URL) as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("SET app.current_user_id = %s", (x_user_id,))
+                cur.execute(
+                    """
+                    SELECT ps.id::text AS id, ps.title, ps.description, ps.status,
+                           ps.is_archived, ps.metadata, ps.created_at, ps.last_accessed_at,
+                           ps.updated_at, ps.user_id::text AS owner_id,
+                           u.full_name AS owner_name, u.email AS owner_email
+                      FROM prompt_sessions ps
+                      LEFT JOIN users u ON u.id = ps.user_id
+                     WHERE ps.metadata->>'session_type' = 'design_session'
+                       AND ps.is_archived IS NOT TRUE
+                       AND (
+                            ps.user_id = %s
+                         OR EXISTS (
+                                SELECT 1 FROM session_permissions sp
+                                WHERE sp.session_id = ps.id AND sp.user_id = %s
+                            )
+                       )
+                     ORDER BY ps.updated_at DESC
+                    """,
+                    (x_user_id, x_user_id),
+                )
+                rows = cur.fetchall()
+                cur.execute(
+                    "SELECT color, title_color, text_color FROM categories WHERE name = %s",
+                    (DESIGN_CONSOLE_CATEGORY,),
+                )
+                cat = cur.fetchone() or {}
+    except Exception as e:  # noqa: BLE001 — the refusal carries its reason
+        raise HTTPException(
+            status_code=503,
+            detail=f"DESIGN QUEUE FAILURE: the queue could not be read — {type(e).__name__}: {e}",
+        ) from e
+
+    cards: list[dict[str, Any]] = []
+    for _row in rows:
+        _meta = _row.get("metadata") or {}
+        if isinstance(_meta, str):
+            try:
+                _meta = json.loads(_meta) if _meta.strip() else {}
+            except (json.JSONDecodeError, ValueError):
+                _meta = {}
+        if not isinstance(_meta, dict):
+            _meta = {}
+        _card_state = card_state_of(_row)
+        if _card_state not in LOCKED_STATES:
+            continue
+        _state_word, _state_color = _card_status(_row, _card_state)
+        _routing = _meta.get("routing") if isinstance(_meta.get("routing"), dict) else {}
+        _owner_id = str(_row.get("owner_id") or "")
+        _card = design_card(
+            card_id=str(_row.get("id") or ""),
+            element_key="",
+            title=(_row.get("title") or "").strip() or "Untitled",
+            description=(_row.get("description") or "").strip(),
+            status=_state_word,
+            status_color=_state_color,
+            state=_card_state.value,
+            locked=True,
+            routing=_routing,
+            reviewer=str(_meta.get("reviewer") or ""),
+            created_at=_row.get("created_at"),
+            last_used=_row.get("updated_at") or _row.get("last_accessed_at"),
+            category_color=cat.get("color") or "",
+            category_title_color=cat.get("title_color") or "",
+            category_text_color=cat.get("text_color") or "",
+        )
+        _card.update({
+            "owner_id": _owner_id,
+            "owner_name": str(_row.get("owner_name") or _row.get("owner_email") or ""),
+            "permission": "owner" if _owner_id == x_user_id else "shared",
+            "queue": "approval" if _card_state == CardState.PENDING_APPROVAL else "share",
+        })
+        cards.append(_card)
+    return {"cards": cards, "count": len(cards)}
+
+
+class CardQueueRequest(BaseModel):
+    destination: str
+
+
+@router.post("/api/design/sessions/{session_id}/queue")
+def queue_design_session(
+    session_id: str,
+    body: CardQueueRequest,
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
+) -> dict[str, Any]:
+    """ROUTE A CARD INTO THE APPROVAL OR SHARING QUEUE. NOTHING IS PURGED.
+
+    The row keeps its conversation, its activity and its saved preview. What changes is its state
+    and its routing mask: the card leaves the designer's workspace list and appears in the
+    supervisor's queue. From that moment the state machine locks it for its owner.
+    """
+    if not x_user_id:
+        raise HTTPException(
+            status_code=400, detail="X-User-ID is required: the card is the user's own."
+        )
+    if not state.prompt_sessions_api:
+        raise HTTPException(
+            status_code=503, detail="DESIGN QUEUE FAILURE: Database not available"
+        )
+    destination = str(body.destination or "").strip().lower()
+    if destination not in ("approval", "share"):
+        raise HTTPException(
+            status_code=422, detail="destination must be 'approval' or 'share'."
+        )
+    row = state.prompt_sessions_api.get_session(session_id=session_id, user_id=x_user_id)
+    if not row:
+        raise HTTPException(
+            status_code=404, detail=f"No session {session_id} exists for this person."
+        )
+    meta = row.get("metadata") or {}
+    if isinstance(meta, str):
+        try:
+            meta = json.loads(meta) if meta.strip() else {}
+        except (json.JSONDecodeError, ValueError):
+            meta = {}
+    if not isinstance(meta, dict):
+        meta = {}
+    kind = str(meta.get("session_type") or "")
+    if kind != "design_session":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Session {session_id} is a live Tools visit. A queue holds cards; "
+                "close the visit before submitting it."
+            ),
+        )
+    current_state = card_state_of(row)
+    if current_state in LOCKED_STATES:
+        raise HTTPException(status_code=409, detail=locked_state_message(current_state))
+    if (
+        destination == "approval"
+        and str(meta.get("review_stage") or "") == "approved"
+    ):
+        raise HTTPException(
+            status_code=409, detail="This card is already approved; it is not pending again."
+        )
+
+    routing = meta.get("routing") if isinstance(meta.get("routing"), dict) else {}
+    routing = dict(routing)
+    routing.update({
+        "destination": destination,
+        "approval": destination == "approval" or bool(routing.get("approval")),
+        "share": destination == "share" or bool(routing.get("share")),
+        "queued_at": datetime.now().isoformat(),
+        "queued_by": x_user_id,
+    })
+    if destination == "approval":
+        stage_metadata = {"review_stage": "in-review", "routing": routing}
+        status_word = "Pending Approval"
+        line = "Card submitted to the Supervisor Queue for approval."
+        session_state = "pending_approval"
+    else:
+        stage_metadata = {"share_stage": "queued", "routing": routing}
+        status_word = "Queued for Share"
+        line = "Card queued for sharing. Its record is read-only until the share is answered."
+        session_state = "queued_for_share"
+
+    updated = state.prompt_sessions_api.update_session(
+        user_id=x_user_id,
+        session_id=session_id,
+        status=status_word,
+        metadata=stage_metadata,
+    )
+    if not updated:
+        raise HTTPException(
+            status_code=403,
+            detail="This card could not be written by you, so the queue was not changed.",
+        )
+
+    conversation_id = str(row.get("conversation_id") or "")
+    if state.conversation_api:
+        try:
+            if not conversation_id:
+                conversations = state.conversation_api.get_conversations_by_session(
+                    session_id, x_user_id
+                )
+                if conversations:
+                    conversation_id = str(conversations[0].get("id") or "")
+            if conversation_id:
+                state.conversation_api.add_message(
+                    conversation_id,
+                    x_user_id,
+                    "assistant",
+                    line,
+                    metadata={
+                        "source": "host",
+                        "session_state": session_state,
+                        "at": datetime.now().isoformat(),
+                    },
+                    save_to_memory=False,
+                )
+        except Exception as e:  # noqa: BLE001 — stated, never hidden
+            print(f"[design-queue] the queue line could not be written: {e}")
+
+    new_state = card_state_of(updated or row)
+    return {
+        "action": "queued",
+        "destination": destination,
+        "state": new_state.value if new_state else "",
+        "session": updated or row,
+        "conversation_id": conversation_id,
+    }
+
+
+@router.post("/api/design/sessions/{session_id}/close")
+def close_design_session(
+    session_id: str,
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
+) -> dict[str, Any]:
+    """CLOSE A TOOLS VISIT AS A CARD — NEVER PURGE IT.
+
+    Every session is a card. Leaving the tab closes the visit; the row becomes a `design_session`
+    with the state Closed, and its conversation, greeting, turns, failures and ingest activity
+    remain the permanent record. The next press of the tab resolves a new working row because this
+    one is no longer a `design_tab`. Nothing here deletes a row, a conversation or an activity.
+    """
+    if not x_user_id:
+        raise HTTPException(
+            status_code=400, detail="X-User-ID is required: the session is the user's own."
+        )
+    if not state.prompt_sessions_api:
+        raise HTTPException(
+            status_code=503, detail="DESIGN SESSION FAILURE: Database not available"
+        )
+    row = state.prompt_sessions_api.get_session(session_id=session_id, user_id=x_user_id)
+    if not row:
+        raise HTTPException(
+            status_code=404, detail=f"No session {session_id} exists for this person."
+        )
+    meta = row.get("metadata") or {}
+    if isinstance(meta, str):
+        try:
+            meta = json.loads(meta) if meta.strip() else {}
+        except (json.JSONDecodeError, ValueError):
+            meta = {}
+    if not isinstance(meta, dict):
+        meta = {}
+    # THE VAULT LOCK. A card in a supervisor queue is not the designer's to close, edit or
+    # re-enter. Its conversation and activity remain readable; its state does not change here.
+    if is_card_locked(row):
+        raise HTTPException(
+            status_code=423, detail=locked_state_message(card_state_of(row))
+        )
+    kind = str(meta.get("session_type") or "")
+    if kind == "design_session":
+        # A CARD IS NOT CLOSED BY A VISIT'S LEAVE. Its record and activity stand as they are.
+        return {
+            "action": "kept",
+            "session": row,
+            "reason": "This session is already a card; leaving the visit does not change it.",
+        }
+    if kind != "design_tab" or str(meta.get("design_tab") or "") != "tools":
+        raise HTTPException(
+            status_code=404,
+            detail=f"Session {session_id} is not a Tools visit, so it has no visit to close.",
+        )
+
+    # ── THE SESSION BECOMES A CARD; NOTHING IS PURGED ────────────────────────────────────────
+    # The row, its conversations, its greeting, every turn and every activity row stay. A blank
+    # visit is still a session that began and ended, and its record is kept like any other.
+    updated = state.prompt_sessions_api.update_session(
+        user_id=x_user_id,
+        session_id=session_id,
+        status="Closed",
+        metadata={
+            "session_type": "design_session",
+            "session_state": "closed",
+            "closed_at": datetime.now().isoformat(),
+        },
+    )
+
+    # ── THE STATE CHANGE IS A TURN IN THE SESSION'S OWN CONVERSATION ─────────────────────────
+    # The row is the durable state; the conversation is the readable log. A failed line does not
+    # undo the close — the row and its status are already written — and the failure is printed,
+    # never swallowed as a clean close.
+    conversation_id = str(row.get("conversation_id") or "")
+    if state.conversation_api:
+        try:
+            if not conversation_id:
+                conversations = state.conversation_api.get_conversations_by_session(
+                    session_id, x_user_id
+                )
+                if conversations:
+                    conversation_id = str(conversations[0].get("id") or "")
+            if conversation_id:
+                state.conversation_api.add_message(
+                    conversation_id,
+                    x_user_id,
+                    "assistant",
+                    "Session closed. Its activity is kept in this card.",
+                    metadata={
+                        "source": "host",
+                        "session_state": "closed",
+                        "at": datetime.now().isoformat(),
+                    },
+                    save_to_memory=False,
+                )
+        except Exception as e:
+            print(f"[design-close] the close line could not be written: {e}")
+
+    return {
+        "action": "closed",
+        "session": updated or row,
+        "conversation_id": conversation_id,
+    }
 
 
 @router.post("/api/design/apply-carbon")

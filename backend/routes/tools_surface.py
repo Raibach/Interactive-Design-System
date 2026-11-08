@@ -50,7 +50,7 @@ def _design_element_rows(user_id: str) -> list[dict[str, Any]]:
                 SELECT id::text AS id, title, description, is_archived, metadata
                   FROM prompt_sessions
                  WHERE user_id = %s AND metadata->>'session_type' = 'design_master'
-                 ORDER BY metadata->>'element_key'
+                 ORDER BY updated_at DESC NULLS LAST, created_at DESC
                 """,
                 (user_id,),
             )

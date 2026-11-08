@@ -31,6 +31,8 @@ export type DesignLeft = {
   host: HTMLElement;
   renderer: any;
   frame: HTMLElement;
+  /** The read-only status a queued card draws in place of the ingest canvas. */
+  ledger: HTMLElement;
 };
 
 /**
@@ -52,9 +54,10 @@ export function useDesignRowSelection(leftRef: RefObject<DesignLeft | null>): vo
 }
 
 /**
- * THE LEFT CONTAINER — DEDICATED, CREATED ONCE. The host is re-parented when the layout is a new
- * element; its renderer and UX frame are never re-created, so switching tabs does not reload
- * either application.
+ * THE LEFT CONTAINER — ONE PER PAGE. A page is created when its tab is pressed and disposed when
+ * another tab is pressed, so every page builds its own left column and its own frame. A tab switch
+ * is a fresh load of that page, not a hidden container re-parented; the record the page reads is
+ * the server's, and no live state of the previous page survives leaving it.
  */
 export function ensureLeftColumn(
   layout: HTMLElement,
@@ -77,6 +80,24 @@ export function ensureLeftColumn(
   ux.style.cssText = 'display:none;flex:1 1 auto;min-height:0;width:100%;';
   host.appendChild(renderer);
   host.appendChild(ux);
+
+  /*
+   * THE QUEUED CARD'S LEDGER. A card in Pending_Approval or Queued_For_Share has no ingest
+   * canvas and no Save control; this read-only block states the state, the card and the reason.
+   * It is plain DOM, not an A2UI component: a locked card must not need a catalogue name to be
+   * told what it is.
+   */
+  const ledger = document.createElement('pre');
+  ledger.setAttribute('data-design-locked-ledger', '');
+  ledger.setAttribute('role', 'status');
+  ledger.setAttribute('aria-live', 'polite');
+  ledger.style.cssText =
+    'display:none;flex:1 1 auto;min-height:0;overflow:auto;margin:0;padding:24px;' +
+    'white-space:pre-wrap;word-break:break-word;line-height:1.6;' +
+    'font-family:"IBM Plex Mono","SFMono-Regular",monospace;font-size:13px;' +
+    'color:#f3e9ef;background:#25141f;' +
+    'border:1px solid #6b4a5e;border-radius:12px;';
+  host.appendChild(ledger);
 
   /*
    * THE ASSEMBLY RING (owner, 2026-10-25: "add a spinner like the others we have in the react
@@ -113,7 +134,7 @@ export function ensureLeftColumn(
   host.appendChild(spin);
 
   layout.appendChild(host);
-  leftRef.current = { host, renderer, frame: ux };
+  leftRef.current = { host, renderer, frame: ux, ledger };
   return leftRef.current;
 }
 
@@ -145,6 +166,7 @@ export function placeLeftColumn({
   }
 
   if (railTab === 'ux') {
+    left.ledger.style.display = 'none';
     left.renderer.style.display = 'none';
     /*
      * THE PROGRAM IS PROBED ON EVERY ENTRY (owner, 2026-10-18: *"it just spins and loads of white
@@ -186,6 +208,18 @@ export function placeLeftColumn({
 
   left.frame.style.display = 'none';
   left.renderer.style.display = 'block';
+  /* THE LOCKOUT GUARD, BEFORE ANY CANVAS IS DRAWN. A queued card's state is evaluated first;
+     the ingest form, the layer tree and the preview are not placed at all. The ledger is the
+     only thing the column draws, and it is read-only. */
+  if (toolsStanding && injected?.locked) {
+    left.renderer.style.display = 'none';
+    left.ledger.textContent =
+      injected.ledger?.text
+      ?? 'This card is locked in the Supervisor Queue. Its canvas is suppressed until the supervisor answers.';
+    left.ledger.style.display = 'block';
+    return;
+  }
+  left.ledger.style.display = 'none';
   /* THE UX TAB'S MESSAGE BELONGS TO THE UX TAB — the box is removed when any other tab owns the
      column (owner, 2026-10-18: it was showing underneath the Figma program). */
   left.host.querySelector('[data-ux-error]')?.remove();

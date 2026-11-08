@@ -89,6 +89,61 @@ interface WritingAreaIndexProps {
   isAuthenticated?: boolean | null;
 }
 
+/**
+ * THE DESIGN ROOM'S LEAVE QUESTION, ASKED BEFORE THE SHELL CHANGES THE TAB.
+ *
+ * The Design room's own leave question lives in its seat; this is the shell knocking on the same
+ * door. The answer decides the act: Save writes the session as a card on the console, Discard
+ * throws the visit away, and a missing dialog keeps the session rather than destroying it.
+ */
+/**
+ * THE TOOLS SESSION'S OWN REPORT, ASKED BEFORE THE DESIGN ROOM IS LEFT.
+ *
+ * The Tools page answers this only while it stands. When another Design tab stands, no answer is
+ * filled, and the header asks nothing. This is the same report the room's own rail asks.
+ */
+function designLeaveReport(): {
+  work?: boolean;
+  kept?: boolean;
+  title?: string;
+  failure?: boolean;
+  changed?: boolean;
+  draft?: boolean;
+} {
+  const report: {
+    work?: boolean;
+    kept?: boolean;
+    title?: string;
+    failure?: boolean;
+    changed?: boolean;
+    draft?: boolean;
+  } = {};
+  window.dispatchEvent(new CustomEvent("design-save-ask", { detail: report }));
+  return report;
+}
+
+/** The question the header draws; the message is the Tools session's own case. */
+function askDesignLeave(message: string): Promise<"save" | "discard" | "accept"> {
+  return new Promise((resolve) => {
+    const detail: {
+      message: string;
+      actions: Array<{ id: string; label: string; variant: "primary" | "destructive" | "plain" }>;
+      handled: boolean;
+      resolve: (action: "save" | "discard" | "accept") => void;
+    } = {
+      message,
+      actions: [
+        { id: "save", label: "Save", variant: "primary" },
+        { id: "discard", label: "Discard", variant: "destructive" },
+      ],
+      handled: false,
+      resolve,
+    };
+    window.dispatchEvent(new CustomEvent("design-leave-question", { detail }));
+    if (!detail.handled) resolve("accept");
+  });
+}
+
 export default function Index(_props: WritingAreaIndexProps) {
   const { toast } = useToast();
   const { id: routeSessionId } = useParams<{ id: string }>();
@@ -357,6 +412,48 @@ export default function Index(_props: WritingAreaIndexProps) {
    */
   const handleTabChange = useCallback(async (tabId: string | null) => {
     if (!tabId) return;
+    /*
+     * LEAVING THE DESIGN ROOM IS A QUESTION, NOT A SILENT MOVE. The Design room holds a session
+     * with its conversations and its audit log; the header is outside that room, so it asks the
+     * room's own leave question before changing the tab. Save writes the card; Discard throws the
+     * visit away; either way the person chose.
+     */
+    if (headerTabRef.current === "design" && tabId !== "design") {
+      /*
+       * THE QUESTION BELONGS TO THE TOOLS SESSION, NOT TO THE DESIGN CONTAINER. The Tools page
+       * answers the report only while it stands; if another Design tab stands, no answer is filled
+       * and the header asks nothing. A saved card's stored preview is not a draft; a failure, a
+       * typed change, or a draft made in this visit is.
+       */
+      const report = designLeaveReport();
+      const unsaved = Boolean(report.work && (!report.kept || report.changed || report.draft));
+      if (unsaved) {
+        const name = report.title ? `"${report.title}"` : "This session";
+        const finding = report.failure
+          ? "has a recorded failure that is not on a card yet."
+          : report.kept
+            ? "has changes from this visit that are not saved on its card."
+            : "has work in it that is not on a card yet.";
+        const outcome = report.kept
+          ? "Save updates the card. Discard closes this visit and leaves the card in place."
+          : "Save keeps it, with its drawing and its activity, as a card. Discard closes the "
+            + "session and keeps its activity; the drawing is not kept.";
+        const answer = await askDesignLeave(`${name} ${finding} ${outcome}`);
+        if (answer === "save") {
+          window.dispatchEvent(new CustomEvent("design-left-save", { detail: { force: true } }));
+          /*
+           * THE SAVE ENDS ON THE CONSOLE, NOT IN THE ROOM THAT WAS PRESSED. The card the save just
+           * made stands on the Design console; carrying the person to the Composer leaves them away
+           * from the record they asked to keep. The save is the Design seat's act, and the console is
+           * where its result is read.
+           */
+          handleHeaderTabChange("console");
+          return;
+        } else if (answer === "discard") {
+          window.dispatchEvent(new CustomEvent("design-save-discard"));
+        }
+      }
+    }
     if (tabId === 'composer') {
       setPendingComposerIntent({ intent: 'render-composer' });
       handleHeaderTabChange('composer');

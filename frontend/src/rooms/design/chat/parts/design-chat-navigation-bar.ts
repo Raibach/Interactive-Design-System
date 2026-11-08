@@ -194,8 +194,8 @@ interface TabDef {
 const TABS: TabDef[] = [
   {
     id: 'chat',
-    label: 'Chat',
-    tooltip: 'Chat with Grace',
+    label: 'Home',
+    tooltip: 'Home — the design console activity, the cards, and the chat',
     // Figma "chat-button" 40001010:25768 — component, frame "chat-menu-item"
     // 40001010:25749 inside it. Geometry comes from the container's constraint
     // (the :host block in this file), not from here — see the note there for why.
@@ -1184,20 +1184,18 @@ export class ChatNavigationBar extends LitElement {
   render() {
     const currentTab = this.activeTab;
 
-    // Filter tabs by role — if allowedTabs is set, only show those.
-    // If unset (dev mode / no role), show all (backwards-compatible).
-    // A set that matches no known tab would render an empty bar, and an empty bar
-    // reads as "the nav bar is broken", not "this role has no tabs" — fail open.
+    /* THE RAIL DRAWS ONLY WHAT THE ROOM STATED (owner, 2026-11-07). Two fallbacks stood here —
+       "no list stated" drew the entire catalogue, and "the list matched nothing" drew it again —
+       and they are what put every tab in the application on the Chat page's rail. Nothing
+       stated is nothing drawn. The room's own page states its rail list. */
     const allowed = this.allowedTabs
       ? this.allowedTabs.split(',').map((id) => id.trim()).filter(Boolean)
       : [];
-    const filtered = allowed.length
-      ? TABS.filter((tab) => allowed.includes(tab.id))
-      : TABS;
+    const filtered = TABS.filter((tab) => allowed.includes(tab.id));
     /* The room's own words for its buttons, when it stated any — applied to the
        DRAWN label and tooltip only. See `tabLabels`. */
     const overrides = this._labelOverrides();
-    const visibleTabs = (filtered.length ? filtered : TABS).map((tab) => {
+    const visibleTabs = filtered.map((tab) => {
       const o = overrides[tab.id];
       return o ? { ...tab, label: o.label ?? tab.label, tooltip: o.tooltip ?? tab.tooltip } : tab;
     });

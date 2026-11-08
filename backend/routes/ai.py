@@ -10,6 +10,7 @@ from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel
 
 import services as state
+from card_lifecycle import CardState, card_state_of, is_card_locked, locked_state_message
 from deps import (
     A2UI_CATALOG_ID,
     DEFAULT_DESIGN_SYSTEM,
@@ -1277,6 +1278,24 @@ def ai_assemble_surface(
             lightweight=False,
             exclude_drafts=True,  # unsigned composer drafts never litter the console
         )
+        # ── THE DESIGN ROOM'S OWN ROWS ARE NOT CONSOLE CARDS ──────────────────────────────────
+        # `get_sessions` returns every package row. The room's container and its
+        # `design_master`/`design_child` element rows are internals. The TOOLS session is a card:
+        # it is the live job, and its card is how it is opened and handed on. The room's
+        # conversation tabs (chat, ux, console) are their own pages, not the console's job cards.
+        _design_internals = {"design", "design_master", "design_child"}
+        _design_conversation_pages = {"chat", "ux", "console"}
+        sessions = [
+            session
+            for session in sessions
+            if str((session.get("metadata") or {}).get("session_type") or "")
+            not in _design_internals
+            and not (
+                str((session.get("metadata") or {}).get("session_type") or "") == "design_tab"
+                and str((session.get("metadata") or {}).get("design_tab") or "")
+                in _design_conversation_pages
+            )
+        ]
         ms_a = (time.perf_counter() - t_a_start) * 1000
 
         # Initial console paint is DB-authoritative and does not block on model
@@ -1306,8 +1325,14 @@ def ai_assemble_surface(
             # package with NO marker is the Composer's by default (owner, 2026-10-27: *"replace
             # the Gemini logo for composer cards"*): the Composer is the seat that makes prompt
             # packages, and the rows written before `created_via` existed carry nothing else.
-            room_domain = session_meta.get("room_domain") or ""
             session_type = session_meta.get("session_type") or ""
+            room_domain = session_meta.get("room_domain") or (
+                "design" if session_type.startswith("design") else ""
+            )
+            # THE DESIGN CARD'S LIFECYCLE. The global console is the supervisor's wide view: it
+            # may hold a queued card, and it says so. The card's state is the record's own; the
+            # design console's own list is where the designer's workspace omits it.
+            _design_state = card_state_of(session) if session_type.startswith("design") else None
             seat = room_domain or (
                 "design" if session_type.startswith("design")
                 else "governance" if session_type == "governance"
@@ -1321,9 +1346,18 @@ def ai_assemble_surface(
                 "description": description,
                 # THE CARD CARRIES ITS ROOM (2026-10-03): the card click routes to the
                 # room that owns the package — a product package opens the Product room,
-                # every other card the Composer. Absent stays absent: a legacy card
-                # routes exactly where it always has.
-                "room_domain": (session_meta.get("room_domain") or ""),
+                # a design package opens the Design room's tool, and the other cards the
+                # Composer. A design row now carries the room even when the old row had no
+                # `room_domain` marker, so the click cannot fall through to the Composer.
+                "room_domain": room_domain,
+                # THE DESIGN CARD'S OWN OPEN TARGET. A design system's card opens the tool in
+                # that system (`system:<name>`); a kept session's card carries no element key
+                # and opens by its session id. Other packages have no element key.
+                "element_key": (
+                    f"system:{session_meta.get('design_system') or ''}"
+                    if session_type == "design_catalogue"
+                    else ""
+                ),
                 # The seat whose mark the card wears — see the note above.
                 "seat": seat,
                 # ⭐ THE BRIDGED PROJECT (2026-10-04): a card for a project in the Product
@@ -1342,6 +1376,10 @@ def ai_assemble_surface(
                 ),
                 "category": session.get("category") or "",
                 "status": (session.get("status") or "Active").lower(),
+                # THE LIFECYCLE AND THE LOCK, in the state machine's own words. A card outside
+                # the design sessions (a design system) carries no lifecycle state.
+                "state": _design_state.value if _design_state else "",
+                "locked": is_card_locked(session),
                 "version": session.get("current_version") or 1,
                 "likes": session.get("likes") or 0,
                 "model_name": session.get("model_name") or "",
@@ -2629,14 +2667,16 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
             # yet, so the layout does not draw it."
             #
             # THE STATE IS THE SHELL'S AND TRAVELS AS BINDINGS. `preview` is written when a run
-            # produces something (`/session/preview`), and `busy`/`message` ride the same channel the
-            # ingest form uses, because it is the same fact: the room is working, or it refused.
+            # produces something (`/session/preview`), and `busy` rides the same channel the
+            # ingest form uses, because it is the same fact: the room is working. THE FAILURE'S
+            # TEXT IS NOT BOUND HERE: a run's failure is said once, in the chat, and the preview
+            # shows the component it drew. Repeating the failure above the drawing makes the
+            # drawing look like the error.
             components.append({
                 "id": "preview",
                 "component": "component-preview",
                 "preview": {"path": "/session/preview"},
                 "busy": {"path": "/session/ingest/busy"},
-                "message": {"path": "/session/ingest/message"},
             })
             for _c in components:
                 if _c.get("id") != "design-middle":
@@ -2934,14 +2974,28 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
             # else — a stranger's id, an element, a removed row — falls through to the tab's own
             # working row, because a bad id must open nothing rather than open something else.
             opened_session = None
+            opened_is_card = False
             if request.session_id:
+                _row = None
+                _card_read_error = None
                 try:
                     _row = state.prompt_sessions_api.get_session(
                         session_id=str(request.session_id), user_id=uid
                     )
                 except Exception as e:
-                    _row = None
+                    _card_read_error = e
                     _warn(f"the session a card asked to open could not be read: {e}")
+                if _card_read_error is not None:
+                    # A FAILED READ IS NOT A MISSING CARD, and neither one is a reason to open a
+                    # different session. The person pressed a card; the answer says why it did not
+                    # open, in the card's own words.
+                    raise HTTPException(
+                        status_code=503,
+                        detail=(
+                            f"The card {request.session_id} could not be read: "
+                            f"{_card_read_error}. Nothing was opened."
+                        ),
+                    )
                 if _row:
                     _meta = _row.get("metadata") or {}
                     if isinstance(_meta, str):
@@ -2949,8 +3003,31 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
                             _meta = json.loads(_meta)
                         except (json.JSONDecodeError, ValueError):
                             _meta = {}
-                    if isinstance(_meta, dict) and str(_meta.get("session_type") or "") == "design_session":
-                        opened_session = _row
+                    if isinstance(_meta, dict):
+                        _kind = str(_meta.get("session_type") or "")
+                        if _kind == "design_session":
+                            # A KEPT OR CLOSED CARD. It stands by its own record.
+                            opened_session = _row
+                            opened_is_card = True
+                        elif _kind == "design_tab" and str(_meta.get("design_tab") or "") == "tools":
+                            # THE LIVE SESSION IS A CARD TOO. A card on the console may name the
+                            # Tools session that is still running; pressing it opens that living
+                            # session, and its leave closes it like any other visit.
+                            opened_session = _row
+                            opened_is_card = False
+                if opened_session is None:
+                    # A BAD CARD ID OPENS NOTHING. It used to fall through to the tab's working row,
+                    # so pressing a card that was not this person's session silently opened the
+                    # current visit and drew it under the pressed card's name. The refusal is
+                    # stated instead; the working row is not a substitute for the card.
+                    raise HTTPException(
+                        status_code=404,
+                        detail=(
+                            f"The card {request.session_id} is not a Design session for "
+                            "this person. Nothing was opened; the working session was not used "
+                            "instead."
+                        ),
+                    )
 
             # ── THE DESIGN SYSTEM'S OWN PACKAGE AND CONVERSATION (owner, 2026-11-02) ────────────
             #
@@ -3026,47 +3103,14 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
                     detail="DESIGN FAILURE: the Tools tab's package did not resolve (not created).",
                 )
 
-            # ── THE TAB REMEMBERS ITS LAST CONVERSATION (2026-11-02) ─────────────────────────────
+            # ── A TAB PRESS IS A NEW SESSION (owner, 2026-11-07) ────────────────────────────────
             #
-            # A Save relabels this tab's row `design_session`, which is what frees the one-per-tab
-            # slot and lets the next press resolve a fresh, empty row. The consequence was visible
-            # and wrong: the person pressed Tools and found an empty chat, while the conversation
-            # they had just kept stood on its card. *"Why can you not make the last conversation
-            # load inside of tools?"*
-            #
-            # So a tab whose own package holds no person's turn resumes the newest kept session of
-            # this tab. The three conditions keep the other roads intact:
-            #   · a card that names a session already set `opened_session` — it wins;
-            #   · a system card names its own package — it wins;
-            #   · a package where the PERSON has spoken is a live visit — it is not replaced.
-            # A greeting does not make a live visit: the seat writes one into an empty thread when
-            # it opens, and reading that as work froze the first press on an empty thread (measured
-            # 2026-11-02: the greeting was written at 19:52:59 and every later assembly stood aside).
-            # Only an empty tab reaches the resume, and what it opens is a real row with its own
-            # conversation, title, address and notes — the same road a card takes.
-            #
-            # A FAILED READ IS NOT AN EMPTY TAB. The list is read and only a successful read that
-            # holds no person's turn may resume anything; a refusal leaves the assembly on the
-            # tab's own row.
-            if opened_session is None and system_package is None and state.conversation_api:
-                _tab_threads: list[dict[str, Any]] | None = None
-                try:
-                    _tab_threads = state.conversation_api.get_conversations_by_session(
-                        design_tools_tab["packageId"], uid
-                    )
-                except Exception as e:  # noqa: BLE001 — the tab's own list failing is said, not guessed
-                    _warn(f"the Tools tab's own conversations could not be read: {e}")
-                if _tab_threads is not None:
-                    _tab_ids = [str((_thread or {}).get("id") or "") for _thread in _tab_threads]
-                    _tab_holds_a_turn = state.conversation_api.holds_person_turn(_tab_ids, uid)
-                    if not _tab_holds_a_turn:
-                        _kept = state.prompt_sessions_api.get_latest_design_session(uid, "tools")
-                        if _kept:
-                            opened_session = _kept
-                            design_tools_tab = {
-                                "packageId": str(_kept["id"]),
-                                "conversationId": str(_kept.get("conversation_id") or ""),
-                            }
+            # *"each tab is like opening a new page… clean navigation"*, and *"the tools tab as
+            # create new button."* The tab's own working row is the visit. A kept session is
+            # opened by its CARD, which sends its id and sets `opened_session` above; the tab
+            # never reaches for the newest kept session on its own. The fallback that stood here
+            # did exactly that, so every new press reopened the card the person had just saved
+            # and no new session was ever made.
             design_conversation = design_tools_tab["conversationId"]
 
             # ── THE CONVERSATIONS THAT HANG OFF THE TOOLS PACKAGE, READ ON ASSEMBLY ──────
@@ -3089,6 +3133,7 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
             # — the sections named Title, Figma URL and Notes. A fresh visit holds empty strings,
             # which is the truth about it rather than a missing key the drawing has to interpret.
             design_form_values = {"title": "", "url": "", "notes": ""}
+            saved_preview = None
             if opened_session is not None:
                 _raw_left = opened_session.get("left_column_content") or ""
                 try:
@@ -3104,6 +3149,32 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
                         design_form_values["url"] = _content
                     elif _name == "notes":
                         design_form_values["notes"] = _content
+                # THE RUN THAT WAS SAVED WITH THIS CARD. The preview carries the compiled drawing,
+                # its facts, its values, its steps and the measured tree. Without it a reopened
+                # card has a name and an address but an empty third column, which is the state the
+                # person came back for. It is the record's own state, not a second copy.
+                _saved_meta = opened_session.get("metadata") or {}
+                if isinstance(_saved_meta, str):
+                    try:
+                        _saved_meta = json.loads(_saved_meta)
+                    except (json.JSONDecodeError, ValueError):
+                        _saved_meta = {}
+                if isinstance(_saved_meta, dict) and isinstance(_saved_meta.get("preview"), dict):
+                    saved_preview = _saved_meta["preview"]
+                # THE CARD'S OWN NAME FILLS THE TITLE WHEN THE SAVE STORED NONE. A save made with
+                # only the address is a real card — the console names it — and a reopened card
+                # that showed an empty Title would lose the name the person sees on the card. Only
+                # a KEPT session takes its row title: a working tab is called "Design — Tools",
+                # which names the room rather than the work.
+                if not design_form_values["title"]:
+                    _opened_meta = opened_session.get("metadata") or {}
+                    if isinstance(_opened_meta, str):
+                        try:
+                            _opened_meta = json.loads(_opened_meta)
+                        except (json.JSONDecodeError, ValueError):
+                            _opened_meta = {}
+                    if str((_opened_meta or {}).get("session_type") or "") == "design_session":
+                        design_form_values["title"] = str(opened_session.get("title") or "")
 
             # THE TOOLS VIEW'S OWN SESSION IS THE PACKAGE, NOT THE DESIGN CONTAINER. The
             # assembly binds every chat seat to that package here, so the Tools view can send its
@@ -3243,7 +3314,7 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
                             SELECT title, description, is_archived, metadata
                               FROM prompt_sessions
                              WHERE user_id = %s AND metadata->>'session_type' = 'design_master'
-                             ORDER BY metadata->>'element_key'
+                             ORDER BY updated_at DESC NULLS LAST, created_at DESC
                             """,
                             (uid,),
                         )
@@ -3418,9 +3489,45 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
             except Exception as e:
                 _warn(f"the design room's activity could not be read for the trace: {e}")
 
+            # ── THE CARD'S LIFECYCLE, ON THE PATH THE TOOLS PAGE READS ─────────────────────────
+            # The page's own session object carries the state machine's answer, so the workspace
+            # panel can evaluate the lock before it draws a field or a submit button. A live
+            # working row is Open; a reopened card is whatever its record says. The preview and
+            # the form data still travel, because the ledger names what the card holds; the UI
+            # suppresses the canvas, not the record.
+            _card_state = card_state_of(opened_session) if opened_session is not None else CardState.OPEN
+            _card_locked = is_card_locked(opened_session) if opened_session is not None else False
+            _card_meta: dict[str, Any] = {}
+            if opened_session is not None:
+                _raw_card_meta = opened_session.get("metadata") or {}
+                if isinstance(_raw_card_meta, str):
+                    try:
+                        _raw_card_meta = json.loads(_raw_card_meta)
+                    except (json.JSONDecodeError, ValueError):
+                        _raw_card_meta = {}
+                if isinstance(_raw_card_meta, dict):
+                    _card_meta = _raw_card_meta
+            _card_routing = (
+                _card_meta.get("routing") if isinstance(_card_meta.get("routing"), dict) else {}
+            )
+
             session_value = {
                 "id": str(design_container["id"]) if design_container else None,
                 "title": design_title,
+                # THE LIFECYCLE IS THE RECORD'S OWN. `card_state` is the enum's exact word;
+                # `locked` is the state machine's answer; `locked_reason` is the refusal the
+                # workspace panel states instead of drawing the ingest form and the preview.
+                "card_state": _card_state.value if _card_state else "",
+                "locked": _card_locked,
+                "locked_reason": locked_state_message(_card_state) if _card_locked else "",
+                "reviewer": str(_card_meta.get("reviewer") or ""),
+                "routing": _card_routing,
+                "owner_id": str((opened_session or {}).get("user_id") or ""),
+                # THE CARD'S OWN NAME, which is not the design system's name the page carries in
+                # `title`. The ledger names the card the person pressed.
+                "card_title": str(
+                    (opened_session or {}).get("title") or design_title or "Untitled"
+                ),
                 "catalogue": design_catalogue_facts,
                 # A container is not a draft and has nothing to describe yet. Stated, rather than
                 # left out, so the seat reads "none" from the value instead of guessing at a
@@ -3448,7 +3555,18 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
                 # on every data-model change (see the note where the form is emitted: a COMPONENTS
                 # change does not re-apply props, so patching the component is a write nothing
                 # reads). `refresh` is the tree's re-read trigger, bumped after an ingest lands.
-                "ingest": {"busy": False, "message": "", "refresh": 0},
+                "ingest": {
+                    "busy": False,
+                    "message": "",
+                    "refresh": 0,
+                    # THE MEASURED TREE THE RUN LEFT, for the list's own arrow. It is the saved
+                    # preview's tree, so a reopened card names the layer the run measured.
+                    "tree": (saved_preview or {}).get("tree"),
+                },
+                # THE DRAWING AND ITS FACTS, ON THE PATH THE LIVE PREVIEW USES. The seat applies
+                # this preview after the assembly, so the third column and the component's drawing
+                # come back exactly as they stood when the session was saved.
+                "preview": saved_preview,
                 # ── THE FOOTER'S TWO VALUES, AND THE ROW SAVE WRITES ────────────────────────
                 #
                 # `saving` and `save_result` are the footer's own, bound above and written here
@@ -3463,6 +3581,11 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
                 "saving": False,
                 "save_result": "",
                 "design_session_id": str(design_tools_tab["packageId"]),
+                # WHETHER THIS VISIT IS A KEPT CARD. A card reopened from the console is kept; a
+                # working tab is a visit. The leave question reads this so leaving a card does not
+                # ask whether to keep work that is already on a card, and so the visit can end
+                # without holding the card for the next press.
+                "kept": opened_is_card,
                 # The form's own three values — empty on a fresh visit, the kept session's on a
                 # reopen. Bound to the element above; one write here re-hands all three.
                 "form": design_form_values,
@@ -5016,6 +5139,11 @@ class AISaveSurfaceRequest(BaseModel):
     middle_column: dict | None = None  # compiled_output, model_used
     right_column: dict | None = None  # conversation_id, messages
     column_widths: dict | None = None  # { left: number|null, chat: number }
+    # THE DESIGN'S RUN, KEPT WITH ITS SESSION. The preview carries the drawing's compiled module,
+    # the facts that were compared, the values, the steps and the measured tree. Without it a
+    # reopened card can show the name and the address but not what the run built — which is the
+    # state the person came back for. Only the Tools save sends it.
+    preview: dict | None = None
     # THE PLACE AS IT WAS LEFT — the state the ELEMENTS hold and a save reads off them:
     # { leftCollapsed, seat: {open, width}, flow: {zoom, panX, panY} }. Optional on purpose:
     # a save that does not know the arrangement must not erase one that does.
@@ -5048,6 +5176,27 @@ async def ai_save_surface(
         )
 
     uid = get_user_id_from_header(x_user_id)
+
+    # ── THE VAULT LOCK, BEFORE THE COMPILE ─────────────────────────────────────────────────────
+    # A save of a card in the Supervisor Queue is refused before any model call is spent and
+    # before any column is read. The state is the record's own; a read that fails is a refusal,
+    # not a reason to save without knowing the state.
+    if request.session_id:
+        try:
+            _lock_row = state.prompt_sessions_api.get_session(request.session_id, uid)
+        except Exception as e:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    f"SAVE LOCK CHECK FAILURE: the session {request.session_id} could not be "
+                    f"read: {type(e).__name__}: {e}. Nothing was saved."
+                ),
+            ) from e
+        if _lock_row and is_card_locked(_lock_row):
+            raise HTTPException(
+                status_code=423,
+                detail=locked_state_message(card_state_of(_lock_row)),
+            )
 
     try:
         # Build left_column_content JSON from sections
@@ -5222,6 +5371,13 @@ Output ONLY valid JSON:
         # the row's own kind is enough, and the tab it came from stays in `metadata.design_tab`
         # because the merge keeps it.
         is_design_session_save = _design_kind in ("design_tab", "design_session")
+        # THE VAULT LOCK, ENFORCED AT THE WRITE. A card in the Supervisor Queue is not saved,
+        # edited or re-entered by its owner. The refusal names the state; the row is untouched.
+        if _design_kind == "design_session" and is_card_locked(previous_state):
+            raise HTTPException(
+                status_code=423,
+                detail=locked_state_message(card_state_of(previous_state)),
+            )
 
         # Build metadata including AI compilation info + column widths
         save_metadata = {
@@ -5238,6 +5394,25 @@ Output ONLY valid JSON:
             save_metadata["session_type"] = "design_session"
             save_metadata["kept_at"] = datetime.now().isoformat()
             save_metadata["kept_by"] = uid
+            # THE RUN IS PART OF THE SESSION. The preview carries the compiled drawing, the facts,
+            # the values, the steps and the measured tree; storing it is what lets the card open
+            # on the work instead of an empty third column. A caller that does not send the field
+            # keeps the preview already stored; a caller that sends null (the person discarded the
+            # drawing) clears it, because then the session really has no drawing.
+            _sent_fields = getattr(request, "model_fields_set", None)
+            if _sent_fields is None:
+                _sent_fields = getattr(request, "__fields_set__", set())
+            if "preview" in _sent_fields:
+                save_metadata["preview"] = (
+                    request.preview
+                    if isinstance(request.preview, dict) and request.preview
+                    else None
+                )
+            # THE APPROVAL QUEUE IS PAUSED FOR THE CURRENT DESIGN TESTING (owner, 2026-11-08:
+            # *"we don't need to focus on these approval cues at the moment"*). A save keeps the
+            # card Closed and editable; it no longer sends every saved card into review. The queue
+            # is still built: `POST /api/design/sessions/{id}/queue` is the explicit act that
+            # sends a card to the supervisor when the approval work resumes.
         if ai_description:
             save_metadata["ai_description"] = ai_description
 
@@ -5284,6 +5459,36 @@ Output ONLY valid JSON:
             action = "created"
 
         session_id = session.get("id") if session else request.session_id
+
+        # ── THE SAVE IS A STATE CHANGE, AND IT IS A TURN IN THE SESSION'S CONVERSATION ─────
+        # The row carries the state; the conversation carries the readable log. A failed line
+        # does not undo the save — the card is already written — and the failure is warned.
+        if is_design_session_save and conversation_id and state.conversation_api:
+            try:
+                # THE LINE SAYS WHAT THE SAVE ACTUALLY DID. The queue is paused, so a save keeps
+                # the card Closed and editable; it no longer claims the session is in review.
+                # An approved card keeps its own word.
+                _saved_state = (
+                    "approved"
+                    if str(_design_meta.get("review_stage") or "") == "approved"
+                    else "closed"
+                )
+                state.conversation_api.add_message(
+                    str(conversation_id),
+                    uid,
+                    "assistant",
+                    "Card saved. This session is approved."
+                    if _saved_state == "approved"
+                    else "Card saved.",
+                    metadata={
+                        "source": "host",
+                        "session_state": _saved_state,
+                        "at": datetime.now().isoformat(),
+                    },
+                    save_to_memory=False,
+                )
+            except Exception as e:
+                _warn(f"the save line could not be written to the session's conversation: {e}")
 
         # ══════════════════════════════════════════════════════════════════════
         # REAL VERSION HISTORY

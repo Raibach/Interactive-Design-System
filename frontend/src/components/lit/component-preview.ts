@@ -45,8 +45,29 @@ export interface PreviewState {
    * component's measured values is read (that would be interpreting one design against another).
    */
   existing?: { tag?: string; nodeId?: string; approvedAt?: string };
+  /**
+   * THE CATALOGUE COMPARISON, CARRIED FOR THE APPROVAL QUEUE. The preview never draws this and
+   * never reads it: the comparison was made by the ingest and it belongs to approval, where the
+   * catalogue is checked. It travels with the run so nothing is lost when the preview is the only
+   * thing holding the ingest's answer.
+   */
+  approvalFacts?: {
+    alreadyInCatalogue?: boolean;
+    existing?: { tag?: string; nodeId?: string; approvedAt?: string };
+    collisions?: Array<Record<string, any>>;
+    instances?: Array<Record<string, any>>;
+  };
   /** The job's id, when an ingest produced this — what an approve resolves. */
   jobId?: string;
+  /**
+   * THE CHAT OWNS THE ACTIONS. The third column draws the component and its facts; the approval
+   * and the diagnostic actions are said in the conversation, so the buttons are not drawn here.
+   */
+  chatControls?: boolean;
+  /** The workflow step drawn at the top of the body: Pending acceptance, Accepted, Approved. */
+  status?: string;
+  /** True once the designer accepted the drawing; the approval writes the catalogue. */
+  accepted?: boolean;
   /** Free label/value facts to draw under the identity, in order. */
   facts?: Array<{ label: string; value: string }>;
   /** One line about what this is, from the row or the ingest. */
@@ -196,6 +217,8 @@ export class ComponentPreview extends LitElement {
         flex: 1 1 auto;
         min-height: 0;
         min-width: 0;
+        max-width: 100%;
+        overflow-x: auto;
         overflow-y: auto;
       }
       .head {
@@ -314,13 +337,14 @@ export class ComponentPreview extends LitElement {
       }
       dl {
         display: grid;
-        grid-template-columns: minmax(90px, auto) 1fr;
+        grid-template-columns: minmax(0, 90px) minmax(0, 1fr);
         gap: 6px 14px;
         margin: 0;
       }
       dt {
         font-size: var(--ds-fs-meta);
         color: var(--ds-muted);
+        overflow-wrap: anywhere;
       }
       dd {
         margin: 0;
@@ -792,6 +816,16 @@ export class ComponentPreview extends LitElement {
         font-size: var(--ds-fs-meta);
         color: var(--ds-amber);
       }
+      /* THE WORKFLOW STEP, SAID ONCE IN THE PANEL: Pending acceptance, Accepted, Approved, In the
+         catalogue, Removed. The chat carries the same word and the action that follows it. */
+      .status {
+        margin: 12px 16px 0;
+        padding: 8px 12px;
+        border-left: 3px solid var(--ds-amber);
+        font-size: var(--ds-fs-meta);
+        font-weight: 700;
+        color: var(--ds-amber);
+      }
       /*
        * THE QUESTION, IN THE INGEST TOOL'S OWN DRESSING (IngestModal.tsx, the amber block under the
        * preview's header): amber, because it is a decision and not a failure; the answers on one
@@ -1227,7 +1261,7 @@ export class ComponentPreview extends LitElement {
       const steps = this.preview.steps ?? [];
       return html`<div class="pending">
         <span class="bigspin" aria-hidden="true"></span>
-        <p class="ptext">${this.preview.note || "Ingesting — reading the node from Figma…"}</p>
+        <p class="ptext">${this.preview.note || "Processing — reading the Figma file. Standby."}</p>
         ${steps.length
           ? html`<details class="acc" open>
               <summary>The run so far — ${steps.length} step${steps.length === 1 ? "" : "s"}</summary>
@@ -1253,7 +1287,12 @@ export class ComponentPreview extends LitElement {
     const facts = p.facts ?? [];
     return html`
       ${this.message ? html`<p class="message">${this.message}</p>` : nothing}
-      ${this._collisionQuestion(p)}
+      <!--
+        THE NAME-COMPARISON QUESTION IS NOT DRAWN HERE. The preview carries the design's own
+        facts — the drawing, the declarations, the readings, the annotations, the fidelity — and
+        nothing about the catalogue. The collision question and its overwrite answers belong to
+        the approval queue, where the catalogue is checked; the method below is kept for it.
+      -->
       <!--
         THE DRAWING, IN A FRAME THAT CANNOT BE INVISIBLE.
         The React preview put a visible outline around the component, and its reason is the reason
@@ -1269,6 +1308,7 @@ export class ComponentPreview extends LitElement {
       </div>
       ${this._binding(p)}
       <div class="body">
+        ${p.status ? html`<p class="status">${p.status}</p>` : nothing}
         ${(p.noteLines && p.noteLines.length ? p.noteLines : p.note ? [p.note] : []).map(
           (line) => html`<p class="note">${line}</p>`,
         )}
@@ -1424,7 +1464,7 @@ export class ComponentPreview extends LitElement {
           one-for-one translation until this instruction. The identity and the three actions read
           under the facts now, and the bar carries a top edge instead of a bottom one.
         */ ''}
-        <span class="actions">
+        ${p.chatControls ? nothing : html`<span class="actions">
           <button
             class="approve"
             type="button"
@@ -1464,7 +1504,7 @@ export class ComponentPreview extends LitElement {
                   : 'Remove from the catalogue'}
               </button>`
             : nothing}
-        </span>
+        </span>`}
         ${this._confirmingRemove
           ? html`<p class="warn">
               This next click deletes ${p.tag} from the catalogue and its file. Bringing it back

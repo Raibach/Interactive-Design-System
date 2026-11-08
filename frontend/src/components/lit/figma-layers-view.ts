@@ -1949,7 +1949,13 @@ export class FigmaLayersView extends LitElement {
           */ ''}
           ${this._renderSearch()}
           ${this.showHead ? this._renderCatalog() : nothing}
-          ${this._renderIngested()}
+          ${/*
+            THE INGESTED DESIGN'S TREE IS NOT DRAWN HERE. The column is the catalogue: the
+            components that exist. A design that was just measured is a preview — an ephemeral
+            draft that the middle column draws — and its layer tree is preview data, not a
+            catalogue entry. Drawing it here mixed the preview with the catalogue and the approval
+            queue. `_renderIngested` is kept, but nothing calls it from this column.
+          */ ''}
           ${this._renderDeclared()}
           ${this._renderRecord()}
         </div>

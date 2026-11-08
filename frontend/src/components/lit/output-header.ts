@@ -49,6 +49,8 @@ export class OutputHeader extends LitElement {
    * draws the line exactly as before.
    */
   declare readoutFilled: boolean;
+  /** The readout is opened by a press: the box grows to the full readout height. */
+  private _expanded = false;
 
   static properties = {
     line: { type: String },
@@ -85,11 +87,12 @@ export class OutputHeader extends LitElement {
       align-items: flex-start;
       gap: 10px;
       align-self: stretch;
+      /* THE BOX IS THE DRAWN BOX: its minimum height is 55px, and the text is cut at two lines
+         with an ellipsis. The grip belongs to the chat slot below, not to this box; nothing here
+         resizes the readout. */
       height: 55px;
-      /* THE FLOOR IS THE DRAWING'S OWN HEIGHT (owner, 2026-10-31: a drag on this bar "just drags
-         all the way" instead of stopping, and the text is cut). 55 is the box's drawn height, so
-         the drag cannot close it past what the drawing gives it. */
       min-height: 55px;
+      overflow: hidden;
       padding: 7px 10px;
       background-color: rgba(117, 142, 135, 0.35);
       border: 1px solid rgba(117, 142, 135, 0.5);
@@ -98,7 +101,8 @@ export class OutputHeader extends LitElement {
       box-sizing: border-box;
     }
 
-    /* 40001123:6763 "textarea" — 450×40, row, gap 10, counter CENTER. */
+    /* 40001123:6763 "textarea" — 450×40, row, gap 10, counter CENTER. The box holds the
+       real readout; its height is the rows' own. */
     .textarea {
       display: flex;
       flex-direction: row;
@@ -106,7 +110,9 @@ export class OutputHeader extends LitElement {
       gap: 10px;
       flex: 1 1 auto;
       min-width: 0;
-      height: 40px;
+      height: auto;
+      min-height: 0;
+      overflow: hidden;
     }
 
     /* THE HOST'S STRIP TAKES THE LINE'S PLACE (see readoutFilled). The slot itself
@@ -135,6 +141,8 @@ export class OutputHeader extends LitElement {
       min-width: 0;
       text-align: left;
     }
+    /* THE SLOT'S OWN PRESSES DO NOT REACH THE READOUT. */
+    .slot { display: contents; }
     .readout-area {
       justify-content: flex-start;
     }
@@ -145,7 +153,7 @@ export class OutputHeader extends LitElement {
        Nunito); the line's figures render Inter via the figures helper. */
     .line {
       font-family: 'IBM Plex Sans', system-ui, sans-serif;
-      font-weight: 400;
+      font-weight: 500;
       font-size: 12px;
       line-height: 20px;
       color: #3D515B;
@@ -153,6 +161,32 @@ export class OutputHeader extends LitElement {
       margin: 0;
       flex: 1 1 auto;
       min-width: 0;
+      /* THE LINE'S OWN NEWLINES ARE REAL ROWS: the readout is several figures on several lines,
+         not one run-on sentence. */
+      white-space: pre-line;
+      /* TWO LINES, AND AN ELLIPSIS. The readout is a fixed two-line box; the grip below belongs
+         to the chat slot, not to this text. */
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    /* THE DRAG LIFTS THE TWO-LINE CUT. The frame writes the box's height on the first drag; from
+       that moment the line is no longer clamped, so the drag reveals the rest of the readout. */
+    .readout-area[style*="height"] .line {
+      display: block;
+      -webkit-line-clamp: unset;
+      overflow: visible;
+    }
+    /* THE PRESS OPENS THE BOX TO THE FULL READOUT HEIGHT. */
+    .readout-area.open {
+      height: auto;
+    }
+    .readout-area.open .line {
+      display: block;
+      -webkit-line-clamp: unset;
+      overflow: visible;
     }
 
     /* 40001124:7096 "model-readout-tokens-etc" — 20×20, FIXED/FIXED. */
@@ -166,6 +200,8 @@ export class OutputHeader extends LitElement {
     }
     .mark-icon { display: block; }
 
+    /* THE GRIPPER'S VISIBLE HANDLE — the five dots the person sees and takes hold of. The frame
+       wires the drag on this band; the dots are the affordance, not decoration. */
     /* 40001123:6773 — the gripper: 500×7, row, FILL/FIXED, gap 10, pad 0/10, CENTER. */
     .gripper {
       display: flex;
@@ -212,13 +248,35 @@ export class OutputHeader extends LitElement {
       parts.push(`Tokens: ${this.attributed ? (this.tokens || '0') : 'unattributed'}`);
       if (this.calls) parts.push(`Calls: ${this.attributed ? this.calls : 'unattributed'}`);
     }
-    return parts.join('  |  ');
+    return parts.join('\n');
   }
+
+  /**
+   * THE BOX OPENS ON A PRESS — the full readout height. A second press closes it. The frame also
+   * wires this face to reset the box; this press stops that one so the click and the drag are the
+   * two ways to the same result, and neither removes the other.
+   */
+  private _onReadoutClick = (e: Event): void => {
+    e.stopImmediatePropagation();
+    const area = this.renderRoot?.querySelector('.readout-area') as HTMLElement | null;
+    /* The drag writes an inline height; a press takes the box back to its own full height. */
+    if (area) {
+      area.style.height = '';
+      area.style.flex = '';
+    }
+    this._expanded = !this._expanded;
+    this.requestUpdate();
+  };
 
   render() {
     return html`
       <div class="area" data-node-id="40001119:6308" data-layer-name="output-header">
-        <div class="readout-area ${this.readoutFilled ? 'filled' : ''}" data-node-id="40001119:6309" data-layer-name="chat-output-readout-area" role="status">
+        <div
+          class="readout-area ${this.readoutFilled ? 'filled' : ''} ${this._expanded ? 'open' : ''}"
+          data-node-id="40001119:6309"
+          data-layer-name="chat-output-readout-area"
+          @click=${this._onReadoutClick}
+        >
           <div class="textarea" data-node-id="40001123:6763" data-layer-name="textarea">
             <p class="line" data-node-id="40001123:6750" data-layer-name="Analyzing: Session 222 | support Customer Session Duration: 28.495s Closed QA: 89.38% Sample text">${figures(this._line)}</p>
           </div>

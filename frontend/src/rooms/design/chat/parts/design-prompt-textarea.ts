@@ -171,6 +171,19 @@ export class PromptTextarea extends LitElement {
     }));
   }
 
+  /**
+   * CLEAR THE BOX AFTER A TURN IS SENT — the one clear that must land while the caret is still
+   * in the control. The `value` property alone cannot do it: `updated()` deliberately leaves a
+   * focused textarea alone, so an outside update never moves the person's caret. The DOM is
+   * cleared here first, the property follows it, and the box measures again at its empty height.
+   */
+  clear(): void {
+    const ta = this.shadowRoot?.querySelector('textarea') as HTMLTextAreaElement | null;
+    if (ta) ta.value = '';
+    if (this.value !== '') this.value = '';
+    this._resize();
+  }
+
   /** Measure once the browser has laid the new text out. */
   private _scheduleResize(): void {
     if (this._resizeQueued) return;

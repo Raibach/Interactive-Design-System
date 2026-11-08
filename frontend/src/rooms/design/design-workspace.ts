@@ -1614,7 +1614,14 @@ export class DesignWorkspaceLayout extends LitElement {
          published, so a longer fold with a shorter wait would put the canvas on screen
          mid-slide. */
       --ease-settle: cubic-bezier(0.22, 1, 0.36, 1);
-      --dur-pane: 760ms;
+      /*
+       * THE PANE'S MOTION CAN BE SWITCHED OFF BY THE ROOM. A tab change shows a page that was
+       * just built, and any change it makes to its column — opening it, setting its width — ran
+       * the 760ms transition, which is the pop seen on every switch. The room raises
+       * --pane-motion to 0 for the moment of the switch, so the page appears at its size; the
+       * value falls back to the drawn duration for every other change, including the drag.
+       */
+      --dur-pane: var(--pane-motion, 760ms);
     }
 
     .pane {
@@ -2173,22 +2180,31 @@ export class DesignWorkspaceLayout extends LitElement {
     `;
   }
 
+  /** The declared width is applied BEFORE the paint it belongs to — see `_applyDeclaredWidth`. */
+  protected willUpdate(changed: Map<string, unknown>): void {
+    if (changed.has('chatLoadWidth')) this._applyDeclaredWidth();
+  }
+
   /** A change to the column's state is also a change to what the panel is told. */
   protected updated(changed: Map<string, unknown>): void {
     if (changed.has('isThirdOpen')) this._syncRightPanel();
     /*
-     * THE ROOM'S DECLARED LOAD WIDTH LANDS ONCE, BEFORE ANY HAND (see the `chatLoadWidth` note
-     * on the property block): when the declaration arrives and nobody has claimed her column,
-     * it becomes the number her pane is drawn from — the same field a drag writes, so there is
-     * ONE width, whoever set it. A declared 0 is the element's own rule and writes nothing.
+     * THE ROOM'S DECLARED LOAD WIDTH LANDS BEFORE THE FIRST PAINT, NOT AFTER IT.
+     *
+     * Applied in `updated`, the declaration arrived after the pane had already drawn at the
+     * equal share, and the change animated the column from that share to the declared number —
+     * the pop seen on every tab change. Applied in `willUpdate`, the very paint the width
+     * belongs to uses it. A declared width is a chosen width, so it also marks the column
+     * operator-set; otherwise the equal-share branch ignores `_rightPx` and the declaration has
+     * no effect at all. A declared 0 is the element's own rule and writes nothing.
      */
-    if (changed.has('chatLoadWidth') && this.chatLoadWidth > 0 && !this._rightIsOperatorSet) {
-      const declared = Math.round(this.chatLoadWidth);
-      if (this._rightPx !== declared) {
-        this._rightPx = declared;
-        this.requestUpdate();
-      }
-    }
+  }
+
+  private _applyDeclaredWidth(): void {
+    if (!(this.chatLoadWidth > 0) || this._rightIsOperatorSet) return;
+    const declared = Math.round(this.chatLoadWidth);
+    this._rightIsOperatorSet = true;
+    if (this._rightPx !== declared) this._rightPx = declared;
   }
 }
 

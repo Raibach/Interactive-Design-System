@@ -46,9 +46,13 @@ export interface DraftPreviewState {
   jobId?: string;
   /** The tag the draft defines, e.g. f-40001207-3497 — used VERBATIM: it is the element's own tag. */
   tag?: string;
-  /** The temporary file under PREVIEW_DIR that the backend wrote for this preview. */
+  /** The module text the ingest built in memory, as TypeScript: the record of every value. */
+  module?: string;
+  /** That module compiled to JavaScript. This is what a browser can parse and draw. */
+  script?: string;
+  /** The temporary file under PREVIEW_DIR, for a preview written before this change. */
   modulePath?: string;
-  /** That same file, as the dev server serves it. This is what the document loads. */
+  /** That same file, as the dev server serves it, for a preview written before this change. */
   moduleUrl?: string;
 }
 
@@ -68,6 +72,20 @@ function draftDocument(draft: DraftPreviewState): string {
   const tag = String(draft.tag || '');
   const url = String(draft.moduleUrl || '');
   const file = String(draft.modulePath || '');
+  // THE BROWSER CANNOT PARSE TYPESCRIPT. The source is carried for the record; the script is its
+  // compiled form and is what the blob loads. A source with no script is refused in words rather
+  // than loaded and failed at its first `export interface`.
+  const moduleText = String(draft.script || '');
+  // `<` becomes the JSON escape in the embedded source, so no string in the module can close this
+  // document's script tag. It parses back to the same character and changes no value.
+  const safeModule = JSON.stringify(moduleText).replace(/</g, '\\u003c');
+  const label = moduleText ? 'the compiled module this ingest built in memory' : url;
+  const loadCode = moduleText
+    ? 'const moduleUrl = URL.createObjectURL(new Blob([' +
+      safeModule +
+      '], { type: "text/javascript" }));' +
+      'await import(moduleUrl);'
+    : 'await import(' + JSON.stringify(url) + " + '?t=' + Date.now());";
   return (
     '<!DOCTYPE html>' +
     '<html>' +
@@ -105,18 +123,13 @@ function draftDocument(draft: DraftPreviewState): string {
     // A COLUMN SO THE CAPTION KEEPS THE TOP AND THE COMPONENT GETS THE REST — the component is
     // centred in what is left, so the line naming the file stays where a reader looks first.
     'body { min-height: 100vh; padding: 16px; background: #fafafa; font-family: "IBM Plex Sans", system-ui, sans-serif; overflow: auto; display: flex; flex-direction: column; }' +
-    // THE ELEMENT'S OWN BOX, MADE VISIBLE — an element with no content draws no border, no
-    // background and nothing else, so a container being a container looks exactly like a preview
-    // that failed. What you are seeing IS the element: its box, at its size, drawing nothing
-    // inside. An outline says where it is (and costs no layout — outlines never do).
-    //
     // AND IT IS CENTRED BY ITS OWN MARGIN (owner, 2026-09-30: *"center the component Vertically and
     // horizontally whenever it displays there"*). An auto margin is what centres it safely: a
     // component WIDER than the pane keeps its left edge reachable, because an auto margin resolves
     // to zero the moment there is no room, where `justify-content: center` would push half of it
     // out of reach. The size is untouched — this is still the component at the size the design
     // measured, not scaled to fit.
-    'body > ' + tag + ' { margin: auto; outline: 1px dashed rgba(31,172,194,0.55); outline-offset: 4px; }' +
+    'body > ' + tag + ' { margin: auto; }' +
     '#preview-caption { font-family: IBM Plex Mono, Menlo, monospace; font-size: 10px; color: #8a9499; margin-bottom: 8px; }' +
     '#preview-status { display: none; max-width: 520px; font-size: 13px; color: #b91c1c; font-family: IBM Plex Mono, monospace; white-space: pre-wrap; text-align: left; }' +
     '</style>' +
@@ -130,8 +143,13 @@ function draftDocument(draft: DraftPreviewState): string {
     '&lt;' +
     tag +
     '&gt; — the element itself, at the size the design measured. What it draws is what the design ' +
-    'contains: nothing is passed to it and nothing is substituted for it.' +
-    (file ? '<br>drawn from ' + file + ' — the temporary file this ingest wrote. The catalogue is not read here; approving is what writes it.' : '') +
+    'contains: nothing is passed to it and nothing is substituted for it. The Figma canvas ' +
+    'placement is not applied; this is the component at its own origin.' +
+    (moduleText
+      ? '<br>drawn from the module this ingest built in memory — nothing was written. The catalogue is not read here; approving is what writes it.'
+      : file
+        ? '<br>drawn from ' + file + ' — the temporary file this ingest wrote. The catalogue is not read here; approving is what writes it.'
+        : '') +
     '</div>' +
     // ── NOTHING IS HANDED TO THE ELEMENT ────────────────────────────────────
     // Instantiated bare. The element that only draws when it is given data draws nothing, and that
@@ -158,13 +176,11 @@ function draftDocument(draft: DraftPreviewState): string {
     // The file is written before the pane can ask for it, so one attempt either loads it or says
     // what went wrong — in the pane, where the designer is looking.
     '  try {' +
-    '    await import(' +
-    JSON.stringify(url) +
-    " + '?t=' + Date.now());" +
+    loadCode +
     '  } catch (err) {' +
     '    say(' +
     "      'I could not load ' + " +
-    JSON.stringify(url) +
+    JSON.stringify(label) +
     "      + ' — ' + (err && err.message ? err.message : err), true);" +
     '    return;' +
     '  }' +
@@ -192,18 +208,27 @@ function draftDocument(draft: DraftPreviewState): string {
     '  if (el && el.updateComplete) { try { await el.updateComplete; } catch (e) {} }' +
     '  const box = el ? el.getBoundingClientRect() : null;' +
     '  const drawn = el && el.shadowRoot ? el.shadowRoot.childElementCount : 0;' +
-    '  if (!box || !box.width || !box.height || !drawn) {' +
+    // A NON-ZERO BOX IS NOT A DRAWING. Measured on right-column-panel-container: the element
+    // loaded, held 964x634, and sat at x = -602.5 — entirely outside this frame — because its
+    // root transform was applied around the corner. The element's ORIGIN must be inside the
+    // frame, or the pane says it drew nothing rather than claiming a success. A tall component
+    // that starts at the top and scrolls is not a failure; an element whose left or top is
+    // outside the frame is.
+    '  const inFrame = !!(box && box.width && box.height && box.left >= -1 && box.top >= -1 && box.left < document.documentElement.clientWidth && box.top < document.documentElement.clientHeight);' +
+    '  if (!box || !box.width || !box.height || !drawn || !inFrame) {' +
     '    say(' +
     "      'I loaded the file and defined <' + " +
     JSON.stringify(tag) +
-    "      + '>, but the element drew nothing — box ' + " +
+    "      + '>, but the element drew nothing inside this frame — box ' + " +
     "      (box ? Math.round(box.width) + ' × ' + Math.round(box.height) : 'none') + " +
-    "      ', ' + drawn + ' child element(s). Nothing is being shown as a success here.', true);" +
+    "      ', ' + drawn + ' child element(s)' + " +
+    "      (inFrame ? '' : ', left/top at ' + (box ? Math.round(box.left) + ', ' + Math.round(box.top) : 'none')) + " +
+    "      '. Nothing is being shown as a success here.', true);" +
     '    return;' +
     '  }' +
     '  say(' +
     "    'Drawn: ' + Math.round(box.width) + ' × ' + Math.round(box.height) + ' — the element from ' + " +
-    JSON.stringify(file || url) +
+    JSON.stringify(label) +
     "    + '.', false);" +
     '};' +
     'load();' +
@@ -230,8 +255,8 @@ export class DraftPreview extends LitElement {
     const d = this.draft;
     // UNSET IS NOT EMPTY: no draft bound is "no ingest has produced one", said in words, because a
     // blank frame and a draft that draws nothing are different claims and only one of them is true.
-    if (!d || !d.moduleUrl) {
-      return html`<p class="empty">No draft to preview. Submit a Figma node and its component is drawn here from the temporary file the ingest writes.</p>`;
+    if (!d || (!d.script && !d.moduleUrl)) {
+      return html`<p class="empty">No drawable module. ${d?.module ? 'The ingest returned its TypeScript source without a compiled script, so the browser cannot parse it.' : 'Submit a Figma node and its component is drawn here from the compiled module the ingest builds in memory.'}</p>`;
     }
     // A TAG THAT CANNOT BE AN ELEMENT IS NOT DRAWN AS ONE. The document would silently instantiate
     // an unknown element and the pane would read as a component that draws nothing; naming the
