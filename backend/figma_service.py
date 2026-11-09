@@ -159,6 +159,44 @@ def get_component_descriptions(file_key: str) -> dict[str, str]:
         return hit[1] if hit else {}
 
 
+#: component names come from the same per-file list as the descriptions. A name such as
+#: `state=closed` is the file's own statement of which variant a component id is; it is the
+#: fact the instance's `componentProperties` value can be checked against.
+_COMPONENT_NAME_CACHE: dict[str, tuple[float, dict[str, str]]] = {}
+_COMPONENT_NAME_TTL = 300.0
+
+
+def get_component_names(file_key: str) -> dict[str, str]:
+    """node_id → the component's name, from `GET /v1/files/{key}/components`.
+
+    A missing or failed read returns the previous answer, or an empty map — never a name
+    invented from an id. The caller treats a missing name as "not measured", not as a match.
+    """
+    if not FIGMA_TOKEN:
+        return {}
+    hit = _COMPONENT_NAME_CACHE.get(file_key)
+    if hit and (time.time() - hit[0]) < _COMPONENT_NAME_TTL:
+        return hit[1]
+    try:
+        r = requests.get(
+            f"{FIGMA_BASE}/files/{file_key}/components",
+            headers=_headers(),
+            timeout=30,
+        )
+        if r.status_code != 200:
+            return hit[1] if hit else {}
+        rows = (r.json().get("meta") or {}).get("components") or []
+        out = {
+            c["node_id"]: c["name"].strip()
+            for c in rows
+            if c.get("node_id") and (c.get("name") or "").strip()
+        }
+        _COMPONENT_NAME_CACHE[file_key] = (time.time(), out)
+        return out
+    except Exception:
+        return hit[1] if hit else {}
+
+
 def get_node(file_key: str, node_id: str) -> dict | None:
     """Get a specific node from a Figma file (e.g., a frame or component instance)."""
     if not FIGMA_TOKEN:

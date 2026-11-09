@@ -244,6 +244,11 @@ interface SessionsLaneRow {
 export class ToolsChat extends LitElement {
   static properties = {
     conversationId: { type: String, attribute: 'conversation-id' },
+    /** THE SURFACE'S DATA, INJECTED BY THE ROOM (owner, 2026-11-07: the shell is a container;
+     *  the seat's own file decides what the data means). The Tools package is read from here. */
+    dataModel: { type: Object },
+    /** The four tabs' package records, injected as data by the container. */
+    designPackages: { type: Object },
     /**
      * WHO SHE IS IN THE ROOM THAT BINDS THIS — declared as a Lit property, and that is load-bearing:
      * the renderer sets its props BEFORE the element upgrades, and Lit only carries an assigned value
@@ -431,6 +436,10 @@ export class ToolsChat extends LitElement {
   // this file once was). Every element in this repo declares properties this way.
   /** The package's conversation. Bound from /session/right_column/conversation_id. */
   declare conversationId?: string;
+  /** The surface's data, injected by the room. The seat resolves its own package from it. */
+  declare dataModel: Record<string, any> | undefined;
+  /** The four tabs' package records, injected as data by the container. */
+  declare designPackages: Record<string, { packageId?: string; conversationId?: string }> | undefined;
   /** The package's history, as the server loaded it. Bound from /session/right_column/messages. */
   declare messages: SeatMessage[];
   /** See the `productTools` note in `static properties` — the product room's binding alone. */
@@ -887,6 +896,19 @@ export class ToolsChat extends LitElement {
     if (bar) bar.hasText = this._draft.trim().length > 0;
   }
 
+  /**
+   * CLEAR THE COMPOSER AFTER A TURN — the same writer the Chat console uses. The drawn control
+   * is <design-prompt-textarea>; setting `_draft` alone left the sent words in the box and the
+   * Send control disabled, because the bar follows `_draft` while the box followed itself.
+   */
+  private _clearDraft(): void {
+    const textarea = this.renderRoot?.querySelector('design-prompt-textarea') as
+      (HTMLElement & { clear?: () => void }) | null;
+    textarea?.clear?.();
+    this._draft = '';
+    this._syncBarText();
+  }
+
   /** The bar's submit — send the slotted input's draft to the model. */
   // ── WHAT THE HOST SAYS TO THIS SEAT ────────────────────────────────────────
   //
@@ -905,9 +927,13 @@ export class ToolsChat extends LitElement {
   private _onHostSay = (e: Event) => {
     const detail = ((e as CustomEvent).detail || {}) as {
       role?: string; content?: string; nodeId?: string; label?: string; alert?: boolean; result?: boolean;
-      messageType?: string | null;
+      messageType?: string | null; tab?: string; persisted?: boolean;
     };
     if (!detail.content) return;  // an empty bubble reads as having said nothing on purpose
+    /* A LINE ADDRESSED TO ANOTHER TAB IS NOT THIS THREAD'S. The ingest writes its line into this
+       session's conversation itself and addresses the display here; drawing it in another tab's
+       chat would put one tab's work in another tab's running log. */
+    if (detail.tab && detail.tab !== 'tools') return;
     this._local = [
       ...this._local,
       {
@@ -928,6 +954,47 @@ export class ToolsChat extends LitElement {
       },
     ];
     this.requestUpdate();
+    /*
+     * THE LINE IS A CONVERSATION TURN, NOT A LOCAL BUBBLE. The live thread draws it immediately,
+     * and the same line is written under the active conversation id so a saved card reopens with
+     * the audit log in it. A write that fails is said, not swallowed.
+     */
+    const conversationId = String(this.conversationId || '');
+    /* THE SEAT THAT MADE THE RUN ALREADY WROTE THIS LINE (`persisted`). The chat draws it and
+       does not write a second copy; a line the seat could not write stays here, and this write
+       is the second attempt — its own failure is said below. */
+    if (conversationId && detail.persisted !== true) {
+      void fetch(`/api/conversations/${encodeURIComponent(conversationId)}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-User-ID': this._userId() },
+        body: JSON.stringify({
+          role: detail.role === 'user' ? 'user' : 'assistant',
+          content: String(detail.content),
+          metadata: {
+            source: 'host',
+            messageType: detail.messageType ?? null,
+            alert: detail.alert === true,
+            result: detail.result === true,
+          },
+        }),
+      })
+        .then((response) => {
+          if (!response.ok) throw new Error(`the server answered ${response.status}`);
+        })
+        .catch((error) => {
+          this._local = [
+            ...this._local,
+            {
+              role: 'assistant',
+              content: `The log line was not saved to the conversation: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+              alert: true,
+            },
+          ];
+          this.requestUpdate();
+        });
+    }
     // A HOST LINE IS THE THREAD GROWING — follow it exactly as history, a sent turn and a
     // reply already do (the rule `_scrollThreadToBottom` states; the live build's steps and
     // the run's bar arrive by this door). Measured 2026-10-06: without this the column held
@@ -1429,6 +1496,35 @@ export class ToolsChat extends LitElement {
       if (family) void this._requestFace(family);
       return;
     }
+    /*
+     * THE INGEST'S FAILURE AND APPROVAL ARE ACTS, NOT QUESTIONS FOR THE MODEL. Copy reads the raw
+     * error the seat is holding; approve and discard are the same events the preview's buttons
+     * used to send, so the seat's one handler is still the only path that writes.
+     */
+    if (action === 'copy-diagnostic') {
+      window.dispatchEvent(new CustomEvent('design-copy-diagnostic'));
+      return;
+    }
+    if (action === 'preview-accept') {
+      window.dispatchEvent(new CustomEvent('preview-accept'));
+      return;
+    }
+    if (action === 'preview-approve') {
+      window.dispatchEvent(new CustomEvent('preview-approve'));
+      return;
+    }
+    if (action === 'preview-discard') {
+      window.dispatchEvent(new CustomEvent('preview-discard'));
+      return;
+    }
+    if (action === 'preview-remove') {
+      window.dispatchEvent(new CustomEvent('preview-remove'));
+      return;
+    }
+    if (action === 'preview-keep') {
+      window.dispatchEvent(new CustomEvent('preview-keep'));
+      return;
+    }
     const edit = parseWriteSeatAction(action);
     if (edit) {
       window.dispatchEvent(new CustomEvent('a2ui:write-seat', { detail: edit }));
@@ -1670,11 +1766,7 @@ export class ToolsChat extends LitElement {
   private _onSendCommand() {
     const text = this._draft.trim();
     if (!text || this._sending) return;
-    const textarea = this.renderRoot?.querySelector('prompt-textarea') as
-      (HTMLElement & { value: string }) | null;
-    if (textarea) textarea.value = '';
-    this._draft = '';
-    this._syncBarText();
+    this._clearDraft();
     void this._send(text);
   }
 
@@ -1684,11 +1776,7 @@ export class ToolsChat extends LitElement {
      decides what the words mean — and nothing here writes a turn. A refusal from the lane is
      drawn as its own reason, in the red the seat already uses; it is NEVER an empty list. */
   private async _runSessionsLane(text: string): Promise<void> {
-    const textarea = this.renderRoot?.querySelector('prompt-textarea') as
-      (HTMLElement & { value: string }) | null;
-    if (textarea) textarea.value = '';
-    this._draft = '';
-    this._syncBarText();
+    this._clearDraft();
     this._laneBusy = true;
     this._laneError = '';
     this.requestUpdate();
@@ -2205,6 +2293,28 @@ export class ToolsChat extends LitElement {
   }
 
   protected updated(changed: Map<PropertyKey, unknown>): void {
+    /* THE SEAT RESOLVES ITS OWN PACKAGE FROM THE INJECTED DATA (owner, 2026-11-07: the shell is
+       a container and the function lives in this file).
+       TWO SOURCES, IN THIS ORDER. The tools assembly states the row the visit is actually in at
+       `/session/design_session_id` — the tab's own working row, or the kept session or design
+       system a card opened. That is the first answer. The tab packages map is the second: it is
+       how the seat has a home before the tools assembly answers, and it is the tab's own row.
+       A map without a `tools` entry is not a reason to sit idle: the assembly's own id still
+       arrives, and the seat binds to it. */
+    const statedSession = String(
+      (this.dataModel as Record<string, any>)?.session?.design_session_id ?? '',
+    ).trim();
+    const injected = (this as unknown as { designPackages?: Record<string, { packageId?: string }> })
+      .designPackages;
+    const mapSession = String(
+      injected?.tools?.packageId ??
+        (this.dataModel as Record<string, any>)?.console?.design_packages?.tools?.packageId ??
+        '',
+    ).trim();
+    const toolsPackage = statedSession || mapSession;
+    if (toolsPackage && toolsPackage !== String(this.sessionId ?? '')) {
+      this.sessionId = toolsPackage;
+    }
     // A PACKAGE CHANGE STARTS THE SEAT OVER. The panel is REUSED across assemblies (the
     // surface keeps the same component id — see the note on `_thread`), so without this the
     // previous package's spoken turns (`_local`) and its loaded history stay on screen over
@@ -3775,9 +3885,18 @@ export class ToolsChat extends LitElement {
      * exempt: the console's recorded rule draws the thread there on purpose (the tab a
      * person asks the governance system its report from). Silent turns never flip —
      * nothing the person did raised them.
+     *
+     * AND THIS SEAT DOES NOT FLIP AT ALL WHEN THE ROOM OWNS THE RAIL (owner, 2026-11-07:
+     * *"Why is it switching tabs when I hit send and I'm inside of tools"*). The rule above is
+     * the governance panel's, where Chat is the one place a conversation may be drawn. The Tools
+     * tab is its own experience with its own conversation; a turn typed there is drawn there.
+     * The room owns the rail (`rail-owned-by-host`, set by the shell), so the send leaves the tab
+     * exactly where the person put it. Measured before the guard: a send in Tools set the seat's
+     * tab to `chat`, and the rail highlight and the panel moved with it.
      */
     if (
       !opts.silent
+      && !this.railOwnedByHost
       && this.activeTab !== 'chat'
       && this.activeTab !== 'approvals'
     ) {
@@ -4272,12 +4391,8 @@ export class ToolsChat extends LitElement {
     // THE KEYBOARD TAKES THE BUTTON'S PATH EXACTLY — including the clear. Measured 2026-10-18:
     // Enter sent the message and left the words in the box, so the next Enter would send them
     // again. The button path (`_onSendCommand`) has cleared since it was written; this is the
-    // same three lines, not a second rule.
-    const textarea = this.renderRoot?.querySelector('prompt-textarea') as
-      (HTMLElement & { value: string }) | null;
-    if (textarea) textarea.value = '';
-    this._draft = '';
-    this._syncBarText();
+    // same writer, not a second rule.
+    this._clearDraft();
     void this._send(text);
   }
 
@@ -4364,7 +4479,12 @@ export class ToolsChat extends LitElement {
        on every press put the seat on an empty "New Chat" left by a test, replacing the thread that
        had just loaded. A conversation is adopted here only when the bound one is no longer live. */
     const rows = (this._conversationRows ?? []).filter((row) => !row.archived);
-    if (!rows.length) return;
+    if (!rows.length) {
+      /* ZERO IS NOT A RESTING STATE (owner, 2026-11-07): with the last conversation gone,
+         Grace's hello creates the tab's first one. */
+      this._startNewConversation();
+      return;
+    }
     const bound = String(this.conversationId ?? '');
     if (bound && rows.some((row) => String(row.id) === bound)) return;
     this._moveSeatTo(String(rows[0].id), { tab: rows[0].tab || 'chat' });
@@ -4759,19 +4879,10 @@ export class ToolsChat extends LitElement {
     return conversation.readPackageConversations.call(this._conv(), userId);
   }
 
-  /** The bar's own click: open or close its list. */
+  /** The bar's own click: open or close its list. The card's own stylesheet draws the two states
+   *  (`open` is reflected there): collapsed is the bar alone, open is the rows' exact height. */
   private _toggleConversations = (): void => {
     this._conversationsOpen = !this._conversationsOpen;
-    /* A PRESS SETS THE CARD'S TWO SIZES, AND THE LIST STAYS INSIDE BOTH (owner, 2026-10-31: *"you
-       can't hide the conversations when I expand it, they have to expand with the drag"*). Open is
-       the card's Default — its bar and one row; closed is the bar alone. The rows are inside the
-       card either way; the card's height is what shows them. */
-    const host = this.renderRoot?.querySelector('[data-slot="conversations"]') as HTMLElement | null;
-    const card = host?.shadowRoot?.querySelector('.shell') as HTMLElement | null;
-    if (card) {
-      card.style.flex = '0 0 auto';
-      card.style.height = this._conversationsOpen ? '68px' : '38px';
-    }
     /* A NOTE BELONGS TO THE OPEN IT HAPPENED IN. Opening or closing starts a new look, so the note
        starts empty. */
     this._listNote = '';
@@ -5164,7 +5275,7 @@ export class ToolsChat extends LitElement {
             <design-chat-navigation-bar
               active-tab=${this.activeTab}
               ?rail-owned-by-host=${this.railOwnedByHost}
-              allowed-tabs=${this.allowedTabs}
+              allowed-tabs=${this.allowedTabs || 'chat,tools,approvals,ux,settings'}
               tab-labels=${this.tabLabels}
               disabled-tabs=${this.disabledTabs}
               ?collapsed=${this.collapsed}
@@ -5274,7 +5385,9 @@ export class ToolsChat extends LitElement {
                   grip-row-node="40001126:2015"
                   grip-dots="40001126:2016,40001126:2017,40001126:2018,40001126:2019,40001126:2020"
                   dm-sans
+                  ?open=${this._conversationsOpen}
                   @keydown=${this._onConversationsKey}
+                  @click=${this._toggleConversations}
                 >
                   <button
                     slot="bar-actions"
@@ -5462,16 +5575,19 @@ export class ToolsChat extends LitElement {
               </div>
               <!-- ── INPUT ── -->
               <div class="chat-input-wrapper">
+                <!-- THE SEND DIVIDER CARRIES NO GESTURE (owner, 2026-10-31: *"remove the effect
+                     that's on the divider with the send button that is making it fly to the top"*).
+                     The bar's own band raises input-resize-start/move; nothing listens for them
+                     now, so pressing that band does nothing.
+                     THIS COMMENT SITS ABOVE THE TAG, NOT INSIDE IT: a comment between attributes
+                     ends the opening tag at the comment's closing bracket, which turned the two
+                     bindings below into text and left Send attached to nothing. -->
                 <tools-chat-controls
                   model-label=${this.modelLabel ?? 'Models'}
                   trailing=${this._seatIsConsole === false ? 'console' : 'agent'}
                   composer-package=${this.composerPackageId ?? ''}
                   ?busy=${this._sending}
                   ?has-text=${this._draft.trim().length > 0}
-                  <!-- THE SEND DIVIDER CARRIES NO GESTURE (owner, 2026-10-31: *"remove the effect
-                       that's on the divider with the send button that is making it fly to the top"*).
-                       The bar's own band raises input-resize-start/move; nothing listens for them
-                       now, so pressing that band does nothing. -->
                   @send-input-to-model=${this._onSendCommand}
                   @stop-model-thinking=${this._onStopCommand}
                 ></tools-chat-controls>

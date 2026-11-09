@@ -204,6 +204,11 @@ interface SessionsLaneRow {
 export class DesignChat extends LitElement {
   static properties = {
     conversationId: { type: String, attribute: 'conversation-id' },
+    /** THE SURFACE'S DATA, INJECTED BY THE ROOM (owner, 2026-11-07: the shell is a container;
+     *  the seat's own file decides what the data means). The tab's package is read from here. */
+    dataModel: { type: Object },
+    /** The four tabs' package records, injected as data by the container. */
+    designPackages: { type: Object },
     /**
      * WHO SHE IS IN THE ROOM THAT BINDS THIS — declared as a Lit property, and that is load-bearing:
      * the renderer sets its props BEFORE the element upgrades, and Lit only carries an assigned value
@@ -391,6 +396,10 @@ export class DesignChat extends LitElement {
   // this file once was). Every element in this repo declares properties this way.
   /** The package's conversation. Bound from /session/right_column/conversation_id. */
   declare conversationId?: string;
+  /** The surface's data, injected by the room. The seat resolves its own package from it. */
+  declare dataModel: Record<string, any> | undefined;
+  /** The four tabs' package records, injected as data by the container. */
+  declare designPackages: Record<string, { packageId?: string; conversationId?: string }> | undefined;
   /** The package's history, as the server loaded it. Bound from /session/right_column/messages. */
   declare messages: SeatMessage[];
   /** See the `productTools` note in `static properties` — the product room's binding alone. */
@@ -512,6 +521,22 @@ export class DesignChat extends LitElement {
    * again. Cleared when the seat moves to another package (see _enterPackage).
    */
   private _conversationEnsured = false;
+  /**
+   * A PRESS OF THE CHAT TAB ASKS FOR THE PACKAGE'S DEFAULT THREAD — the Tools seat's own latch
+   * (owner, 2026-11-07). The press usually lands before the seat knows its package, so the
+   * request waits for `sessionId` and `updated` asks again.
+   */
+  private _wantsDefaultConversation = false;
+  /**
+   * THE PACKAGE WHOSE DEFAULT THREAD THIS SEAT HAS ALREADY ASKED FOR — asked on the first load
+   * and on every new package, so the page does not need a second press to open what it lands on.
+   */
+  private _defaultOpenAsked = '';
+  /**
+   * THE DEFAULT OPEN IS STILL READING OR PLACING — the window in which Grace must not speak on
+   * her own. Creation is in flight through `_creatingConversation`; this covers the read before it.
+   */
+  private _openingDefault = false;
   /** Whether the leading bar's conversation list is open. */
   private _conversationsOpen = false;
   /**
@@ -611,7 +636,7 @@ export class DesignChat extends LitElement {
   declare duration: string;
   declare qaScore: string;
   /** Token/cost tallies shown in <design-chat-footer>. */
-  declare usage: Record<string, number | string | undefined>;
+  declare usage: Record<string, any> | undefined;
   /** Persisted left-column JSON. */
   /**
    * The left column, as the seat beside it sees it: the LIVE sections array
@@ -640,13 +665,6 @@ export class DesignChat extends LitElement {
   declare inputHeight: number;
   /** The rail's active view. */
   declare activeTab: string;
-  /**
-   * WHOSE CONVERSATIONS THIS SEAT LISTS (owner, 2026-11-03: *"the chat seat for design would only
-   * be the all of the design chats … it's already pre-filtered to design chat"*). `design` reads
-   * the design tab packages and the kept design sessions; `package` reads one package's. There is
-   * no whole-system scope. Absent reads as `package`.
-   */
-  conversationScope: 'package' | 'design' = 'package';
   /** The room owns the rail: a press is navigation for the room, never a switch inside this seat. */
   declare railOwnedByHost: boolean;
   /** True when the chat column is collapsed to its rail. */
@@ -815,7 +833,10 @@ export class DesignChat extends LitElement {
    * writing its property is composition, not a value pushed into the surface's tree.
    */
   private _syncBarText() {
-    const bar = this.renderRoot?.querySelector('chat-action-bar') as
+    /* THE ELEMENT THAT IS DRAWN (zero-suppression audit, 2026-11-07): the page renders
+       <design-chat-action-bar>; this lookup named a tag that does not exist, so the draft never
+       reached the bar and Send could never enable. The name now matches the element. */
+    const bar = this.renderRoot?.querySelector('design-chat-action-bar') as
       (HTMLElement & { hasText: boolean }) | null;
     if (bar) bar.hasText = this._draft.trim().length > 0;
   }
@@ -838,9 +859,11 @@ export class DesignChat extends LitElement {
   private _onHostSay = (e: Event) => {
     const detail = ((e as CustomEvent).detail || {}) as {
       role?: string; content?: string; nodeId?: string; label?: string; alert?: boolean; result?: boolean;
-      messageType?: string | null;
+      messageType?: string | null; tab?: string;
     };
     if (!detail.content) return;  // an empty bubble reads as having said nothing on purpose
+    /* A LINE ADDRESSED TO ANOTHER TAB IS NOT THIS THREAD'S. */
+    if (detail.tab && detail.tab !== this.activeTab) return;
     this._local = [
       ...this._local,
       {
@@ -1470,14 +1493,25 @@ export class DesignChat extends LitElement {
     }
   }
 
+  /**
+   * CLEAR THE COMPOSER AFTER A TURN OR A QUERY — the one writer for all three send paths.
+   *
+   * The drawn control is <design-prompt-textarea>, not the older <prompt-textarea>; the lookup
+   * used that older name, so the visible box kept the sent words while the draft was already
+   * empty. The element's own `clear()` is what lands while the caret is still in it.
+   */
+  private _clearDraft(): void {
+    const textarea = this.renderRoot?.querySelector('design-prompt-textarea') as
+      (HTMLElement & { clear?: () => void }) | null;
+    textarea?.clear?.();
+    this._draft = '';
+    this._syncBarText();
+  }
+
   private _onSendCommand() {
     const text = this._draft.trim();
     if (!text || this._sending) return;
-    const textarea = this.renderRoot?.querySelector('prompt-textarea') as
-      (HTMLElement & { value: string }) | null;
-    if (textarea) textarea.value = '';
-    this._draft = '';
-    this._syncBarText();
+    this._clearDraft();
     void this._send(text);
   }
 
@@ -1487,11 +1521,7 @@ export class DesignChat extends LitElement {
      decides what the words mean — and nothing here writes a turn. A refusal from the lane is
      drawn as its own reason, in the red the seat already uses; it is NEVER an empty list. */
   private async _runSessionsLane(text: string): Promise<void> {
-    const textarea = this.renderRoot?.querySelector('prompt-textarea') as
-      (HTMLElement & { value: string }) | null;
-    if (textarea) textarea.value = '';
-    this._draft = '';
-    this._syncBarText();
+    this._clearDraft();
     this._laneBusy = true;
     this._laneError = '';
     this.requestUpdate();
@@ -2019,10 +2049,101 @@ export class DesignChat extends LitElement {
     if (lead) parts.push(lead);
     if (named) parts.push(named);
     if (this.qaScore) parts.push(`Closed QA: ${this.qaScore}`);
-    return parts.join('  |  ');
+    /*
+     * THE SESSION DATA FROM THE USAGE LEDGER, and nothing else (owner, 2026-11-07). The header
+     * shows the recorded tokens, calls, cost and pricing basis, the last call, and the split by
+     * model. Langfuse v4 in this deployment is events-only and no longer serves its sessions
+     * endpoint, so these are the same numbers the calls reported to it, read from the ledger.
+     * Zero recorded calls draw nothing; a missing cost draws nothing rather than a zero.
+     */
+    const tok = (n: unknown): string => Number(n ?? 0).toLocaleString('en-US');
+    const money = (n: unknown): string =>
+      n === null || n === undefined ? '' : `$${Number(n).toFixed(4)}`;
+    const span = (s: unknown): string => {
+      const total = Number(s ?? 0);
+      const minutes = Math.floor(total / 60);
+      return minutes ? `${minutes}m ${total % 60}s` : `${total}s`;
+    };
+    const usage = this.usage ?? {};
+    const sessions = Number(usage.sessions ?? 0);
+    const calls = Number(usage.calls ?? 0);
+    const attributed = usage.attributed === true;
+    if (attributed && (calls > 0 || sessions > 0)) {
+      const cost = money(usage.cost);
+      parts.push(
+        `This conversation (since recording began): ${tok(usage.totalTokens)} tokens · ` +
+        `${calls} call${calls === 1 ? '' : 's'}${cost ? ` · ${cost}` : ''}`,
+      );
+    } else {
+      /* A SEAT WITH NO ATTRIBUTED CALL SAYS SO. It never borrows the session's or the user's
+         totals; another scope's numbers would be a lie about this conversation. */
+      parts.push('Usage: unattributed — no call in the ledger is attributed to this conversation yet.');
+    }
+    if (typeof usage.pricing === 'string' && usage.pricing.trim()) {
+      parts.push(`Pricing: ${usage.pricing.trim()}`);
+    }
+    const rates = usage.rates as Record<string, unknown> | undefined;
+    if (rates && typeof rates === 'object') {
+      const band = usage.rateBand === 'off_peak' ? 'off-peak' : usage.rateBand === 'peak' ? 'peak' : '';
+      parts.push(
+        `Rates per 1M${band ? ` (${band})` : ''}: input hit $${rates.input_hit} · ` +
+        `input miss $${rates.input_miss} · output $${rates.output}`,
+      );
+    }
+    const byModel = Array.isArray(usage.byModel) ? usage.byModel : [];
+    for (const m of byModel.slice(0, 4) as Array<Record<string, unknown>>) {
+      const model = String(m?.model ?? '').trim();
+      if (!model) continue;
+      const cost = money(m?.cost);
+      parts.push(
+        `${model}: ${Number(m?.calls ?? 0)} calls · ${tok(m?.tokens)} tokens` +
+        `${cost ? ` · ${cost}` : ''}`,
+      );
+    }
+    const last = usage.lastSession as
+      | { name?: string; durationSeconds?: number; tokens?: number; calls?: number; cost?: number; lastSeen?: string }
+      | undefined;
+    if (last?.name) {
+      const cost = money(last.cost);
+      parts.push(
+        `Last: ${last.name} · ${span(last.durationSeconds)} · ${tok(last.tokens)} tokens · ` +
+        `${last.calls} calls${cost ? ` · ${cost}` : ''} · ${String(last.lastSeen ?? '')}`,
+      );
+    }
+    return parts.join('\n');
   }
 
   protected updated(changed: Map<PropertyKey, unknown>): void {
+    /* THE PAGE READS THE SESSION THE ROOM HANDS IT (owner, 2026-11-07). The room's shell gives
+       the Chat seat the Console package, the UX seat its own package, and the Approve seat none.
+       This block only fills a session when no host stated one; it never takes a seat's session
+       away from it. The Chat seat's conversation file reads that package's own list — the
+       Console's threads and no other tab's. */
+    if (this.dataModel || this.designPackages) {
+      const packages =
+        (this.designPackages as Record<string, any> | undefined) ??
+        ((this.dataModel as Record<string, any>)?.console?.design_packages ?? {});
+      const own =
+        this.activeTab === 'ux' ? packages.ux?.packageId
+          : this.activeTab === 'approvals' ? ''
+            : this.activeTab === 'chat' ? packages.chat?.packageId
+              : packages.console?.packageId;
+      const wanted = String(own || '');
+      if (wanted && String(this.sessionId ?? '') !== wanted) {
+        this.sessionId = wanted;
+        /*
+         * THE PAGE OPENS THE THREAD THE MOMENT IT LEARNS ITS PACKAGE. This only runs for a host
+         * that handed no session of its own; the room's shell hands no Chat address, so the Chat
+         * console resolves its own package row here and opens that package's thread.
+         */
+        if (this.activeTab === 'chat') {
+          this._enterPackage(wanted);
+          this._defaultOpenAsked = wanted;
+          this._wantsDefaultConversation = true;
+          void this._loadDefaultConversationNow();
+        }
+      }
+    }
     // A PACKAGE CHANGE STARTS THE SEAT OVER. The panel is REUSED across assemblies (the
     // surface keeps the same component id — see the note on `_thread`), so without this the
     // previous package's spoken turns (`_local`) and its loaded history stay on screen over
@@ -2047,8 +2168,25 @@ export class DesignChat extends LitElement {
       if (arrived) this._takeArrival(arrived.kind);
       void this._readPackageConversations(this._userId());
       void this._readSeatScope(this._userId());
+      /* THE READOUT IS READ ON THE REAL EVENT, WITH NO DELAY. A timeout in front of a read is a
+         guessed wait, not a fact; the read either answers or it says why. */
+      void this._readUsageSummary();
+      /* THE CHAT TAB OPENS ITS DEFAULT WHEN THE PAGE LEARNS ITS PACKAGE (owner, 2026-11-07).
+         The Tools tab is opened by the press; this tab is the one the room lands on, so the page
+         asks the same open for itself instead of waiting for a second press. It is asked once per
+         package; a later press asks again through `loadDefaultConversation`. */
+      if (this.activeTab === 'chat' && this.sessionId
+        && this._defaultOpenAsked !== String(this.sessionId)) {
+        this._defaultOpenAsked = String(this.sessionId);
+        this._wantsDefaultConversation = true;
+      }
+      void this._loadDefaultConversationNow();
     }
-    if (changed.has('conversationId')) void this._loadHistory();
+    if (changed.has('conversationId')) {
+      void this._loadHistory();
+      /* THE READOUT BELONGS TO THE CONVERSATION THE SEAT JUST OPENED. */
+      void this._readUsageSummary();
+    }
     /*
      * AND AFTER EVERY RENDER, because the greeting waits on facts that arrive in
      * either order: the announcement (which can land before this seat exists) and
@@ -2142,7 +2280,7 @@ export class DesignChat extends LitElement {
       // thread element owns the seating — it is the element that knows where the question
       // is; this only asks for it. A thread that cannot seat (no such element) keeps the
       // old follow-to-bottom.
-      const thread = this.renderRoot?.querySelector('chat-messages') as
+      const thread = this.renderRoot?.querySelector('design-chat-messages') as
         | (HTMLElement & { seatConversation?: () => void })
         | null;
       if (thread?.seatConversation) {
@@ -2231,7 +2369,7 @@ export class DesignChat extends LitElement {
    * NOT NULL), so the element asks the package's conversation for its own history.
    */
   private async _loadHistory(): Promise<void> {
-    return conversation.loadHistory.call(this._conv());
+    return this._conversationModule.loadHistory.call(this._conv());
   }
 
   /**
@@ -2375,9 +2513,9 @@ export class DesignChat extends LitElement {
     const currentRow = rows.find((row) => String(row.id) === String(this.conversationId));
     /*
      * THE GREETING BELONGS TO A PACKAGE WITH NOTHING TO READ (owner, 2026-11-03). The Chat's list
-     * is every Design chat; an empty newest thread beside eight other chats is not a reason to
-     * introduce her again. It takes no other conversations, or one empty one; a failed list read
-     * is neither.
+     * is its own package's list; an empty newest thread beside other conversations is not a
+     * reason to introduce her again. It takes no other conversations, or one empty one; a failed
+     * list read is neither.
      */
     const onlyConversationIsEmpty =
       rowsKnown &&
@@ -2386,6 +2524,20 @@ export class DesignChat extends LitElement {
     if (!this._wantsGreeting && this.sessionId && !this.conversationId
       && Array.isArray(this._conversationRows) && this._conversationRows.length === 0) {
       this._historyChecked = true;
+      this._takeArrival('resume');
+    }
+    /*
+     * A CONVERSATION THAT HOLDS NOTHING IS THE SAME ARRIVAL — the Tools seat's own rule, applied
+     * here. The rule above needs the seat to have NO conversation at all; a package whose one
+     * conversation exists and is empty took no arrival, and this function returned before she was
+     * ever asked. That is the tab that opens on an empty thread with no word in it. The emptiness
+     * is only claimed once both reads have answered, and `_sending` is excluded so the greeting
+     * cannot fire on top of a turn already in flight.
+     */
+    if (!this._wantsGreeting && !this._sending && this.sessionId
+      && this._conversationsRead && this._historyChecked && !this._historyError
+      && onlyConversationIsEmpty
+      && (this.messages?.length ?? 0) === 0 && this._local.length === 0) {
       this._takeArrival('resume');
     }
     const kind = this._wantsGreeting;
@@ -2417,12 +2569,17 @@ export class DesignChat extends LitElement {
      * PACKAGE'S SEAT, so a package's conversation is what it is owed. A composer with no package
      * has no `sessionId` and is still left alone.
      */
-    if (this.sessionId && !this.conversationId && !this._conversationEnsured) {
-      this._conversationEnsured = true;
-      this._startNewConversation();
-    }
+    /* THE PAGE OPENS ITS DEFAULT; IT DOES NOT MANUFACTURE ONE (owner, 2026-11-07). This block
+       used to create a conversation whenever the seat had a package and no conversation bound
+       yet — which is every open, before the list is read — and that is the blank chat a person
+       saw on every click. Creation now belongs to ONE place only: the read that returns zero
+       rows, after it succeeds. Opening never creates anything. */
     if (!kind || this._greeted || !this._historyChecked) return;
-    if (this._historyError || this._sending) return;
+    /* THE OPEN COMES FIRST. While the default thread is being read or created, the greeting must
+       not start a turn of its own: that turn would be in flight when the create finishes, and the
+       hello meant for the new thread would be dropped as a second send. `_creatingConversation`
+       covers the create, `_openingDefault` the read before it. */
+    if (this._historyError || this._sending || this._openingDefault || this._creatingConversation) return;
     /*
      * AND NOTHING IS DECIDED ABOUT THIS PACKAGE UNTIL ITS OWN LIST HAS BEEN READ.
      *
@@ -2774,8 +2931,17 @@ export class DesignChat extends LitElement {
     return this as unknown as conversation.ChatConversationHost;
   }
 
+  /**
+   * THE SEAT'S CONVERSATION FILE. The base page uses `chat/conversation.ts`; <chat-tab>, the
+   * Chat console's own page, overrides this with `chat/console-conversation.ts`. The behavior
+   * is the same; the file and the package it reads are the seat's own.
+   */
+  protected get _conversationModule(): typeof conversation {
+    return conversation;
+  }
+
   private _conversationBelongsToPackage(id: string): boolean {
-    return conversation.belongsToPackage.call(this._conv(), id);
+    return this._conversationModule.belongsToPackage.call(this._conv(), id);
   }
 
   /**
@@ -3557,7 +3723,15 @@ export class DesignChat extends LitElement {
       const turnUrl = '/api/teacher/query';
       const resp = await fetch(turnUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-User-ID': this._userId() },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-ID': this._userId(),
+          /* THE LEDGER ATTRIBUTES THE CALL TO THE SEAT IT WAS ABOUT. The middleware reads these
+             two headers and never the body (a body read there deadlocks the request); without
+             them the usage row names no package and the header can only show the user's totals. */
+          'X-Package-Session': String(this.sessionId ?? ''),
+          'X-Conversation-ID': String(this.conversationId ?? ''),
+        },
         body: JSON.stringify({
           question: text,
           context: grace.text,
@@ -3788,6 +3962,9 @@ export class DesignChat extends LitElement {
       }
       this._sending = false;
       this._abort = null;
+      /* THE READOUT IS RE-READ ON THE REAL EVENT, WITH NO DELAY. The ledger write and this read
+         are separate server facts; the read answers what is there and says so if it cannot. */
+      void this._readUsageSummary();
       if (this._workActive && this._workStage === 'thinking') {
         // NO BUILD WAS ANNOUNCED IN THIS ROOM — the reply was the whole turn. Give the build's
         // announcement one beat to beat us to it, then close the card. (A room that builds
@@ -3908,12 +4085,8 @@ export class DesignChat extends LitElement {
     // THE KEYBOARD TAKES THE BUTTON'S PATH EXACTLY — including the clear. Measured 2026-10-18:
     // Enter sent the message and left the words in the box, so the next Enter would send them
     // again. The button path (`_onSendCommand`) has cleared since it was written; this is the
-    // same three lines, not a second rule.
-    const textarea = this.renderRoot?.querySelector('prompt-textarea') as
-      (HTMLElement & { value: string }) | null;
-    if (textarea) textarea.value = '';
-    this._draft = '';
-    this._syncBarText();
+    // same writer, not a second rule.
+    this._clearDraft();
     void this._send(text);
   }
 
@@ -3987,7 +4160,7 @@ export class DesignChat extends LitElement {
    * row yet, so it keeps whatever is showing.
    */
   private _moveSeatTo(id: string, opts: { tab?: string } = {}): void {
-    conversation.moveSeatTo.call(this._conv(), id, opts);
+    this._conversationModule.moveSeatTo.call(this._conv(), id, opts);
   }
 
   /**
@@ -4072,7 +4245,7 @@ export class DesignChat extends LitElement {
       { action: 'conversation-select' },
       this.sessionId ? { flow: this.sessionId } : {},
     );
-    conversation.selectConversation.call(this._conv(), id);
+    this._conversationModule.selectConversation.call(this._conv(), id);
   }
 
   /**
@@ -4162,9 +4335,20 @@ export class DesignChat extends LitElement {
         /* THE MECHANICS ARE THE SHARED MODULE'S. It creates, points the package, moves the seat
            and reads the list BEFORE returning, so a greeting fired after it can never be refused
            by the seat's own ownership guard. */
-        await conversation.createPackageConversation.call(
+        await this._conversationModule.createPackageConversation.call(
           this._conv(), userId, this._successorTitle() ?? 'New Chat',
         );
+        /* A NEW CONVERSATION OPENS WITH HER OWN WORD, not with an empty card — the Tools seat's
+           own rule, applied here (owner, 2026-11-07). The turn lands in the thread just created;
+           `_greeted` stops the arriving path from saying it twice. */
+        this._greeted = true;
+        void this._send(
+          'A person has just started a new chat in the design room — '
+          + 'the Chat tab, where the design work and the console are discussed. '
+          + 'They have said nothing yet. ' + NEW_PROMPT_HELLO,
+          { silent: true },
+        );
+        this.requestUpdate();
       } catch (err) {
         this._historyError =
           `A new conversation could not be started: ${String((err as Error)?.message ?? err)}`;
@@ -4283,7 +4467,83 @@ export class DesignChat extends LitElement {
    * make — see the gate in _greetIfArriving that requires a real empty array.
    */
   private async _readPackageConversations(userId: string): Promise<void> {
-    return conversation.readPackageConversations.call(this._conv(), userId);
+    /* THE TOOLS SEAT'S OWN SHAPE, LINE FOR LINE: the read is the module's, and the zero state is
+       answered by the seat's default-open (`_loadDefaultConversationNow`), which creates once. */
+    return this._conversationModule.readPackageConversations.call(this._conv(), userId);
+  }
+
+  /**
+   * THE USAGE READOUT — this seat's tokens, calls, cost and pricing.
+   *
+   * Langfuse v4 in this deployment runs in events-only mode and no longer serves its sessions
+   * endpoint (measured 404), so the readout reads the app's per-call ledger: the same numbers the
+   * model calls reported, which is what Langfuse receives. The endpoint answers for this seat
+   * when the ledger attributed the call to it, and says so in `scope`. A read that fails is said
+   * on the page — it is never drawn as zeros that look measured.
+   */
+  private async _readUsageSummary(): Promise<void> {
+    if (!this.conversationId) return;
+    try {
+      const res = await fetch(
+        `/api/governance/usage/summary?conversation_id=${encodeURIComponent(String(this.conversationId))}`,
+        { headers: { 'X-User-ID': this._userId() } },
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const body = (await res.json()) as Record<string, unknown>;
+      if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        throw new Error('the usage summary was not an object');
+      }
+      /* THE READOUT IS THIS CONVERSATION'S OR IT IS UNATTRIBUTED. The endpoint never answers
+         with another scope's totals; the page never borrows them. */
+      this.usage = body as Record<string, any>;
+      this.requestUpdate();
+    } catch (err) {
+      this._listNote = `The usage readout could not be read: ${String((err as Error)?.message ?? err)}`;
+      this.requestUpdate();
+    }
+  }
+
+  /** THE TAB'S PRESS, ANSWERED — the Tools seat's own method (owner, 2026-11-07). A press usually
+   *  lands before the seat knows its package, so the request is latched and `updated` asks again
+   *  when `sessionId` arrives. It is asked once per press. */
+  loadDefaultConversation(): void {
+    this._wantsDefaultConversation = true;
+    void this._loadDefaultConversationNow();
+  }
+
+  /** THE TAB'S DEFAULT OPEN (owner, 2026-11-07 — the Tools seat's rule, applied here). The seat
+   *  lands on the conversation the package points to; if that row is gone, the last one in the
+   *  list; with none at all, Grace's hello creates the first. Opening creates nothing else and
+   *  saves nothing. */
+  private async _loadDefaultConversationNow(): Promise<void> {
+    if (!this._wantsDefaultConversation || !this.sessionId) return;
+    this._wantsDefaultConversation = false;
+    this._openingDefault = true;
+    try {
+      await this._readPackageConversations(this._userId());
+      /* A FAILED READ IS NOT AN EMPTY ONE. The row list is only assigned by a successful read, so
+         a null list means "this seat could not find out", and that is never a reason to create a
+         conversation. The read's own failure is what the card says. */
+      if (!Array.isArray(this._conversationRows)) return;
+      const rows = this._conversationRows.filter((row) => !row.archived);
+      if (!rows.length) {
+        this._startNewConversation();
+        return;
+      }
+      const bound = String(this.conversationId ?? '');
+      if (bound && rows.some((row) => String(row.id) === bound)) return;
+      this._moveSeatTo(String(rows[0].id), { tab: rows[0].tab || 'chat' });
+      if (this.sessionId) {
+        pointPackageAt({ sessionId: this.sessionId, userId: this._userId() }, String(rows[0].id)).catch((err) => {
+          this._listNote = `This package could not be pointed at its last chat: ${String((err as Error)?.message ?? err)}`;
+          this.requestUpdate();
+        });
+      }
+    } finally {
+      /* THE OPEN IS OVER WHEN THE READ AND THE MOVE ARE. The create, if one was started, is
+         covered by `_creatingConversation` from here on. */
+      this._openingDefault = false;
+    }
   }
 
   /**
@@ -4329,22 +4589,10 @@ export class DesignChat extends LitElement {
     this.requestUpdate();
   }
 
-  /** The bar's own click: open or close its list. */
+  /** The bar's own click: open or close its list. The card's own stylesheet draws the two states
+   *  (`open` is reflected there): collapsed is the bar alone, open is the rows' exact height. */
   private _toggleConversations = (): void => {
     this._conversationsOpen = !this._conversationsOpen;
-    /*
-     * A PRESS OPENS A LIST THAT CAN BE READ. The bar's count is the package's rows, and this seat
-     * carries the console's whole-person read — fifty-odd rows, not one. A 68-pixel card is a
-     * window one row high: the rows were there and could not be seen, which is the defect the
-     * owner reported on 2026-11-03. The open card takes a height that shows several rows, and its
-     * body scrolls for the rest. The closed card is the bar alone.
-     */
-    const host = this.renderRoot?.querySelector('[data-slot="conversations"]') as HTMLElement | null;
-    const card = host?.shadowRoot?.querySelector('.shell') as HTMLElement | null;
-    if (card) {
-      card.style.flex = '0 0 auto';
-      card.style.height = this._conversationsOpen ? 'min(360px, 40vh)' : '38px';
-    }
     /* A NOTE BELONGS TO THE OPEN IT HAPPENED IN. Opening or closing starts a new look, so the note
        starts empty. */
     this._listNote = '';
@@ -4367,19 +4615,26 @@ export class DesignChat extends LitElement {
    * read lands (or if it cannot), the surface's own list is drawn, exactly as before.
    */
   private _conversationRowsForList() {
-    const rows = this._conversationRows
-      ?? (this.conversations ?? []).map((c) => ({
-        id: String(c?.id ?? ''),
-        title: String(c?.title || '(untitled)'),
-        tab: String(c?.tab || 'chat'),
-        archived: false,
-        // The SURFACE's list carries no time — it is the assembly's own array, not this
-        // server read — so a fallback row draws the title and no timestamp. A missing time
-        // is drawn as nothing rather than as a guess.
-        savedAt: '',
-      })).filter((r) => r.id);
+    /* THE APPROVE TAB'S ROWS ARE RECORDS, NOT CONVERSATIONS (owner, 2026-11-07): its view draws
+       them, and the conversations card above it draws nothing — never another tab's list. */
+    if (this.activeTab === 'approvals') {
+      return html`<p class="conversation-none">This tab's records are drawn by its own view.</p>`;
+    }
+    /* THE SURFACE'S OWN LIST IS DRAWN UNTIL THE PACKAGE'S READ LANDS — the header's sessions were
+       fed this way, and a card that hides them until a fetch comes back is a card that looks
+       empty. The server read takes over the moment it arrives, and a failed read says its reason
+       instead of pretending the package has none. */
+    const surfaceRows = (this.conversations ?? []).map((c) => ({
+      id: String(c?.id ?? ''),
+      title: String(c?.title || '(untitled)'),
+      tab: String(c?.tab || 'chat'),
+      archived: false,
+      savedAt: '',
+      messageCount: 0,
+    })).filter((r) => r.id);
+    const rows = this._conversationRows ?? surfaceRows;
     if (!rows.length) {
-      return html`<p class="conversation-none">No conversations yet for this package.</p>`;
+      return html`<p class="conversation-none">${this._listNote || 'No conversations yet for this package.'}</p>`;
     }
     return rows.map(
       (r) => html`<li>
@@ -4468,7 +4723,23 @@ export class DesignChat extends LitElement {
    * now follows.
    */
   private async _removeConversation(id: string, userId: string): Promise<void> {
-    return conversation.removeConversation.call(this._conv(), id, userId);
+    await this._conversationModule.removeConversation.call(this._conv(), id, userId);
+    /*
+     * THE PACKAGE WITH NOTHING LEFT IS OWED ITS NEXT CONVERSATION.
+     *
+     * The shared removal moves the seat to no conversation and takes the arrival, but it cannot
+     * reach this seat's default open — and creation belongs to that open alone (see the note above
+     * the history gate in `_greetIfArriving`). Without this, the greeting that follows is a turn the
+     * app asked for: the server answers it and writes nothing down (`routes/teacher.py` refuses to
+     * start a conversation for a `person_turn=false` turn), so Grace speaks in a thread that was
+     * never registered, the list stays at zero, and the header loses the line naming the
+     * conversation. The Tools seat still carries its own create for this case.
+     */
+    if (this.conversationId) return;
+    if (!Array.isArray(this._conversationRows)) return;
+    if (this._conversationRows.some((row) => !row.archived)) return;
+    this._wantsDefaultConversation = true;
+    await this._loadDefaultConversationNow();
   }
 
   /**
@@ -4688,7 +4959,7 @@ export class DesignChat extends LitElement {
     if (this.productRoom && !this.productTools) return html``;
     const seated = this._seatSlotted();
     const usage = this.usage ?? {};
-    const attributed = Boolean(this.conversationId);
+    const attributed = this.usage?.attributed === true;
     const unannotated = (this.unannotatedInUse ?? []).length > 0;
     return html`
       <!-- THE COLUMN'S SPACER — "chat-left-spacer" #40001085:2598, and it is this
@@ -4742,7 +5013,7 @@ export class DesignChat extends LitElement {
             <design-chat-navigation-bar
               active-tab=${this.activeTab}
               ?rail-owned-by-host=${this.railOwnedByHost}
-              allowed-tabs=${this.allowedTabs}
+              allowed-tabs=${this.allowedTabs || 'chat,tools,approvals,ux,settings'}
               tab-labels=${this.tabLabels}
               disabled-tabs=${this.disabledTabs}
               ?collapsed=${this.collapsed}
@@ -4806,8 +5077,6 @@ export class DesignChat extends LitElement {
                   line=${this._statusLine}
                   ?attributed=${attributed}
                   ?readout-filled=${this._statusContentSlotted}
-                  tokens=${String((usage.totalTokens as number) ?? 0)}
-                  calls=${String((usage.calls as number) ?? 0)}
                 >
                   <!-- THE ROOM'S READOUT STRIP RELAYS THROUGH HERE (owner, 2026-10-13 late
                        — the trace facts go in THIS bar). A room appends its strip to this
@@ -4828,7 +5097,7 @@ export class DesignChat extends LitElement {
                   ? html`<design-chat-header
                   data-slot="conversations"
                   status-text=${(() => {
-                    const n = this._conversationRows?.length ?? (this.conversations ?? []).length;
+                    const n = this.activeTab === 'approvals' ? 0 : (this._conversationRows?.length ?? 0);
                     // The drawing's copy is "23 Conversations"; one of them is one conversation.
                     return `${n} ${n === 1 ? 'Conversation' : 'Conversations'}`;
                   })()}
@@ -4846,6 +5115,7 @@ export class DesignChat extends LitElement {
                   grip-row-node="40001126:2015"
                   grip-dots="40001126:2016,40001126:2017,40001126:2018,40001126:2019,40001126:2020"
                   dm-sans
+                  ?open=${this._conversationsOpen}
                   @click=${this._toggleConversations}
                   @keydown=${this._onConversationsKey}
                 >
@@ -5047,8 +5317,6 @@ export class DesignChat extends LitElement {
                   composer-package=${this.composerPackageId ?? ''}
                   ?busy=${this._sending}
                   ?has-text=${this._draft.trim().length > 0}
-                  @input-resize-start=${this._onResizeStart}
-                  @input-resize-move=${this._onResizeMove}
                   @send-input-to-model=${this._onSendCommand}
                   @stop-model-thinking=${this._onStopCommand}
                 ></design-chat-action-bar>

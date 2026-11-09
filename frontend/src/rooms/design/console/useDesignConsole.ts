@@ -13,10 +13,11 @@
  *
  * Nothing here draws. `DesignSeatShell` composes this with the chat and the left column.
  */
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { getStoredUserId } from '@/services/authService';
 import { readA2UIEnvelope, envelopeRefusalError } from '@/shared/a2ui-envelope';
 import { extractLeft, type Tree } from '@/rooms/design/inject';
+import { isCardLocked } from '@/rooms/design/cardLifecycle';
 
 /** The console and the Figma surface name the seat differently; the room reads one name. */
 function asDesignChat(tree: Tree): Tree {
@@ -42,6 +43,10 @@ export type DesignConsoleState = {
   coverDown: boolean;
   /** The shell's own failure — a frame that never drew its layout — is stated through the same door. */
   setError: (message: string) => void;
+  /** A saved session's card, placed in the console's own list without re-reading the console. */
+  upsertCard: (card: Record<string, any>) => void;
+  /** A removed card leaves the console's own list without re-reading the console. */
+  removeCard: (cardId: string) => void;
 };
 
 export function useDesignConsole(): DesignConsoleState {
@@ -56,9 +61,9 @@ export function useDesignConsole(): DesignConsoleState {
      `setGateDown(true)` can run. These two facts are the same values the JSX draws from, so either
      one lowers the cover whatever happened to the effect. */
   const coverDown = gateDown || frame !== null || error !== null;
-
   useEffect(() => {
     let cancelled = false;
+    setError(null);
     void (async () => {
       try {
         const res = await fetch("/api/design/console", {
@@ -109,5 +114,50 @@ export function useDesignConsole(): DesignConsoleState {
     };
   }, []);
 
-  return { frame, consoleApp, error, coverDown, setError };
+  /*
+   * A SAVED CARD JOINS THE CONSOLE'S LIST IN PLACE. The alternative was to re-read the console on
+   * the Home press, which re-runs the console's assembly and redraws the grid the person is about
+   * to press — a card that is being pressed can be replaced by the redraw, and the press answers
+   * nothing. The save already knows the card; the list is updated from that record, and the grid
+   * is not rebuilt. The systems stay first; the kept session is the newest of the sessions.
+   */
+  const upsertCard = useCallback((card: Record<string, any>) => {
+    if (!card || !card.id) return;
+    /*
+     * A QUEUED CARD IS NOT THE DESIGNER'S WORKSPACE CARD. The console's own read omits
+     * Pending_Approval and Queued_For_Share, and a save's answer must follow the same bound:
+     * placing it here would make the grid contradict the read it came from. The card is still
+     * in the Supervisor Queue; nothing is lost.
+     */
+    if (card.locked === true || isCardLocked(card.state)) return;
+    setFrame((prev) => {
+      if (!prev) return prev;
+      const model = (prev.dataModel ?? {}) as Record<string, any>;
+      const cards = Array.isArray(model.cards) ? (model.cards as Record<string, any>[]) : [];
+      const isSystem = (row: Record<string, any>) =>
+        String(row?.element_key ?? "").startsWith("system:");
+      const systems = cards.filter(isSystem);
+      const others = cards.filter(
+        (row) => !isSystem(row) && String(row?.id ?? "") !== String(card.id),
+      );
+      return {
+        ...prev,
+        dataModel: { ...model, cards: [...systems, card, ...others] },
+      };
+    });
+  }, []);
+
+  const removeCard = useCallback((cardId: string) => {
+    if (!cardId) return;
+    setFrame((prev) => {
+      if (!prev) return prev;
+      const model = (prev.dataModel ?? {}) as Record<string, any>;
+      const cards = Array.isArray(model.cards) ? (model.cards as Record<string, any>[]) : [];
+      const next = cards.filter((row) => String(row?.id ?? "") !== String(cardId));
+      if (next.length === cards.length) return prev;
+      return { ...prev, dataModel: { ...model, cards: next } };
+    });
+  }, []);
+
+  return { frame, consoleApp, error, coverDown, setError, upsertCard, removeCard };
 }

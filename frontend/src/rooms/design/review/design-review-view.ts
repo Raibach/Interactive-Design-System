@@ -142,6 +142,14 @@ export class DesignReviewView extends LitElement {
   `;
 
   declare sessionId?: string;
+
+  /** THE A2UI PACKAGE PROPERTY. The surface binds `packageId`; the review keeps its own field. */
+  get packageId(): string {
+    return this.sessionId ?? '';
+  }
+  set packageId(value: string) {
+    this.sessionId = value;
+  }
   reviewId?: string;
 
   private _rows: ReviewRow[] = [];
@@ -177,38 +185,41 @@ export class DesignReviewView extends LitElement {
   }
 
   private async _load(): Promise<void> {
-    try {
-      const res = await fetch('/api/design/reviews', { headers: this._headers() });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        this._say(String(body?.detail || `The list of reviews could not be read (HTTP ${res.status}).`), true);
-        this.requestUpdate();
-        return;
-      }
-      this._rows = Array.isArray(body?.reviews) ? body.reviews : [];
-
-      /* THE GENERAL QUEUE SITS BESIDE THE SESSIONS (owner, 2026-11-02): a font or a component the
-         system does not hold waits here until a person decides. */
-      const queueRes = await fetch('/api/design/requests?decision=pending', { headers: this._headers() });
-      const queueBody = await queueRes.json().catch(() => ({}));
-      this._queue = Array.isArray(queueBody?.requests) ? queueBody.requests : [];
-
-      /* THE RAIL'S APPROVE ICON PULSES FROM THIS COUNT (owner, 2026-11-03). The seat is the
-         listener; the count is the sessions this person can answer plus the requests waiting. */
-      this._publishApprovalCount();
-
-      const wanted =
-        this.reviewId || this._selected || this._rows[0]?.session_id || '';
-      if (wanted) {
-        this._selected = wanted;
-        await this._open(wanted);
-      } else {
-        this._detail = null;
-        this._say('');
-        this.requestUpdate();
-      }
-    } catch (err) {
-      this._say(`The list of reviews could not be read: ${String((err as Error)?.message ?? err)}`, true);
+    const res = await fetch('/api/raibach/approve/records', { headers: this._headers() });
+    const records = (await res.json()) as Array<{
+      id: string;
+      kind: string;
+      title: string;
+      state: string;
+      payload?: Record<string, unknown>;
+      updated_at: string;
+    }>;
+    this._rows = records
+      .filter((r) => r.kind === 'review')
+      .map((r) => ({
+        session_id: String(r.payload?.session_id || r.id),
+        title: String(r.title || '(untitled)'),
+        stage: String(r.state || r.payload?.stage || ''),
+        stage_word: String(r.payload?.stage_word || r.state || ''),
+        reviewer: '',
+        reviewer_id: '',
+        owner_id: String(r.payload?.owner_id || ''),
+        owner_name: '',
+        mine: true,
+        can_send: false,
+        can_answer: false,
+        updated_at: String(r.updated_at || ''),
+      }));
+    /* The queue is the Approve tab's approval records — none today. No manufactured queue. */
+    this._queue = [];
+    this._publishApprovalCount();
+    const wanted = this.reviewId || this._selected || this._rows[0]?.session_id || '';
+    if (wanted) {
+      this._selected = wanted;
+      await this._open(wanted);
+    } else {
+      this._detail = null;
+      this._say('');
       this.requestUpdate();
     }
   }
@@ -230,25 +241,15 @@ export class DesignReviewView extends LitElement {
   }
 
   private async _open(sessionId: string): Promise<void> {
-    try {
-      const res = await fetch(`/api/design/sessions/${encodeURIComponent(sessionId)}/review`, {
-        headers: this._headers(),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        this._say(String(body?.detail || `That review could not be read (HTTP ${res.status}).`), true);
-        this.requestUpdate();
-        return;
-      }
-      this._detail = body as ReviewDetail;
-      this._selected = sessionId;
-      this.reviewId = sessionId;
-      this._say('');
-      this.requestUpdate();
-    } catch (err) {
-      this._say(`That review could not be read: ${String((err as Error)?.message ?? err)}`, true);
-      this.requestUpdate();
-    }
+    /* THE ROW IS THE DETAIL. The new schema's review record carries its own state; there is no
+       second read and no error frame. A missing row is a lookup on a row the list just returned,
+       so the raw property access is the failure if it is absent. */
+    const row = this._rows.find((r) => r.session_id === sessionId) as ReviewRow;
+    this._detail = { ...row, events: [] };
+    this._selected = sessionId;
+    this.reviewId = sessionId;
+    this._say('');
+    this.requestUpdate();
   }
 
   /** One gate, posted. `request` addresses the session; `approve` and `changes` answer it. */

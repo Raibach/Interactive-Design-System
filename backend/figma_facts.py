@@ -129,12 +129,22 @@ def path_for(job_id: str) -> str:
     return os.path.join(FACTS_ROOT, safe, "facts.json")
 
 
-def write(record: dict[str, Any]) -> str:
+def remember(record: dict[str, Any]) -> None:
+    """Keep one measurement in this process and write nothing.
+
+    A preview is not a record. The measurement exists while the preview is looked at, so the next
+    read can compare with it; it becomes durable only when the designer saves or approves.
+    """
     job_id = record["jobId"]
     _MEMORY[job_id] = record
     node_id = record.get("nodeId")
     if node_id:
         _LATEST_BY_NODE[node_id] = job_id
+
+
+def write(record: dict[str, Any]) -> str:
+    remember(record)
+    job_id = record["jobId"]
     destination = path_for(job_id)
     os.makedirs(os.path.dirname(destination), exist_ok=True)
     with open(destination, "w", encoding="utf-8") as handle:

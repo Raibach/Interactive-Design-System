@@ -39,6 +39,7 @@ and engine rather than inferred here.
 from __future__ import annotations
 
 import json
+import math
 from typing import Any
 
 from design_renderer import (
@@ -131,6 +132,11 @@ RAW_TO_SPEC: dict[str, tuple[str, ...]] = {
     "strokeGeometry": ("paths", "svg"),
     "annotations": ("annotation",),
     "componentId": ("componentId",),
+    # THE THREE FACTS THAT NOW HAVE A DRAWING MAPPING. `arcData` is carried and checked against
+    # the geometry Figma states; `componentProperties` is carried and checked against the
+    # component's own name; `maxWidth` is a declaration the renderer emits.
+    "componentProperties": ("componentProperties",),
+    "maxWidth": ("maxWidth",),
 }
 
 # ── THE TRUNCATION KEYS, WHICH LIVE ON TWO PLACES AND ARE READ FROM BOTH ─────────────────────
@@ -145,6 +151,9 @@ TRUNCATION_KEYS = ("textTruncation", "maxLines")
 NOT_A_FACT = {
     "id", "name", "type", "children", "layoutVersion", "exportSettings", "pluginData",
     "sharedPluginData", "measurements", "devStatus", "componentPropertyDefinitions",
+    # Attached by the ingest from the file's component list; it is the name the variant check
+    # compares against, not a key the design states on the node.
+    "component_name",
 }
 
 
@@ -167,10 +176,37 @@ ASKS: dict[str, set[str] | None] = {
     "counterAxisAlignItems": {"MIN", "CENTER", "MAX", "BASELINE"},
     "layoutMode": {"HORIZONTAL", "VERTICAL"},
     "clipsContent": None,        # handled by _states: False is not a statement
-    # A stroke drawn INSIDE is what a border is; only OUTSIDE asks for the outline that costs no
-    # layout. INSIDE is therefore a stated value that needs no declaration of its own.
-    "strokeAlign": {"OUTSIDE"},
+    # EVERY ALIGNMENT ASKS FOR ITS OWN DRAWING. INSIDE is a border, OUTSIDE is an outline, and
+    # CENTER is an outline moved in by half its width; none of the three is a stated value that
+    # needs nothing.
+    "strokeAlign": None,
 }
+
+# ── NON-VISUAL CONFIGURATION, NEVER A DRAWING TARGET ───────────────────────────────────────────
+# These are read in full and carried in the component's typed parameter block. They are not drawing
+# targets, so they produce no row, no reason, and no error: a style reference names a value already
+# drawn, a constraint governs a resize the fixed drawing never performs, an auto-resize mode is a
+# behaviour whose result is the measured box, a boolean operation names geometry drawn from its
+# paths, and `componentId` names the component an instance refers to while the instance is drawn
+# from its own measured nodes. `locked` is an editing state and says nothing about a pixel.
+#
+# WHAT IS NOT HERE, AND WHY. `strokeCap`, `strokeJoin`, `dashPattern` and `maxWidth` change the
+# drawing: a round cap drawn square, a dashed border drawn solid, or a maximum width that changes
+# wrapping are visual differences. They were in this set, which gave them no row, no reason and no
+# error; they are gated again. `componentProperties` is not here either: it is configuration only
+# if the instance's measured children carry every override, and that has not been shown. Until it
+# is, the gate names it rather than assuming it.
+STRUCTURAL_FACTS = frozenset({
+    "styles",
+    "boundVariables",
+    "constraints",
+    "textAutoResize",
+    "primaryAxisSizingMode",
+    "counterAxisSizingMode",
+    "booleanOperation",
+    "componentId",
+    "locked",
+})
 
 
 def _asks(raw_node: dict[str, Any], key: str) -> bool:
@@ -669,14 +705,38 @@ def _stroke_drawn(spec_node: dict[str, Any], decls: list[str]) -> dict[str, Any]
         weight = re.search(r'\bstroke-width="([^"]*)"', svg)
         if colour:
             return {"color": colour.group(1), "weight": _num(weight.group(1)) if weight else None, "by": "svg"}
+        # A STROKE-ONLY VECTOR IS DRAWN FROM ITS STROKE GEOMETRY. The path is filled with the
+        # stroke's colour, and the path's own outline is the stroke's weight; there is no separate
+        # stroke attribute because the artwork already is the stroke. The `fill="none"` on the
+        # `<svg>` wrapper is not the path's paint, so the first non-none fill is the one to read.
+        fill_value = next(
+            (one for one in re.findall(r'\bfill="([^"]*)"', svg) if one not in ("none", "")),
+            None,
+        )
+        stroke = spec_node.get("stroke") or {}
+        if fill_value and not spec_node.get("fill") and stroke.get("color"):
+            return {
+                "color": fill_value,
+                "weight": _num(stroke.get("weight")),
+                "by": "the artwork's own fill",
+            }
 
     prop, value = _decl_any(decls, "border", "outline")
     if value:
         import re
 
-        match = re.match(r"(?:([\d.]+)px)\s+solid\s+(\S+)", value)
+        # THE WHOLE COLOUR, NOT ITS FIRST WORD. A colour with spaces — `rgba(78, 104, 210, 0.5)`
+        # — was read as `rgba(78,` because the pattern stopped at the first space. The gate then
+        # compared the design's full colour to that fragment, reported a difference that the
+        # drawing did not have, and printed the fragment as the drawn value. The value runs to the
+        # end of the declaration; a colour cannot contain the declaration's own semicolon.
+        match = re.match(r"(?:([\d.]+)px)\s+solid\s+(.+?)\s*$", value)
         if match:
-            return {"color": match.group(2), "weight": float(match.group(1)), "by": prop or ""}
+            return {
+                "color": match.group(2).strip(),
+                "weight": float(match.group(1)),
+                "by": prop or "",
+            }
     colour = _decl(decls, "border-color")
     widths = _decl(decls, "border-width")
     if colour:
@@ -777,16 +837,48 @@ def _compare_fact(
         paints = _visible_paints(raw_node, "fills")
         if not paints:
             return None
-        unsupported = [p for p in paints if str(p.get("type") or "").upper() != "SOLID" and not _is_gradient(p)]
+
+        def kind_of(paint: dict[str, Any]) -> str:
+            return str(paint.get("type") or "").upper()
+
+        unsupported = [
+            p for p in paints
+            if kind_of(p) != "SOLID" and not _is_gradient(p) and kind_of(p) != "IMAGE"
+        ]
         if unsupported:
             kinds = ", ".join(sorted({str(p.get("type")) for p in unsupported}))
             return row(kinds, "not drawn", f"a {kinds} fill is not drawn by this renderer yet", "differs",
                        f"{kinds} → nothing")
-        wanted_parts = [(_gradient_css(p) if _is_gradient(p) else _paint_css(p)) for p in paints]
-        if any(value is None for value in wanted_parts):
-            return row("a paint", "not drawn", "the paint could not be expressed as a colour", "differs",
-                       "paint → nothing")
-        wanted = ", ".join(v for v in wanted_parts if v)
+
+        # AN IMAGE FILL'S WANTED VALUE IS THE DATA URI THE SPEC CARRIES. The spec builder renders
+        # the node through Figma and writes the bytes as `url('data:image/png;base64,…')`; the
+        # drawing writes the same string as its background. The comparison is therefore the same
+        # exact-value comparison a colour gets, and a design that states a logo is drawn rather
+        # than refused for a paint this check did not know how to express.
+        def wanted_of(paint: dict[str, Any]) -> str:
+            if kind_of(paint) == "IMAGE":
+                return str(spec_node.get("fill") or "")
+            return _gradient_css(paint) if _is_gradient(paint) else (_paint_css(paint) or "")
+
+        wanted_parts = [wanted_of(p) for p in paints]
+        if any(not value for value in wanted_parts):
+            # THE IMAGE BOUNDARY'S OWN WORDS. A failed image render carries its exception, type
+            # and stack trace on the spec; the row and the gate's named fact repeat them instead
+            # of reporting only that a paint is missing.
+            image_error = str(spec_node.get("imageError") or "").strip()
+            why = "the paint could not be expressed as a drawing"
+            delta = "paint → nothing"
+            if image_error:
+                why = f"{why}; the image render failed: {image_error}"
+                delta = f"paint → nothing; the image render failed: {image_error}"
+            return row("a paint", "not drawn", why, "differs", delta)
+        # THE ROW SPEAKS IN WORDS, NOT IN FOUR KILOBYTES OF BASE64. The comparison uses the data
+        # URI; the source and drawn columns stay readable.
+        labels = [
+            "an image fill" if kind_of(paint) == "IMAGE" else value
+            for paint, value in zip(paints, wanted_parts)
+        ]
+        wanted = ", ".join(v for v in labels if v)
         prop, value = _decl_any(decls, "color", "background")
         if not value and is_vector:
             # A DRAWN SHAPE'S PAINT IS ON ITS PATH (`fill="#ffffff"`), not in a rule.
@@ -796,19 +888,26 @@ def _compare_fact(
             return differs(wanted, "no declaration", "the design states a fill and nothing is drawn")
         drawn_parts = _split_top_level(value)
         if len(drawn_parts) != len(paints):
-            return differs(wanted, value,
+            return differs(wanted, "a different number of fills",
                            "the number of fills drawn is not the number the design states")
         for paint, drawn in zip(paints, drawn_parts):
-            if _is_gradient(paint):
+            if kind_of(paint) == "IMAGE":
+                if drawn.strip() != wanted_of(paint).strip():
+                    return differs("an image fill", "not the image the design states",
+                                   "the image fill drawn is not the image the design states")
+            elif _is_gradient(paint):
                 if not _same_gradient(_gradient_css(paint), drawn):
-                    return differs(wanted, value,
+                    return differs(wanted, "a different gradient",
                                    "the gradient drawn is not the gradient the design states")
             elif not _same_colour(_paint_css(paint), drawn):
-                return differs(wanted, value,
+                return differs(wanted, "a different colour",
                                "the fill drawn is not the fill the design states")
         why = ("the fill the design states" if len(paints) == 1
                else f"{len(paints)} fills, drawn in the design's order")
-        return row(wanted, value, why)
+        drawn_label = value
+        if len(paints) == 1 and kind_of(paints[0]) == "IMAGE" and value.strip() == wanted_parts[0].strip():
+            drawn_label = "the image"
+        return row(wanted, drawn_label, why)
 
     if fact == "strokes":
         paints = _visible_paints(raw_node, "strokes")
@@ -1005,13 +1104,35 @@ def _compare_fact(
 
     if fact == "strokeAlign":
         wanted = str(raw_node.get("strokeAlign") or "")
-        if wanted != "OUTSIDE":
+        if not wanted:
             return None
-        got = _decl(decls, "outline")
-        if got:
-            return row("OUTSIDE", got, "the border is drawn outside the box, which costs no layout")
-        return differs("OUTSIDE", "a border inside the box",
-                       "the design draws the border outside and the drawing puts it inside")
+        # A STROKE-ONLY VECTOR IS ITS STROKE. Figma's `strokeGeometry` is the outline the stroke
+        # occupies, with the alignment applied in its own coordinates, and `_svg_for_vector` fills
+        # that path. There is no CSS alignment to compare because the artwork already is one.
+        if not raw_node.get("fillGeometry") and raw_node.get("strokeGeometry"):
+            return row(wanted, "the artwork is the stroke's own geometry",
+                       "the path is the outline the stroke occupies, alignment included")
+        if wanted == "OUTSIDE":
+            got = _decl(decls, "outline")
+            if got:
+                return row("OUTSIDE", got, "the border is drawn outside the box, which costs no layout")
+            return differs("OUTSIDE", "a border inside the box",
+                           "the design draws the border outside and the drawing puts it inside")
+        if wanted == "CENTER":
+            got = _decl(decls, "outline")
+            offset = _decl(decls, "outline-offset")
+            if got and offset:
+                return row("CENTER", f"{got}; outline-offset: {offset}",
+                           "the stroke straddles the edge: half inside, half outside")
+            return differs("CENTER", "a border inside the box",
+                           "the design centres the stroke on the edge and the drawing puts it inside")
+        if wanted == "INSIDE":
+            prop, value = _decl_any(decls, "border", "border-width")
+            if prop:
+                return row("INSIDE", f"{prop}: {value}", "the border is drawn inside the box")
+            return differs("INSIDE", "no border",
+                           "the design draws the stroke inside the box and the drawing has no border")
+        return None
 
     # ── WHAT THE LAYER DOES TO ITSELF ──────────────────────────────────────────────────────
     if fact == "opacity":
@@ -1222,6 +1343,111 @@ def _compare_fact(
                            "the styled ranges drawn are not the ranges the design states")
         return row(f"{len(runs)} range(s)", f"{len(drawn)} span(s)", "every styled range the design states")
 
+    if fact == "arcData":
+        stated = raw_node.get("arcData") or {}
+        if not stated:
+            return None
+        start = float(stated.get("startingAngle") or 0.0)
+        end = float(stated.get("endingAngle") or 0.0)
+        inner = float(stated.get("innerRadius") or 0.0)
+        svg = str(spec_node.get("svg") or "")
+        if not svg:
+            return differs(
+                f"{_n(start)} / {_n(end)} / {_n(inner)}",
+                "no geometry",
+                "the design states an arc and the drawing carries no Figma geometry",
+            )
+        full = abs((end - start) - 2.0 * math.pi) < 1e-6 and inner <= 1e-6
+        if not full:
+            return differs(
+                f"{_n(start)} / {_n(end)} / {_n(inner)}",
+                "Figma geometry drawn, angles not verified",
+                "the renderer draws Figma's geometry but cannot verify a partial arc from its "
+                "angles without rebuilding it; refusing as not capable",
+            )
+        if "Z" not in svg:
+            return differs(
+                f"{_n(start)} / {_n(end)} / {_n(inner)}",
+                "geometry is not closed",
+                "the design states a full ellipse and Figma's geometry is not a closed outline",
+            )
+        drawn_width = _num(_svg_attr(spec_node, "width"))
+        drawn_height = _num(_svg_attr(spec_node, "height"))
+        wanted_width = float(box.get("width") or 0)
+        wanted_height = float(box.get("height") or 0)
+        if _same(wanted_width, drawn_width) and _same(wanted_height, drawn_height):
+            return row(
+                "0..2π, inner 0",
+                f"{_n(drawn_width)} × {_n(drawn_height)} Figma geometry",
+                "Figma's own stroke geometry, the full ellipse the design states",
+            )
+        return differs(
+            f"{_n(wanted_width)} × {_n(wanted_height)}",
+            f"{_n(drawn_width)} × {_n(drawn_height)}",
+            "the arc geometry drawn is not the box the design states",
+        )
+
+    if fact == "maxWidth":
+        stated = raw_node.get("maxWidth")
+        if stated is None:
+            return None
+        got = _decl(decls, "max-width")
+        if got is None:
+            return differs(
+                _n(float(stated)),
+                "no declaration",
+                "the design states a maximum width and no declaration carries it",
+            )
+        if _same(float(stated), _num(got)):
+            return row(_n(float(stated)), got, "the maximum width the design states")
+        return differs(
+            _n(float(stated)), got,
+            "the maximum width drawn is not the maximum the design states",
+        )
+
+    if fact == "componentProperties":
+        stated = raw_node.get("componentProperties") or {}
+        if not stated:
+            return None
+        values = [
+            str((entry or {}).get("value") or "")
+            for entry in stated.values()
+            if isinstance(entry, dict)
+        ]
+        values = [value for value in values if value]
+        if not values:
+            return differs(
+                _short(str(stated), 40),
+                "no variant value",
+                "the design states component properties with no value to carry",
+            )
+        component_name = str(raw_node.get("component_name") or "")
+        if not component_name:
+            return differs(
+                ", ".join(values),
+                "no component name",
+                "the instance states a variant and the component's name was not measured; "
+                "refusing as not capable",
+            )
+        if not all(value.lower() in component_name.lower() for value in values):
+            return differs(
+                ", ".join(values),
+                component_name,
+                "the component name does not state the variant the instance selects",
+            )
+        children = raw_node.get("children") or []
+        if not children:
+            return differs(
+                ", ".join(values),
+                "no measured children",
+                "the instance states a variant and has no measured children to draw",
+            )
+        return row(
+            ", ".join(values),
+            f"{component_name}, {len(children)} measured child(ren)",
+            "the variant the design states, on the instance Figma resolved",
+        )
+
     if fact in ("fillGeometry", "strokeGeometry"):
         if not is_vector:
             return None
@@ -1423,6 +1649,8 @@ def key_coverage(spec: dict[str, Any]) -> dict[str, Any]:
 
     for node in _walk_nodes(spec):
         for key, value in (node.get("stated") or {}).items():
+            if key in STRUCTURAL_FACTS:
+                continue  # configuration, not a visual fact: no row, no reason, no error
             entry = carried.setdefault(
                 key, {"nodes": 0, "with_content": 0, "examples": [], "unexamined": 0, "reason": None}
             )
@@ -1845,23 +2073,37 @@ def account(report: dict[str, Any]) -> dict[str, Any]:
     rows = report.get("rows") or []
     seen: dict[tuple[str, str], int] = {}
     for row in rows:
-        # THE LAYER'S NAME AND ITS FACT, not its node id: a row may carry no id, and then every
-        # node in the report would collide with every other one and a clean report would be read
-        # as full of duplicates. The layer label is what the row prints, so it is what identifies
-        # it for the count.
-        key = (str(row.get("layer") or ""), str(row.get("fact") or ""))
+        # THE NODE AND ITS FACT. Two layers can share a name and a type — a navigation bar holds
+        # two `chat-button` instances — and keying on the printed label alone counted two real
+        # layers as one fact counted twice, refusing a complete design. The row carries the node
+        # id the report already measured; the label is the fallback for a row with no id, which is
+        # the only case where the label must identify it.
+        identity = str(row.get("id") or row.get("layer") or "")
+        key = (identity, str(row.get("fact") or ""))
         seen[key] = seen.get(key, 0) + 1
-    duplicates = [f"{key[0]} · {key[1]} (×{count})" for key, count in seen.items() if count > 1]
+    labels = {str(row.get("id") or row.get("layer") or ""): row.get("layer") for row in rows}
+    duplicates = [
+        f"{labels[identity]} · {fact} (×{count})"
+        for (identity, fact), count in seen.items() if count > 1
+    ]
     drawn = sum(1 for row in rows if row.get("verdict") == "drawn")
     accepted = sum(1 for row in rows if row.get("verdict") == "accepted")
     missing = sum(1 for row in rows if row.get("verdict") not in ("drawn", "accepted"))
+    unexamined = list((report.get("key_coverage") or {}).get("omissions") or [])
     return {
         "total": len(rows),
         "drawn": drawn,
         "accepted": accepted,
         "missing": missing,
         "duplicates": duplicates,
+        # THE ROW EQUATION DOES NOT COVER THESE: a stated key with no examination is not a row.
+        # It is counted here so the account cannot read as complete while the gate is blocking.
+        "unexamined": unexamined,
         "closed": not duplicates and len(rows) == drawn + accepted + missing,
+        "note": (
+            "the row equation covers the facts that were compared; stated keys with no "
+            "examination are listed in `unexamined` and are not rows"
+        ),
     }
 
 
@@ -2041,6 +2283,8 @@ def fidelity_report(raw_document: dict[str, Any], tag: str | None = None,
         started = len(rows)
 
         for key in sorted(set(raw_node) | set(TRUNCATION_KEYS)):
+            if key in STRUCTURAL_FACTS:
+                continue  # configuration, carried in the typed block and drawn by nothing
             if key in NOT_A_FACT or key not in RAW_TO_SPEC:
                 continue
             if not _states(raw_node, key):
@@ -2145,6 +2389,12 @@ def fidelity_report(raw_document: dict[str, Any], tag: str | None = None,
             # the two are equal at the precision the drawing keeps, and `differs` when they are not
             # — never on the strength of a declaration's NAME appearing.
             for fact in _FACT_LABELS.get(key, (key,)):
+                # THE ROOT'S PLACE ON THE CANVAS IS NOT A COMPONENT FACT. The component preview is
+                # drawn at its own origin, so the root's position, rotation and transform are
+                # excluded from the drawing and from the component's rows. They are not errors and
+                # they are not a claim about the design; they are the canvas placement.
+                if is_root and fact in ("position", "rotation", "transform"):
+                    continue
                 try:
                     compared = _compare_fact(raw_node, spec_node, fact, decls, markup, parent_spec)
                 except Exception as error:  # noqa: BLE001 — a proof must never stop the work
@@ -2162,9 +2412,11 @@ def fidelity_report(raw_document: dict[str, Any], tag: str | None = None,
                 if compared["state"] == "differs":
                     verdict, why = "differs", compared["why"]
                 elif compared["state"] == "carried":
-                    # Measured, deliberately not a declaration, with the reason written down —
-                    # a drawn shape's corners and rotation live in its path. Not counted as an
-                    # exact DECLARATION, and not counted against the design either.
+                    # A CARRIED VALUE IS ACCEPTED, NOT DRAWN. A rotation composed into the
+                    # transform or a corner radius drawn in the artwork's own path is carried by
+                    # the drawing; the row says so, with its reason. It is not an exact declaration
+                    # of its own, and it is not counted as one. The global reclassification to
+                    # `drawn` raised the exactness count without naming the drawing that carries it.
                     verdict, why = "accepted", compared["why"]
                 else:
                     verdict, why = "drawn", compared["why"]
@@ -2208,15 +2460,18 @@ def fidelity_report(raw_document: dict[str, Any], tag: str | None = None,
         counts[row["verdict"]] = counts.get(row["verdict"], 0) + 1
 
     exact = counts.get("drawn", 0)
-    # THE TOTAL IS EVERY FACT THAT ASKS FOR A DRAWING. A fact that was never read, never drawn, or
-    # drawn and measured to fall short is IN the total, so a percentage can never read 100 while
-    # the same answer names a failure. `accepted` rows ask for nothing and carry a written reason;
-    # they are counted separately and named in the verdict sentence.
+    # THE TOTAL IS EVERY FACT THAT ASKS FOR A DRAWING, INCLUDING THE STATED KEYS NO EXAMINATION
+    # COVERS. A key that never reached a row is still a fact the design states, so it belongs in
+    # the denominator; otherwise a design with three unexamined keys can print 100%.
+    # `accepted` rows ask for nothing and carry a written reason; they are counted separately and
+    # named in the verdict sentence.
     not_exact = sum(
         counts.get(verdict, 0)
         for verdict in ("differs", "uncomparable", "not-read", "not-drawn", "defect")
     )
-    compared = exact + not_exact
+    coverage = key_coverage(spec)
+    unexamined = len(coverage.get("omissions") or [])
+    compared = exact + not_exact + unexamined
 
     return {
         "tag": tag,
@@ -2237,6 +2492,7 @@ def fidelity_report(raw_document: dict[str, Any], tag: str | None = None,
             "exact": exact,
             "compared": compared,
             "differs": counts.get("differs", 0),
+            "unexamined": unexamined,
             "percent": round(exact / compared * 100, 2) if compared else 100.0,
         },
         "accepted_unrendered": sorted(ACCEPTED_UNRENDERED),
@@ -2245,7 +2501,7 @@ def fidelity_report(raw_document: dict[str, Any], tag: str | None = None,
         "design": design_findings(raw_document),
         # THE DESIGNER'S OWN NOTES AND PROPERTY MARKS, quoted verbatim, per layer.
         "annotations": annotation_report(raw_document),
-        "key_coverage": key_coverage(spec),
+        "key_coverage": coverage,
         "interactions": interaction_report(spec),
         "source_chars": len(source),
     }

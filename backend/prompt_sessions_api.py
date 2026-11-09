@@ -577,42 +577,6 @@ class PromptSessionsAPI:
             conn.commit()
             return str(conversation_id)
 
-    def get_latest_design_session(self, user_id: str, tab: str) -> dict[str, Any] | None:
-        """The newest KEPT session of one Design tab — the last conversation that tab had.
-
-        A Save relabels the tab's working row `design_session` (see `routes/ai.py`), which frees
-        the one-per-tab slot the next visit resolves into a fresh, empty row. The work the person
-        just kept was therefore reachable only through its card, while pressing the tab showed an
-        empty chat. This read lets the assembly open the last kept visit instead, when the tab's
-        own package holds no turn of its own.
-
-        ORDER IS `updated_at DESC`: the list's own order, so the first row is the last one written
-        to. Archived rows are not candidates — a card put away is not "last".
-        """
-        if not user_id or not tab:
-            return None
-        with self.get_db() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SET app.current_user_id = %s", (user_id,))
-            cursor.execute(
-                """
-                SELECT id::text AS id
-                  FROM prompt_sessions
-                 WHERE user_id = %s
-                   AND metadata->>'session_type' = 'design_session'
-                   AND metadata->>'design_tab' = %s
-                   AND is_archived IS NOT TRUE
-                 ORDER BY updated_at DESC
-                 LIMIT 1
-                """,
-                (user_id, tab),
-            )
-            row = cursor.fetchone()
-        if not row:
-            return None
-        session_id = row["id"] if isinstance(row, dict) else row[0]
-        return self.get_session(session_id=str(session_id), user_id=user_id)
-
     def get_or_create_design_tab(
         self,
         user_id: str,
@@ -670,6 +634,7 @@ class PromptSessionsAPI:
                 return dict(row) if row else None
 
         package = read_package()
+        created_id = ""
         if not package:
             try:
                 created = self.create_session(
@@ -679,6 +644,7 @@ class PromptSessionsAPI:
                 )
                 if not created or not created.get("id"):
                     return None
+                created_id = str(created["id"])
                 with self.get_db() as conn:
                     cursor = conn.cursor()
                     cursor.execute("SET app.current_user_id = %s", (user_id,))
@@ -701,6 +667,13 @@ class PromptSessionsAPI:
                 package = read_package()
                 if not package:
                     raise
+            # A LOSING CREATOR TAKES ITS ORPHAN ROW WITH IT. The losing insert still made a
+            # session and an empty conversation before the index refused its kind. Left behind,
+            # that untyped row is listed by the global console as a package — the blank
+            # "Design — Tools" cards the owner saw in a column — because no tab read claims it.
+            # The row is new, untyped and has no turn; the winner is never touched.
+            if created_id and package and str(package.get("id") or "") != created_id:
+                self._discard_losing_tab_package(created_id, user_id)
         if not package:
             return None
 
@@ -794,6 +767,67 @@ class PromptSessionsAPI:
             "conversationId": str(conversation_id),
             "conversationIds": conversation_ids,
         }
+
+    def _discard_losing_tab_package(self, session_id: str, user_id: str) -> None:
+        """Remove the empty package a losing tab creator left behind.
+
+        The partial unique index permits one typed `design_tab` row per person per tab. When
+        two callers race, the loser's freshly created row and its conversation are not the
+        tab's package. Left behind, the row carries no kind, so no tab read claims it and the
+        global console lists it as a package — the blank "Design — Tools" cards the owner saw
+        in a column. The row is new, untyped and holds no turn; the winner is never touched.
+        """
+        with self.get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SET app.current_user_id = %s", (user_id,))
+            cursor.execute(
+                "SELECT metadata FROM prompt_sessions WHERE id = %s",
+                (session_id,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return
+            meta = row["metadata"] or {}
+            if isinstance(meta, str):
+                try:
+                    meta = json.loads(meta) if meta.strip() else {}
+                except (json.JSONDecodeError, ValueError):
+                    meta = {}
+            # A ROW THAT CARRIES A KIND IS NOT THIS CALL'S ORPHAN. The winner's row is never
+            # removed, even if the loser's read arrived at it.
+            if isinstance(meta, dict) and meta.get("session_type"):
+                return
+            # A ROW THAT HOLDS A TURN IS NOT EMPTY, whatever its kind says. It is kept.
+            cursor.execute(
+                """
+                SELECT 1
+                  FROM conversation_messages m
+                  JOIN conversations c ON c.id = m.conversation_id
+                 WHERE c.session_id = %s
+                 LIMIT 1
+                """,
+                (session_id,),
+            )
+            if cursor.fetchone():
+                return
+            cursor.execute(
+                "SELECT id FROM conversations WHERE session_id = %s",
+                (session_id,),
+            )
+            for conversation in cursor.fetchall():
+                cursor.execute(
+                    "DELETE FROM conversations WHERE id = %s",
+                    (conversation["id"],),
+                )
+            cursor.execute(
+                "DELETE FROM session_permissions WHERE session_id = %s",
+                (session_id,),
+            )
+            cursor.execute(
+                "DELETE FROM prompt_sessions WHERE id = %s",
+                (session_id,),
+            )
+            conn.commit()
 
     def get_sessions(
         self,

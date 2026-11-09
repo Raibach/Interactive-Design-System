@@ -34,6 +34,8 @@ import html as _html
 import re
 from typing import Any
 
+from design_parameters import apply_parameters
+
 # The spec keys this renderer knows how to place. Anything outside this set that turns up in a
 # spec is a key the two halves of the contract disagree about, and the ingest REFUSES on it — a
 # measurement nobody can place is not something to render "well enough".
@@ -79,6 +81,11 @@ RENDERED_KEYS = {
     # `rotation` field cannot express.
     "transform",
     "strokeAlign", "strokeWeights", "strokeCap", "strokeJoin", "dashPattern", "constraints",
+    # THE THREE FACTS THAT NOW HAVE A DRAWING MAPPING. `arcData` is drawn by the geometry Figma
+    # states, and the full ellipse is verified against the stated angles; `maxWidth` is a CSS
+    # declaration; `componentProperties` is represented by the resolved instance's measured
+    # children, and the fidelity check verifies the stated variant against the component's own name.
+    "arcData", "componentProperties", "maxWidth",
     # ── WHAT FIGMA STATED AND NOBODY PLACES YET ───────────────────────────────────────────────
     # `stated` is the carrier for every key Figma sent that this renderer has no mapping for
     # (see `_CONSUMED_KEYS` in routes/figma.py). It is named here so the ingest does NOT refuse a
@@ -108,13 +115,9 @@ SHAPE_TYPES = frozenset({
 })
 
 ACCEPTED_UNRENDERED = {
-    # ── THE TWO FIGMA KEYS THE PIPELINE DELIBERATELY DOES NOT CARRY (2026-11-02) ──────────────
-    # Both were reported as unexamined losses. Neither is a loss: each asks for nothing of its own,
-    # and the reason is recorded here so an examination exists instead of a silence.
-    "arcData": "the ellipse's arc. The renderer draws the layer's measured box and a full circle; "
-               "a PARTIAL arc (start and end angles other than 0 and 2π) is not carried, and the "
-               "row says so rather than pretending the circle is the arc. A full ellipse states "
-               "0 → 2π, which is exactly what a circle is.",
+    # ── THE FIGMA KEY THE PIPELINE DELIBERATELY DOES NOT CARRY (2026-11-02) ───────────────────
+    # It was reported as an unexamined loss. It is not a loss: it asks for nothing of its own, and
+    # the reason is recorded here so an examination exists instead of a silence.
     "styles": "Figma's named style references. The effect a reference names is resolved onto the "
               "node and drawn from `effects`; the reference itself is a name for a value that is "
               "already measured, and asks for no declaration of its own.",
@@ -461,6 +464,24 @@ def _css_paint(paint: Any) -> str:
     return css
 
 
+def _lit_text(value: str) -> str:
+    """A measured string as the module's template literal writes it.
+
+    THE DESIGN'S OWN CHARACTERS, KEPT AND ESCAPED. The generated module puts this text inside a
+    JavaScript template literal. A backtick would close it, `${` would start an expression, and a
+    backslash would be read as a JavaScript escape. Each is escaped here, so the browser draws the
+    characters Figma stated and the module stays one module.
+    """
+    escaped = _html.escape(value)
+    escaped = escaped.replace("\\", "\\\\").replace("`", "\\`").replace("${", "\\${")
+    return escaped.replace("\n", "<br/>")
+
+
+def _lit_attr(value: str) -> str:
+    """The same escapes for a value that rides inside the template's markup, not its text."""
+    return value.replace("\\", "\\\\").replace("`", "\\`").replace("${", "\\${")
+
+
 def _text_html(node: dict[str, Any]) -> str:
     """A measured text layer, as markup: the runs styled as measured, the words escaped.
 
@@ -484,18 +505,18 @@ def _text_html(node: dict[str, Any]) -> str:
         return "${this." + field + "}"
     runs = [r for r in (node.get("runs") or []) if r.get("start") is not None and r.get("end") is not None]
     if not runs:
-        return _html.escape(text).replace("\n", "<br/>")
+        return _lit_text(text)
 
     out: list[str] = []
     cursor = 0
     for run in sorted(runs, key=lambda r: r["start"]):
         start, end = int(run["start"]), int(run["end"])
         if start > cursor:
-            out.append(_html.escape(text[cursor:start]).replace("\n", "<br/>"))
+            out.append(_lit_text(text[cursor:start]))
         style = run.get("style") or {}
         declarations = []
         if style.get("fontFamily"):
-            declarations.append(f"font-family: {_css_string_in_attr(_local_face(style['fontFamily']))}, sans-serif")
+            declarations.append(f"font-family: {_lit_attr(_css_string_in_attr(_local_face(style['fontFamily'])))}, sans-serif")
         if style.get("fontWeight"):
             declarations.append(f"font-weight: {style['fontWeight']}")
         if style.get("fontSize") is not None:
@@ -510,14 +531,14 @@ def _text_html(node: dict[str, Any]) -> str:
             declarations.append(f"text-decoration: {_TEXT_DECORATION[style['textDecoration']]}")
         if style.get("fill"):
             declarations.append(f"color: {style['fill']}")
-        inner = _html.escape(text[start:end]).replace("\n", "<br/>")
+        inner = _lit_text(text[start:end])
         if declarations:
             out.append(f'<span style="{"; ".join(declarations)}">{inner}</span>')
         else:
             out.append(inner)
         cursor = end
     if cursor < len(text):
-        out.append(_html.escape(text[cursor:]).replace("\n", "<br/>"))
+        out.append(_lit_text(text[cursor:]))
     return "".join(out)
 
 
@@ -552,7 +573,11 @@ def _truncation_frame(node: dict[str, Any]) -> list[str] | None:
     return ["display: block", f"max-height: {_px(height)}", "overflow: hidden"]
 
 
-def _declarations(node: dict[str, Any], place: dict[str, float] | None = None) -> list[str]:
+def _declarations(
+    node: dict[str, Any],
+    place: dict[str, float] | None = None,
+    is_root: bool = False,
+) -> list[str]:
     """The CSS this layer's own measurements produce, in a fixed order.
 
     Fixed order matters: the same spec must produce the same bytes, or a diff between two runs of
@@ -630,6 +655,11 @@ def _declarations(node: dict[str, Any], place: dict[str, float] | None = None) -
         out.append(f"width: {_px(size[0])}")
         out.append(f"height: {_px(size[1])}")
         out.append("box-sizing: border-box")
+    # THE MAXIMUM THE DESIGN STATES, AS A DECLARATION OF ITS OWN. The measured width is the width
+    # at the measured content; the maximum is the constraint that produced it, and a drawing that
+    # omits it can grow past a width the design forbids.
+    if node.get("maxWidth") is not None:
+        out.append(f"max-width: {_px(node['maxWidth'])}")
 
     # A FILL MEANS TWO DIFFERENT THINGS, and getting them the same way round is what painted a
     # text layer as a solid box: on a shape it is the BACKGROUND, on a TEXT layer it is the COLOUR
@@ -669,18 +699,27 @@ def _declarations(node: dict[str, Any], place: dict[str, float] | None = None) -
                 break
             widths.append(_px(stated))
         if widths:
-            if len(set(widths)) == 1:
+            align = str(node.get("strokeAlign") or "")
+            uniform = len(set(widths)) == 1
+            if align == "OUTSIDE" and uniform:
+                # A stroke drawn OUTSIDE the box is not a border: a border lives inside the box and
+                # would change the layout. An outline draws outside and costs no layout.
+                out.append(f"outline: {widths[0]} solid {colour}")
+                out.append("outline-offset: 0")
+            elif align == "CENTER" and uniform:
+                # A CENTER stroke straddles the edge: half inside, half outside. An outline of the
+                # stated width moved in by half that width is centred on the edge.
+                out.append(f"outline: {widths[0]} solid {colour}")
+                out.append(f"outline-offset: {_px(-float(weight) / 2)}")
+            elif uniform:
+                # INSIDE is what a border is; a CENTER stroke whose width is per-side cannot be
+                # centred with one outline, so it takes the same border and the proof reports the
+                # difference rather than pretending the alignment was drawn.
                 out.append(f"border: {widths[0]} solid {colour}")
             else:
                 out.append(f"border-width: {' '.join(widths)}")
                 out.append("border-style: solid")
                 out.append(f"border-color: {colour}")
-        elif node.get("strokeAlign") == "OUTSIDE" and weight is not None:
-            # A stroke drawn OUTSIDE the box is not a border: a border lives inside the box and
-            # would change the layout. An outline draws outside and costs no layout, which is what
-            # Figma's OUTSIDE alignment means.
-            out.append(f"outline: {_px(weight)} solid {colour}")
-            out.append("outline-offset: 0")
 
     # WHAT THE LAYER DOES TO THE SPACE IT SITS IN, and to what it draws.
     if node.get("opacity") is not None:
@@ -702,15 +741,20 @@ def _declarations(node: dict[str, Any], place: dict[str, float] | None = None) -
     # level for level: a mirrored group, mirrored buttons, and text that reads normally because the
     # two mirrors cancel. `transform-origin: 0 0` is Figma's origin — the node's own corner — where
     # a rotation about the centre would move a turned box off its measured position.
-    linear: tuple[float, float, float, float] | None = _linear_of(node)
-    if linear is not None:
-        a, b, c, d = linear
-        out.append(f"transform: matrix({a:g}, {b:g}, {c:g}, {d:g}, 0, 0)")
-        out.append("transform-origin: 0 0")
-    elif node.get("rotation") is not None:
-        # No matrix on this node, and an angle is stated: the degrade path, kept for a response
-        # that carries one field and not the other. Never used when the transform is present.
-        out.append(f"transform: rotate({round(-float(node['rotation']), 3)}deg)")
+    # THE ROOT'S PLACE ON THE FIGMA CANVAS IS NOT PART OF THE COMPONENT. Its transform, rotation
+    # and page position place the frame on the canvas; the component preview is drawn at its own
+    # origin. Excluding them is not a repair and not a finding: the canvas placement is simply not
+    # a component fact. Every child keeps its transform, which is the component's own structure.
+    if not is_root:
+        linear: tuple[float, float, float, float] | None = _linear_of(node)
+        if linear is not None:
+            a, b, c, d = linear
+            out.append(f"transform: matrix({a:g}, {b:g}, {c:g}, {d:g}, 0, 0)")
+            out.append("transform-origin: 0 0")
+        elif node.get("rotation") is not None:
+            # No matrix on this node, and an angle is stated: the degrade path, kept for a response
+            # that carries one field and not the other. Never used when the transform is present.
+            out.append(f"transform: rotate({round(-float(node['rotation']), 3)}deg)")
     sizing = node.get("sizing") or {}
     if sizing.get("layoutGrow"):
         out.append("flex-grow: 1")
@@ -729,7 +773,7 @@ def _declarations(node: dict[str, Any], place: dict[str, float] | None = None) -
 
     style = node.get("type_style") or {}
     if style.get("fontFamily"):
-        out.append(f"font-family: {_css_string(_local_face(style['fontFamily']))}, sans-serif")
+        out.append(f"font-family: {_lit_attr(_css_string(_local_face(style['fontFamily'])))}, sans-serif")
     if style.get("fontWeight"):
         out.append(f"font-weight: {style['fontWeight']}")
     if style.get("fontSize") is not None:
@@ -986,7 +1030,7 @@ def render_spec(spec: dict[str, Any], tag: str, catalog: dict[str, str] | None =
     # offset — is the `position: relative` that `_declarations` already emits for exactly that
     # case (owner, 2026-09-29: *"this is not AI right… how can a Turing process invent
     # something?"* — it cannot; a second code path can).
-    root_decls: list[str] = _declarations(spec)
+    root_decls: list[str] = _declarations(spec, is_root=True)
 
     rules: list[str] = []
     markup: list[str] = []  # noqa: F841 — declared beside `rules` and never written to; likely a leftover from an earlier shape
@@ -1246,3 +1290,14 @@ if (!customElements.get('{tag}')) {{
   customElements.define('{tag}', {class_name});
 }}
 """
+
+
+def render_module(spec: dict[str, Any], tag: str, catalog: dict[str, str] | None = None) -> str:
+    """The component drawn by `render_spec`, carrying every parameter it was built from.
+
+    The drawing is not changed. The block beside it is the complete typed record of the measured
+    description: every style reference, node property, and layout rule the file stated. A value
+    that cannot be typed exactly raises `ParameterTypeError` here, before a module exists, so a
+    partially described component is never produced.
+    """
+    return apply_parameters(render_spec(spec, tag, catalog), spec)

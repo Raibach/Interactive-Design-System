@@ -22,6 +22,7 @@
  * the shell already owns a layout and a chat, and a second one is exactly what made the room jerk.
  */
 import { componentProps } from "@/components/lit/a2ui-renderer";
+import { isCardLocked } from "@/rooms/design/cardLifecycle";
 
 export type Tree = { components: any[]; dataModel: Record<string, any> };
 
@@ -37,6 +38,12 @@ export type Content = {
   dataModel: Record<string, any>;
   /** The chat information the shell's one chat loads while this content is standing. */
   chat: Record<string, unknown>;
+  /**
+   * THE CARD IS IN A SUPERVISOR QUEUE. The active canvas is suppressed: no ingest form, no
+   * preview, no Save control. `ledger` is the read-only status the left column draws instead.
+   */
+  locked?: boolean;
+  ledger?: { state: string; text: string };
 };
 
 const refsOf = (c: any): string[] => {
@@ -87,15 +94,38 @@ export function buildContent(tree: Tree): Content | null {
     : {};
 
   const session = (tree.dataModel as Record<string, any>)?.session ?? {};
+  const cardState = String(session.card_state ?? "");
+  /* THE LOCKOUT IS EVALUATED BEFORE THE CANVAS IS BUILT. A card in Pending_Approval or
+     Queued_For_Share has no ingest form, no preview and no Save control: the contents of the
+     content object are empty, and the ledger is what the left column draws. The chat is still
+     handed over, because the card's conversation is its activity log and remains readable. */
+  const locked = session.locked === true || isCardLocked(cardState);
+  const ledger = locked
+    ? {
+        state: cardState,
+        text: [
+          "SESSION LOCKED — READ-ONLY LEDGER",
+          `State: ${cardState || "Unknown"}`,
+          `Card: ${String(session.card_title || session.title || "Untitled")}`,
+          `Reviewer: ${String(session.reviewer || "the Supervisor Queue")}`,
+          "",
+          "This card has been submitted to the Supervisor Queue.",
+          "Its canvas is suppressed. It cannot be re-opened, re-ingested, edited, or closed",
+          "until the supervisor approves or rejects it.",
+        ].join("\n"),
+      }
+    : undefined;
   return {
     leftId,
-    components,
-    middleId,
-    middleComponents,
+    components: locked ? [] : components,
+    middleId: locked ? undefined : middleId,
+    middleComponents: locked ? [] : middleComponents,
     /* THE APPLICATION'S DATA, AS THE APPLICATION DECLARED IT. The shell merges this under its own
        model so the injected components resolve their paths; it is not the shell's job to know
        which keys the Figma application uses. */
     dataModel: { session, ...(tree.dataModel as Record<string, any>) },
     chat,
+    locked,
+    ledger,
   };
 }

@@ -35,6 +35,13 @@ export class AgentCardElement extends LitElement {
     description: { type: String },
     version: { type: Number },
     status: { type: String },
+    /**
+     * THE STATE'S OWN COLOUR (owner, 2026-11-07). The footer's word is the card's STATE, and the
+     * surface that emits the card states the colour with it. The card therefore draws a state
+     * without knowing any state's name: a record that carries a colour is drawn in it, and a
+     * record that carries none keeps the card's resting treatment.
+     */
+    statusColor: { type: String, attribute: 'status-color' },
     likes: { type: Number },
     categoryColor: { type: String, attribute: 'category-color' },
     categoryTitleColor: { type: String, attribute: 'category-title-color' },
@@ -68,6 +75,7 @@ export class AgentCardElement extends LitElement {
   declare description: string;
   declare version: number;
   declare status: string;
+  declare statusColor: string;
   declare likes: number;
   declare categoryColor: string;
   declare categoryTitleColor: string;
@@ -89,6 +97,7 @@ export class AgentCardElement extends LitElement {
     this.description = '';
     this.version = 1;
     this.status = 'Active';
+    this.statusColor = '';
     this.likes = 0;
     this.categoryColor = '';
     this.categoryTitleColor = '';
@@ -336,6 +345,10 @@ export class AgentCardElement extends LitElement {
        draws that is a verdict rather than a state: the work is done, and the card leaves the
        console on the next assembly. */
     .status-text.completed { color: #1F7A3D; }
+    /* THE STATE'S OWN COLOUR WINS, AT REST AND UNDER THE HAND. The record stated it, so neither
+       the resting teal nor the hover's teal may paint over it. */
+    .status-text.stated { color: var(--status-color); }
+    .card:hover .status-text.stated { color: var(--status-color); }
     .likes {
       margin-left: auto;
       width: 72px;
@@ -520,6 +533,8 @@ export class AgentCardElement extends LitElement {
     // Category colors — validated, invalid values throw
     const safeColor = this.categoryColor ? this._validateColor(this.categoryColor) : '';
     const safeTitleColor = this.categoryTitleColor ? this._validateColor(this.categoryTitleColor) : '';
+    /* THE STATE'S COLOUR, from the record. Empty keeps the card's resting treatment. */
+    const safeStatusColor = this.statusColor ? this._validateColor(this.statusColor) : '';
     const category = (this.category || '').trim().toLowerCase();
     const usesDesignSystemStyle = category === '' || category === 'design system';
 
@@ -572,7 +587,8 @@ export class AgentCardElement extends LitElement {
         <div class="footer-details">
           <div class="version-pill">
             <div class="version-text">Version ${figures(String(Math.min(v, 99)))} |</div>
-            <div class="status-text ${String(safeStatus).toLowerCase() === 'completed' ? 'completed' : ''}">${safeStatus}</div>
+            <div class="status-text ${String(safeStatus).toLowerCase() === 'completed' ? 'completed' : ''} ${safeStatusColor ? 'stated' : ''}"
+                 style=${safeStatusColor ? `--status-color: ${safeStatusColor}` : ''}>${safeStatus}</div>
           </div>
           <div class="likes">
             <div class="like-count">${likeCount}</div>

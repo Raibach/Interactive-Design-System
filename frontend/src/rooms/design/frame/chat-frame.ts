@@ -169,8 +169,12 @@ export interface ChatFrameHost extends HTMLElement {
       /* ── INPUT ── */
       /* THE COMPOSER'S DIVIDER SLIDES THE INPUT (owner, 2026-10-31: *"make the divider gripper with
          the send button slide up and slide down"*). It gets its own plain gesture here, the same
-         shape as the slots': hold, move, the input's height changes by the distance. */
-      if (host.tagName.toLowerCase() === 'tools-chat-controls') {
+         shape as the slots': hold, move, the input's height changes by the distance.
+         BOTH COMPOSER BARS TAKE THIS PATH. The Tools seat draws `tools-chat-controls` and the
+         shared seat draws `design-chat-action-bar`; the band is the same drawn grip, so the
+         behavior is the same one, wired here and not by a second handler on the bar. */
+      const hostTag = host.tagName.toLowerCase();
+      if (hostTag === 'tools-chat-controls' || hostTag === 'design-chat-action-bar') {
         band.style.cursor = 'ns-resize';
         band.style.touchAction = 'none';
         /* A PRESS ON THE BAND IS A DRAG, NEVER A SELECTION (owner, 2026-10-31: the divider "snaps

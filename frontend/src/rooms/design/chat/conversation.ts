@@ -1,29 +1,27 @@
 /**
- * THE CHAT SEAT'S CONVERSATION — the console's own file, and no other seat reads it.
+ * THE TOOLS TAB'S CONVERSATION — this seat's own file, and no other seat reads it.
  *
  * Owner, 2026-11-02: *"why can't you make a conversation file for tools and a conversation.TS for
  * chat or the console? Why can't you have two different ones? Why are you making one and trying to
- * use it in both?"* There are two now: this one serves the Chat and console seat,
- * `tools/conversation.ts` serves the Tools seat, and neither can change the other. The look is
- * shared; the build is not.
+ * use it in both?"* There are two now: this one serves the Tools seat, `chat/conversation.ts` serves
+ * the Chat and console seat, and neither can change the other. The look is shared; the build is not.
  *
- * WHAT IT DOES. It reads the conversation list, reads a conversation's turns, checks that a
- * conversation belongs to this package, moves the seat into one, removes one, and starts one. What
- * stays in the seat is what a person sees and what this seat asks for: its greeting, its send, its
+ * WHAT IT DOES. It reads the package's conversation list, reads a conversation's turns, checks that
+ * a conversation belongs to this package, moves the seat into one, removes one, and starts one. What
+ * stays in the seat is what a person sees and what this tab asks for: its greeting, its send, its
  * scroll record, its own controls.
  *
- * THIS SEAT FOLLOWS THE ROW, WITHIN THE DESIGN ROOM. The scope decides whose rows are read:
- * `design` (the Design Chat's) reads every design tab's and kept design session's conversations;
- * `package` (a tab's) reads its own. `all` is the whole person's and is not a seat's list. The
- * owner, 2026-11-03: *"the chat seat for design would only be the all of the design chats … it's
- * already pre-filtered to design chat."*
+ * THE RULE THAT IS THIS TAB'S OWN: a conversation born in Tools is stored under the chat tab's name,
+ * because a conversation has no tab of its own when it is created. Adopting a row by its stored tab
+ * therefore moved the Tools rail onto Chat while the person was looking at Tools. Here the seat
+ * stays where it is; only a stored query and the approvals gate move it.
  *
  * A PLAIN MODULE, NOT AN ELEMENT. Every function takes the seat as `this`, so the bodies below are
  * the seat's own text, MOVED — no rule changed, no number touched. `ChatConversationHost` states
  * what the conversation may reach; a member it does not name cannot be reached from here.
  */
 import { logger } from '@/lib/logger';
-import { create, listForDesign, listForPackage, pointPackageAt, remove, type ConversationRow } from '@/shared/conversations';
+import { create, listForPackage, pointPackageAt, remove, type ConversationRow } from '@/shared/conversations';
 
 /** One turn as the seat draws it. The same shape the seats already carry. */
 export interface ConversationTurn {
@@ -55,12 +53,6 @@ export interface ChatConversationHost extends HTMLElement {
   _listNote: string;
   _takeArrival(kind: 'resume' | 'blank' | 'console' | 'governance' | 'evaluators'): void;
   _conversationWrite(url: string, method: 'POST' | 'PUT', body: unknown, userId: string): Promise<Record<string, unknown> | null>;
-  /**
-   * WHOSE CONVERSATIONS THE LIST HOLDS. `package` is a tab's own work; `all` is the Design
-   * console's reach — every conversation the person has, so tools work is openable from the
-   * console. Absent reads as `package`, which is the safe answer for a seat that never said.
-   */
-  conversationScope?: 'package' | 'design';
   requestUpdate(): void;
 }
 
@@ -102,7 +94,17 @@ export function belongsToPackage(this: ChatConversationHost, id: string): boolea
 export async function loadHistory(this: ChatConversationHost): Promise<void> {
   if (this.messages?.length) { this._historyChecked = true; return; }
   if (!this.conversationId) return;
-  if (!belongsToPackage.call(this, this.conversationId)) { this._historyChecked = true; return; }
+  if (!belongsToPackage.call(this, this.conversationId)) {
+    /* A DENIAL IS LOUD (zero-suppression mode). A conversation that does not belong to this
+       seat must never draw as a blank or empty thread: the refusal is written on the screen,
+       which is also the audit record for the person using it. */
+    this._historyError =
+      `This conversation is not this seat's: ${String(this.conversationId).slice(0, 8)}… ` +
+      'belongs to another tab. Nothing was read.';
+    this._historyChecked = true;
+    this.requestUpdate();
+    return;
+  }
   try {
     const resp = await fetch(`/api/conversations/${this.conversationId}/messages?limit=200`, {
       headers: { 'X-User-ID': this._userId() },
@@ -137,13 +139,19 @@ export async function loadHistory(this: ChatConversationHost): Promise<void> {
     this.messages = rows
       .filter((row) => (row as { metadata?: { kind?: string } }).metadata?.kind !== 'inspection')
       .map((m) => {
-        const meta = (m as { metadata?: { kind?: string } }).metadata;
+        const meta = (m as {
+          metadata?: { kind?: string; alert?: boolean; result?: boolean };
+        }).metadata;
         /* A RUN'S RESULTS KEEP THEIR MARK ACROSS A RELOAD: the conversation the run filed them in
-           carries kind 'tool-answer' / 'run-result', and the thread draws those as results. */
+           carries kind 'tool-answer' / 'run-result', and the thread draws those as results.
+           THE ERROR STATE IS PART OF THE TURN TOO. `alert` is stored with the line; dropping it
+           on reload drew a failure as an ordinary answer. */
         return {
           role: m.role,
           content: m.content,
-          result: meta?.kind === 'tool-answer' || meta?.kind === 'run-result',
+          result:
+            meta?.kind === 'tool-answer' || meta?.kind === 'run-result' || meta?.result === true,
+          alert: meta?.alert === true,
         };
       });
   } catch (err) {
@@ -163,44 +171,38 @@ export async function loadHistory(this: ChatConversationHost): Promise<void> {
  * a claim only a successful empty read can make.
  */
 export async function readPackageConversations(this: ChatConversationHost, userId: string): Promise<void> {
-  /* THE DESIGN CHAT READS ALL OF DESIGN; A TAB READS ITS OWN PACKAGE (owner, 2026-11-03). */
-  const design = this.conversationScope === 'design';
-  if (!design && !this.sessionId) return;
+  /*
+   * THE CHAT SEAT READS ITS OWN PACKAGE — the Console package, and no other tab's threads.
+   *
+   * The behavior is the Tools tab's, copied into this seat's own file: read the package's own
+   * list, adopt the last modified row when nothing is bound. The CONTENT is not shared — the
+   * Tools chat, the UX chat and every other tab's conversation belong to their own packages and
+   * are not this list. A seat that read all of Design adopted the Figma tool's thread and then
+   * refused it as another tab's; the divider is the package.
+   */
+  if (!this.sessionId) return;
   try {
     let rows: ConversationRow[];
     try {
-      rows = design
-        ? await listForDesign({ sessionId: this.sessionId ?? '', userId })
-        : await listForPackage({ sessionId: this.sessionId!, userId });
-    } catch {
+      rows = await listForPackage({ sessionId: this.sessionId!, userId });
+    } catch (err) {
+      /* A READ THAT FAILED IS SAID. "Reading the conversations…" held forever over an unreachable
+         server is the same dead screen as an empty one, and it is not an answer. */
       this._conversationsRead = true;
+      this._listNote = `The conversations could not be read: ${String((err as Error)?.message ?? err)}`;
+      this.requestUpdate();
       return;
     }
     /* THE LIST IS REDRAWN WHEN IT CHANGES, AND THE COMPARISON IS MADE BEFORE THE ASSIGNMENT. */
     const rowsChanged = JSON.stringify(rows) !== JSON.stringify(this._conversationRows ?? []);
-    const firstRead = !this._conversationsRead;
     this._conversationRows = rows;
     this._conversationsRead = true;
 
     /*
-     * THE DESIGN CHAT OPENS THE LAST MODIFIED CONVERSATION — AS THE LIST SAYS (owner, 2026-11-03):
-     * *"If it says it's got five conversations, they just load the last modified."*
-     *
-     * The rows are the server's order, newest first. Every one is a conversation; none is skipped
-     * and nothing has to be deleted. An empty conversation is still the conversation that opens,
-     * and the frame's empty state is its content, not a cut thread. A row the person picks after
-     * this first read is theirs; later reads leave it alone. A host that bound a particular
-     * conversation (a card) is not overridden.
-     */
-    if (design && firstRead && !this._adoptedByHost && rows.length) {
-      this._moveSeatTo(rows[0].id, { tab: rows[0].tab });
-      return;
-    }
-
-    /*
-     * A CONVERSATION NOT IN THIS SEAT'S LIST IS NOT THIS SEAT'S. The seat reads every Design
-     * chat, and a bound thread from another scope is stale by that list's own rule; the newest
-     * row replaces it.
+     * A CONVERSATION NOT IN THIS PACKAGE'S LIST IS NOT THIS PACKAGE'S. The server answers newest
+     * first, so the first row is the thread last written to — "the last one" as a person means it.
+     * A bound id the list does not contain is stale by the package's own rule, and the newest row
+     * replaces it. The caller's package is the only owner this seat answers to.
      */
     const boundIsThisPackages =
       !!this.conversationId &&
@@ -211,8 +213,10 @@ export async function readPackageConversations(this: ChatConversationHost, userI
     }
     if (!rowsChanged) return;
     this.requestUpdate();
-  } catch {
+  } catch (err) {
     this._conversationsRead = true;
+    this._listNote = `The conversations could not be read: ${String((err as Error)?.message ?? err)}`;
+    this.requestUpdate();
   }
 }
 
@@ -234,13 +238,15 @@ export function moveSeatTo(this: ChatConversationHost, id: string, opts: { tab?:
   if (opts.tab) {
     /* A QUERY RECORD OPENS ON ITS OWN TAB. A conversation filed with `tab = "sessions"` is a stored
        lane query, not a thread — opening it moves to Sessions and REPLAYS the recorded filter. */
-    /* THE ROW'S OWN TAB, NOT THE CHAT TAB (owner, 2026-11-02). This forced 'chat' for every tab
-       that was not sessions or approvals, so adopting a Tools conversation set the seat to the Chat
-       tab and the room set it back on the next draw — the visible flip between the two. */
+    /* THIS SEAT STAYS ON TOOLS (owner, 2026-11-02). A thread born in this tab is stored under the
+       chat tab's name, because a conversation has no tab of its own when it is created. Adopting a
+       row by its stored tab therefore moved the rail onto Chat while the person was working in
+       Tools — the flip they saw between the two. Only the two tabs that are a different process (a
+       stored query, and the approvals gate) move this seat. */
     this.activeTab =
       opts.tab === 'approvals' ? 'approvals'
         : opts.tab === 'sessions' ? 'sessions'
-          : String(opts.tab);
+          : 'chat';
   }
   if (opts.tab === 'sessions') void this._replayLaneQuery(id);
   this.dispatchEvent(
@@ -316,8 +322,7 @@ export async function removeConversation(
     }
     const live = (this._conversationRows ?? [])
       .filter((r) => !r.archived && String(r.id) !== String(id));
-    /* THE NEXT ROW IS THE NEXT CONVERSATION — the newest remaining, the last modified, exactly as
-       the list reads. No row is skipped, and nothing is deleted to make the app behave. */
+    /* The next row is the next conversation, the last modified; no row is skipped. */
     const next = live.length ? String(live[0].id) : '';
     if (next) {
       this._moveSeatTo(next);

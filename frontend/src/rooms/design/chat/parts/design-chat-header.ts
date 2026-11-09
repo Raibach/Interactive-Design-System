@@ -77,6 +77,9 @@ export class ChatHeader extends LitElement {
      * AGENTS-instructions/OUTPUT-STYLING.md R4).
      */
     hasResults: { type: Boolean, attribute: 'has-results', reflect: true },
+    /* THE CONVERSATIONS CARD STANDS OPEN (owner, 2026-11-07): a press on the bar opens it,
+       and an open card is exactly its rows' height. It loads collapsed — the bar alone. */
+    open: { type: Boolean, reflect: true },
     /* THE USAGE FIGURES — declared, or the renderer DROPS them. assignProps skips an
        undeclared property with a console warning only, so a bound value would arrive at
        nothing and the readout would show a zero nobody sent (prop-undeclared). */
@@ -271,8 +274,10 @@ export class ChatHeader extends LitElement {
     /* THE CONVERSATION BOX CANNOT CLOSE PAST ITS OWN BAR (owner, 2026-10-31: the drag "covers the
        conversation text and expands the padding below the grip … padding is never changing"). Its
        resting height is 38, so 38 is the floor: the label is never cut and the ground around it is
-       fixed. */
+       fixed. COLLAPSED IS THE DEFAULT (owner, 2026-11-07): the card loads as its bar alone, and
+       only an open card takes its rows' height — never a fixed number for the list. */
     :host([data-slot="conversations"]) .shell { min-height: 38px; height: 38px; }
+    :host([data-slot="conversations"][open]) .shell { height: auto; }
     /* THE INSIDE. It takes whatever height the bar leaves and scrolls in it; empty, it is 0 and
        the card is exactly its bar. */
     .body {

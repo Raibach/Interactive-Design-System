@@ -50,6 +50,12 @@ export default function DesignRoom({ onAssemblingChange }: DesignRoomProps) {
   /** A kept session a design card asked to reopen — the Tools tab then works in that row. */
   const [openSession, setOpenSession] = useState<string | null>(null);
   /**
+   * THE TAB PRESS COUNT. Every press of the Tools tab is a new session, and a press whose session
+   * id is already empty changes no other prop — the press itself has to reach the seat, or the
+   * previous session stays on screen under a table that says a new one began.
+   */
+  const [toolsPress, setToolsPress] = useState(0);
+  /**
    * THE DESIGN SYSTEM A CARD ASKED FOR (owner, 2026-11-02): *"the card should just open the tool
    * with the loaded DS, which this one is the default."* The card's key is the catalogue's own
    * name, and the seat builds the tab in that catalogue. Null means the tab's own default.
@@ -62,12 +68,13 @@ export default function DesignRoom({ onAssemblingChange }: DesignRoomProps) {
    */
   const [saveDecision, setSaveDecision] = useState<ToolsDecision | null>(null);
   /**
-   * THE THREE ANSWERS ABOUT A SESSION THE PERSON IS LEAVING (owner, 2026-11-02). Save makes it a
-   * card, Accept keeps it here, Discard throws it away. The shell asks and waits; this room draws
-   * the question and answers through the promise the shell is holding.
+   * THE TWO ANSWERS ABOUT A SESSION THE PERSON IS LEAVING (owner, 2026-11-07). Save makes it a
+   * card; Discard removes the visit. There is no third answer that holds the visit for the next
+   * press — a saved session is opened by its card. The shell asks and waits; this room draws the
+   * question and answers through the promise the shell is holding.
    */
   const [leaveDecision, setLeaveDecision] = useState<ToolsDecision | null>(null);
-  const leaveAnswerRef = useRef<((action: "save" | "accept" | "discard") => void) | null>(null);
+  const leaveAnswerRef = useRef<((action: "save" | "discard") => void) | null>(null);
 
   /* THE RAIL IS THE NAVIGATION. It does not select a page; it selects what is injected. */
   const onTab = useCallback((tab: string) => {
@@ -76,28 +83,42 @@ export default function DesignRoom({ onAssemblingChange }: DesignRoomProps) {
       setToolsStanding(true);
     } else {
       setToolsStanding(false);
+      /* LEAVING TOOLS PUTS ITS PAGE AWAY. Its content belongs to the visit that is ending; a
+         tool's answer arriving after this must not be stored for the next page. */
+      setInjected(null);
     }
   }, []);
 
+  /* THE CONTENT REPORT IS ONLY FOR THE PAGE THAT STANDS. A read that was in flight when the
+     visit ended must not land on another tab's page. */
+  const toolsStandingRef = useRef(false);
+  toolsStandingRef.current = toolsStanding;
   const onContent = useCallback((content: Content) => {
+    if (!toolsStandingRef.current) return;
     setInjected(content);
   }, []);
 
   /* The shell asks for the Figma content (a card click) or for the console (the Design button). */
   useEffect(() => {
     const onTools = (event: Event) => {
-      const detail = (event as CustomEvent<{ openTag?: string; openSession?: string; openSystem?: string }>)?.detail ?? {};
+      const detail = (event as CustomEvent<{ openTag?: string; openSession?: string; openSystem?: string; title?: string }>)?.detail ?? {};
       const tag = String(detail.openTag ?? "");
       const session = String(detail.openSession ?? "");
       const system = String(detail.openSystem ?? "");
       setToolsOpened(true);
+      /* THE PRESS OPENS A NEW PAGE. Its content is read by the page itself, so the previous
+         visit's content is cleared here: the new page starts on its own answer and never draws
+         the session that was left. */
+      setInjected(null);
       setToolsStanding(true);
+      setToolsPress((n) => n + 1);
       setOpenSession(session || null);
       setOpenSystem(system || null);
       setOpenTag(tag || null);
     };
     const onConsole = () => {
       setToolsStanding(false);
+      setInjected(null);
       setOpenTag(null);
       setOpenSession(null);
       setOpenSystem(null);
@@ -135,36 +156,60 @@ export default function DesignRoom({ onAssemblingChange }: DesignRoomProps) {
     const onLeave = (event: Event) => {
       const detail = (event as CustomEvent<{
         message?: string;
+        actions?: ToolsDecision["actions"];
         handled?: boolean;
-        resolve?: (action: "save" | "accept" | "discard") => void;
+        resolve?: (action: "save" | "discard") => void;
       }>).detail;
       if (!detail?.resolve) return;
       detail.handled = true;
       leaveAnswerRef.current = detail.resolve;
       setLeaveDecision({
         message: String(detail.message ?? ""),
-        actions: [
-          { id: "save", label: "Save", variant: "primary" },
-          { id: "accept", label: "Accept", variant: "plain" },
-          { id: "discard", label: "Discard", variant: "destructive" },
-        ],
+        actions:
+          Array.isArray(detail.actions) && detail.actions.length
+            ? detail.actions
+            : [
+                { id: "save", label: "Save", variant: "primary" },
+                { id: "discard", label: "Discard", variant: "destructive" },
+              ],
       });
     };
     window.addEventListener("design-leave-question", onLeave);
     return () => window.removeEventListener("design-leave-question", onLeave);
   }, []);
 
+  /*
+   * THE QUESTION COULD NOT BE DRAWN, AND NOTHING WAS DELETED. The shell used to answer Accept on
+   * its own and then treat that as Discard; this path states the truth and asks only for a Close.
+   */
+  useEffect(() => {
+    const onUnanswered = (event: Event) => {
+      const detail = (event as CustomEvent<{ message?: string }>).detail ?? {};
+      leaveAnswerRef.current = null;
+      setLeaveDecision({
+        message: String(detail.message ?? "The session question could not be drawn."),
+        actions: [{ id: "close", label: "Close", variant: "plain" }],
+      });
+    };
+    window.addEventListener("design-leave-unanswered", onUnanswered);
+    return () => window.removeEventListener("design-leave-unanswered", onUnanswered);
+  }, []);
+
   const onLeaveDecision = useCallback((actionId: string) => {
     const answer = leaveAnswerRef.current;
     leaveAnswerRef.current = null;
     setLeaveDecision(null);
-    const action = actionId === "save" || actionId === "discard" ? actionId : "accept";
-    answer?.(action);
+    if (actionId === "save" || actionId === "discard") answer?.(actionId);
   }, []);
 
   return (
     <>
-      <DesignSeatShell injected={injected} toolsStanding={toolsStanding} onTab={onTab} />
+      <DesignSeatShell
+        injected={injected}
+        toolsStanding={toolsStanding}
+        toolsVisit={toolsPress}
+        onTab={onTab}
+      />
       {toolsOpened ? (
         <Suspense fallback={null}>
           <ToolsSeat
@@ -175,6 +220,7 @@ export default function DesignRoom({ onAssemblingChange }: DesignRoomProps) {
             openTag={openTag}
             openSession={openSession}
             openSystem={openSystem}
+            press={toolsPress}
           />
         </Suspense>
       ) : null}

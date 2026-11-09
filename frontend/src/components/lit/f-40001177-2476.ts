@@ -44,6 +44,7 @@ export class PromptTextareaContainerSystem extends LitElement {
 
   static styles = css`
     :host {
+      position: relative;
       display: flex;
       flex-direction: column;
       padding-left: 13px;
@@ -56,9 +57,7 @@ export class PromptTextareaContainerSystem extends LitElement {
       box-sizing: border-box;
       background: #ffffff;
       border-radius: 6px;
-      box-shadow: inset 0px 2px 4px rgba(0, 0, 0, 0.15);
-      /* CONFLICT: box-shadow stated as 'inset 0px 2px 4px rgba(0, 0, 0, 0.15)' then 'inset 1px 0px 4px rgba(0, 0, 0, 0.25)' — CSS keeps the last */
-      box-shadow: inset 1px 0px 4px rgba(0, 0, 0, 0.25);
+      box-shadow: inset 0px 2px 4px rgba(0, 0, 0, 0.15), inset 1px 0px 4px rgba(0, 0, 0, 0.25);
     }
     .empty {
       position: relative;
@@ -77,6 +76,7 @@ export class PromptTextareaContainerSystem extends LitElement {
       word-break: break-word;
     }
     .text-input-area {
+      position: relative;
       display: flex;
       flex-direction: row;
       gap: 10px;

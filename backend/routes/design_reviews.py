@@ -23,6 +23,7 @@ records that gate; the write into the catalogue is the last gate and it is a sep
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException
@@ -302,10 +303,21 @@ def write_review(
         reviewer_id = str(person.get("id") or "")
         stage = "in-review"
         event = "review-requested"
+        # THE ROUTING MASK IS THE RECORD'S OWN. The stage says the card is in the queue; the
+        # mask says where it was sent, so a card cannot be asked about as if it were never
+        # routed. The reviewer is still the person this gate was addressed to.
+        _routing = meta.get("routing") if isinstance(meta.get("routing"), dict) else {}
         metadata = {
             "reviewer": reviewer,
             "reviewer_id": reviewer_id,
             "review_stage": stage,
+            "routing": {
+                **_routing,
+                "destination": "approval",
+                "approval": True,
+                "queued_at": datetime.now().isoformat(),
+                "queued_by": uid,
+            },
         }
     elif action == "approve":
         if now_stage != "in-review":

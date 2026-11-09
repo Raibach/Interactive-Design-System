@@ -588,6 +588,7 @@ class A2UIConsoleCardGrid extends LitElement {
         description=${item?.description ?? ''}
         version=${item?.version || item?.message_count || 1}
         status=${item?.status || 'Active'}
+        status-color=${item?.status_color ?? ''}
         likes=${item?.likes ?? 0}
         category-color=${item?.category_color ?? ''}
         category-title-color=${item?.category_title_color ?? ''}

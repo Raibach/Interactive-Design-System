@@ -147,7 +147,22 @@ export class FigmaIngestForm extends LitElement {
       }
       button:disabled { opacity: 0.4; cursor: not-allowed; }
       button:not(:disabled):hover { background: var(--ds-text-strong); }
-      .message { margin: 0; font-size: var(--ds-fs-meta); color: var(--ds-amber); }
+      /*
+       * THE DIAGNOSTIC ZONE. The raw failure text — the exception, its counts and limits, its
+       * stack trace — is drawn here, above the layer tree, with its own newlines. It is never
+       * cut to fit the layout: the box scrolls, and the text stays selectable.
+       */
+      .message {
+        margin: 0;
+        font-size: var(--ds-fs-meta);
+        color: var(--ds-amber);
+        white-space: pre-wrap;
+        word-break: break-word;
+        user-select: text;
+        max-height: 260px;
+        overflow: auto;
+        line-height: 1.35;
+      }
       /* THE SPINNER WHILE AN INGEST RUNS, WITH THE STEP IT IS ON. The step text is the backend's
          own, written as the work advances — never a canned sequence. */
       .progress {
@@ -263,7 +278,9 @@ export class FigmaIngestForm extends LitElement {
             @input=${(e: Event) => { this.notes = (e.target as HTMLInputElement).value; this._announceFields(); }}
           />
         </div>
-        ${this.message ? html`<p class="message">${this.message}</p>` : nothing}
+        ${this.message
+          ? html`<pre class="message" role="alert">${this.message}</pre>`
+          : nothing}
       </form>
     `;
   }

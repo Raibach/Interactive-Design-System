@@ -105,11 +105,14 @@ export class UxChat extends LitElement {
        turn's own figures WHEN the server supplies them. Neither is invented here. */
     section: { type: String },
     meta: { type: String },
+    /** THE UX TAB'S OWN PACKAGE — a binding from the surface; no literal and no fallback. */
+    packageId: { type: String, attribute: 'package-id' },
   };
 
   declare busy: boolean;
   declare section: string;
   declare meta: string;
+  declare packageId: string;
 
   private _turns: UxTurn[] = [];
   private _seat: SeatHost | null = null;
@@ -391,23 +394,16 @@ export class UxChat extends LitElement {
 
   /** THE TAB'S RECENT CHATS (their list, our database) — newest first, title and last save. */
   private async _loadConversations(): Promise<void> {
-    try {
-      const res = await fetch('/api/ux/conversations', { headers: { 'X-User-ID': getStoredUserId() } });
-      const data = (await res.json().catch(() => null)) as {
-        conversations?: Array<{ id?: string; title?: string; updated_at?: string }>;
-        error?: string;
-      } | null;
-      if (!res.ok || !data || data.error) {
-        console.error('[ux-chat] the recent chats could not be listed:', data?.error || res.status);
-        return;
-      }
-      this._conversations = (data.conversations ?? [])
-        .filter((c) => c && c.id)
-        .map((c) => ({ id: String(c.id), title: String(c.title || '(untitled)'), updated_at: String(c.updated_at || '') }));
-      this.requestUpdate();
-    } catch (e) {
-      console.error('[ux-chat] the recent chats could not be listed:', (e as Error).message);
-    }
+    const res = await fetch('/api/raibach/ux/conversations', {
+      headers: { 'X-User-ID': getStoredUserId() },
+    });
+    const rows = (await res.json()) as Array<{ id?: string; title?: string; updated_at?: string }>;
+    this._conversations = rows.map((c) => ({
+      id: String(c.id),
+      title: String(c.title || '(untitled)'),
+      updated_at: String(c.updated_at || ''),
+    }));
+    this.requestUpdate();
   }
 
   /** Opened from the navigation's Chat tab — the same path the view's own list used. */
@@ -421,35 +417,23 @@ export class UxChat extends LitElement {
     this._threadLoaded = false;
     this._threadError = '';
     this.requestUpdate();
-    try {
-      const res = await fetch(`/api/ux/chat/thread?conversation_id=${encodeURIComponent(id)}`, {
-        headers: { 'X-User-ID': getStoredUserId() },
-      });
-      const data = (await res.json().catch(() => null)) as {
-        package_id?: string;
-        conversation_id?: string | null;
-        messages?: Array<{ role?: string; content?: string }>;
-        error?: string;
-      } | null;
-      if (!res.ok || !data || data.error) {
-        const why = data?.error || `the thread door answered ${res.status}`;
-        this._threadError = why;
-        this._turns = [{ role: 'app', text: `That conversation could not be read: ${why}` }];
-        return;
-      }
-      if (data.package_id) this._packageId = String(data.package_id);
-      this._conversationId = String(data.conversation_id || '');
-      this._turns = (data.messages ?? []).map((m) => ({
-        role: String(m.role) === 'user' ? 'person' : 'app',
-        text: String(m.content ?? ''),
-      }));
-    } catch (e) {
-      this._threadError = (e as Error).message;
-      this._turns = [{ role: 'app', text: `That conversation could not be read: ${(e as Error).message}` }];
-    } finally {
-      this._threadLoaded = true;
-      this.requestUpdate();
-    }
+    const res = await fetch(
+      `/api/raibach/ux/conversations/${encodeURIComponent(id)}/messages`,
+      { headers: { 'X-User-ID': getStoredUserId() } },
+    );
+    const data = (await res.json()) as {
+      package_id?: string;
+      conversation_id?: string;
+      messages: Array<{ role?: string; content?: string }>;
+    };
+    if (data.package_id) this._packageId = String(data.package_id);
+    this._conversationId = String(data.conversation_id || '');
+    this._turns = data.messages.map((m) => ({
+      role: String(m.role) === 'user' ? 'person' : 'app',
+      text: String(m.content ?? ''),
+    }));
+    this._threadLoaded = true;
+    this.requestUpdate();
   }
 
   /** A NEW CHAT is a real conversation under the UX package; the package pointer moves to it. */
@@ -582,43 +566,36 @@ export class UxChat extends LitElement {
     this._threadLoaded = false;
     this._threadError = '';
     this.requestUpdate();
-    try {
-      /* THE TAB'S OWN THREAD (restored 2026-10-19, owner: *"the conversations … you can restore
-         those, put those back where they belong"*). This view reads the thread the UX door owns —
-         the one its own list names — exactly as it did before. */
-      const res = await fetch('/api/ux/chat/thread', {
-        headers: { 'X-User-ID': getStoredUserId() },
-      });
-      const data = (await res.json().catch(() => null)) as {
-        package_id?: string;
-        conversation_id?: string | null;
-        messages?: Array<{ role?: string; content?: string }>;
-        error?: string;
-      } | null;
-      if (!res.ok || !data || data.error) {
-        const why = data?.error || `the thread door answered ${res.status} with no thread`;
-        this._threadError = why;
-        this._turns = [{ role: 'app', text: `That conversation could not be read: ${why}` }];
-        return;
-      }
-      if (data.package_id) this._packageId = String(data.package_id);
-      this._conversationId = String(data.conversation_id || '');
-      const loaded: UxTurn[] = (data.messages ?? []).map((m) => ({
-        role: String(m.role) === 'user' ? 'person' : 'app',
-        text: String(m.content ?? ''),
-      }));
-      /* ONLY WHAT THE SERVER SAID IS DRAWN — an empty answer is a saved row with no words, and it
-         is shown as the empty answer it is rather than being dropped. */
-      this._turns = loaded;
-    } catch (e) {
-      this._threadError = (e as Error).message;
-      this._turns = [
-        { role: 'app', text: `That conversation could not be read: ${(e as Error).message}` },
-      ];
-    } finally {
+    const listRes = await fetch('/api/raibach/ux/conversations', {
+      headers: { 'X-User-ID': getStoredUserId() },
+    });
+    const rows = (await listRes.json()) as Array<{ id?: string }>;
+    const id = String(rows[0]?.id || '');
+    if (!id) {
+      /* A TRUE EMPTY UX TAB: no conversation, no manufactured thread. */
+      this._conversationId = '';
+      this._turns = [];
       this._threadLoaded = true;
       this.requestUpdate();
+      return;
     }
+    const res = await fetch(
+      `/api/raibach/ux/conversations/${encodeURIComponent(id)}/messages`,
+      { headers: { 'X-User-ID': getStoredUserId() } },
+    );
+    const data = (await res.json()) as {
+      package_id?: string;
+      conversation_id?: string;
+      messages: Array<{ role?: string; content?: string }>;
+    };
+    if (data.package_id) this._packageId = String(data.package_id);
+    this._conversationId = String(data.conversation_id || id);
+    this._turns = data.messages.map((m) => ({
+      role: String(m.role) === 'user' ? 'person' : 'app',
+      text: String(m.content ?? ''),
+    }));
+    this._threadLoaded = true;
+    this.requestUpdate();
   }
 
   /** The bar's Send — the same press the seat's own handler would have taken. */
