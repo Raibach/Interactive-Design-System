@@ -1,5 +1,372 @@
 # The Design room — changelog
 
+## 2026-11-08 (audit) — the code behind the design seat, read at 288910a7
+
+The designer's screen is the subject of this record. It states what the code does now, at commit `288910a7` on branch `design-room-honest-ingest`, and what was measured in this session. It is a record, not a plan: it proposes no repair, and no second document was written.
+
+### The checks that were run
+
+- `cd frontend && npm run typecheck` exited 0. The compiler read the whole front end, including `a2ui-primitives.ts` and `ToolsSeat.tsx`, and reported no type error.
+- `cd frontend && npm run catalog:check` exited 0 and printed two `[blocking]` findings. The catalog declares a `"seat"` slot on `RoomEmbed` and the element renders no slot by that name, so a payload written to that slot draws nowhere. The README claims 74 trusted components and the catalog holds 75. The command reports and never fails on a finding, so exit 0 is not a clean verdict.
+- `python3 -m py_compile` succeeded for `backend/routes/figma.py`, `backend/prompt_sessions_api.py`, `backend/figma_fidelity.py`, `backend/design_renderer.py`, `backend/card_lifecycle.py`, `backend/routes/design_console.py`, `backend/routes/ai.py`, `backend/routes/prompt_sessions.py` and `backend/routes/design_reviews.py`.
+- `git status` shows no modification to the four files the audit named. Their contents are the committed contents of `288910a7`.
+
+### The eleven skills
+
+`.agents/skills/anti-error-suppression/SKILL.md` is present. The record is `SUPPRESSED_COMPLIANCE_BYPASS`: the fallbacks at `prompt_sessions_api.py:791-795`, `card_lifecycle.py:39-42`, `design_console.py:63`, `:1066-1073`, `:532-553` and `:570-577` turn a failed read into an empty value.
+
+`.agents/skills/deterministic-agentic-compilation/SKILL.md` is present. The record is `SUPPRESSED_COMPLIANCE_BYPASS`. The permanent-ledger rule is broken by the deletes at `prompt_sessions_api.py:819`, `:823`, `:827` and `:1408`. The failure-placement rule is broken by `ToolsSeat.tsx:1159-1174`, which sends the raw failure to the chat and not to the left `<pre>`. The literal 422 block exists at `figma.py:5477-5481` but cannot name the three keys it names, for the reason recorded below.
+
+`.agents/skills/architecture-preservation/SKILL.md` is present. The record is `SUPPRESSED_COMPLIANCE_BYPASS`: the working tree deletes 18 tracked `design/` documents, 4062 lines, with no replacement of equivalent size.
+
+`.agents/skills/sovereign-workspace/SKILL.md` is present. The record is `ARMED_AND_HONEST`: no remote fetch, no checkout and no historical override was found in the scanned paths.
+
+`.agents/skills/a2ui-catalog-validation/SKILL.md` is present. The record is `SUPPRESSED_COMPLIANCE_BYPASS`: the gate exits 0 with two `[blocking]` findings, and the skill's definition of done requires zero.
+
+`.agents/skills/runtime-diagnostics/SKILL.md` is present. The record is `SUPPRESSED_COMPLIANCE_BYPASS`: the console treats an unread conversation list as an empty list and creates a new conversation at `design_console.py:532-553`, and treats an unread thread as unused at `:570-577`.
+
+`.agents/skills/a2ui-core-architecture/SKILL.md`, `a2ui-data-binding/SKILL.md`, `a2ui-data-flow/SKILL.md`, `a2ui-protocol/SKILL.md` and `a2ui-user-actions/SKILL.md` are present. No binding, stream sequence, payload shape or action envelope was changed in the four scanned files. The record is `ARMED_AND_HONEST` for those layers, with the catalog gate's findings standing.
+
+`AGENTS-instructions/ZERO-SUPPRESSION-MODE.md` and `frontend/src/rooms/design/ZERO-SUPPRESSION-MODE.md` are present and untracked; they are byte-identical. The code below contradicts both.
+
+### `frontend/src/components/lit/a2ui-primitives.ts`
+
+**What the designer receives.** The card grid draws. The `<agent-card-element>` tag at 579-597 is whole, every attribute is an attribute, and no comment text sits inside the `html` template. The four `//` lines the earlier report placed at 586-589 are not in the file. Lines 588-589 are `description=${item?.description ?? ''}` and `version=${item?.version || item?.message_count || 1}`.
+
+**What the design card carries.** Line 586 is `?nodelete=${item?.room_domain === 'design'}`. The reported `String(item?.element_key ?? '') !== ''` fallback is absent. The consumer is real: `agent-card-element.ts:62` declares `nodelete: { type: Boolean }`, `:84` declares the field, and `:549` suppresses the trash control when `isDemoMode() || this.nodelete`. A design card has no delete control; a product card does.
+
+`[FILE_PATH]: frontend/src/components/lit/a2ui-primitives.ts:579-597`
+`[INTENDED_CONSTRAINT]: no comment text inside the tagged template; one whole tag.`
+`[ACTUAL_CODE_STATE]: lines 579-597 as above; the only change to this template in fc1f45fe is status-color at 591.`
+`[STATUS]: ARMED_AND_HONEST`
+
+### `backend/routes/figma.py`
+
+**What the designer receives when the file states an unexamined key.** The four-line refusal is written at 5477-5481 and raised at 5489:
+
+```
+[ERROR_TYPE]: INGEST_VALIDATION_FAILURE
+[FAILED_NODE]: <node>
+[MISSING_OR_UNPARSED_KEYS]: [<keys>]
+[STATUS]: Pipeline incomplete. Representation accuracy is below 100%.
+```
+
+The refusal reads `key_coverage(spec_for_model)` at 5470. `key_coverage` walks only `node.get("stated")` (`figma_fidelity.py:1650-1651`).
+
+**What the three named keys do instead.** `_CONSUMED_KEYS` at 3351-3353 names `arcData`, `componentProperties` and `maxWidth`, and the comment states they are carried as named spec fields rather than as `stated`. The spec builder writes them at 3448-3458. Because they are not in `stated`, `key_coverage["omissions"]` cannot name them, and the refusal at 5489 cannot fire for them. The three keys are examined elsewhere: `RAW_TO_SPEC` names them at `figma_fidelity.py:88` and `:138-139`, and the comparison branches at `:1346-1450` return `drawn` or `differs`.
+
+`[FILE_PATH]: backend/routes/figma.py:3351-3358, 3443-3458`
+`[INTENDED_CONSTRAINT]: a key the skill names must reach the literal 422.`
+`[ACTUAL_CODE_STATE]: the keys are consumed into spec fields and excluded from stated; key_coverage reads stated only.`
+`[STATUS]: SUPPRESSED_COMPLIANCE_BYPASS`
+
+**What the designer is told about the gate.** The comment at 5744-5753 says `REPORTED, NOT BLOCKED (owner ruling)`, says `NOTHING stops the ingest`, and calls a refusing gate "suppression wearing zero-trust clothes". The code directly below it, at 5766-5776, reads `gate.get("blocks")` and raises `HTTPException(status_code=422, detail="The fidelity gate blocked this design. Nothing was written.")`. The comment describes a behavior the file does not have.
+
+`[FILE_PATH]: backend/routes/figma.py:5744-5776`
+`[INTENDED_CONSTRAINT]: one doctrine, matching the code beneath it.`
+`[ACTUAL_CODE_STATE]: comment says reported and not blocked; code blocks and raises 422.`
+`[STATUS]: SUPPRESSED_COMPLIANCE_BYPASS`
+
+**What travels with a successful result.** The comment at 5889-5893 says the validation profile is "the report that travels with the drawing". `_validation_failure` is assigned only at 5472, where it is `None`. The only path that would populate it raises at 5489. A 200 answer therefore always carries `"validationFailure": null` at 5894.
+
+**What the activity record filters.** At 6437-6447 the record reads `(result.get("validationFailure") or {}).get("keys")` and removes those keys from the blocking sentences. Because `validationFailure` is always null on a 200, `_validation_keys` is always empty and `_reported_blocking` equals `blocking`. The filter never removes anything.
+
+`[FILE_PATH]: backend/routes/figma.py:5889-5894, 6437-6468`
+`[INTENDED_CONSTRAINT]: the profile must travel with the answer and name the keys in the record.`
+`[ACTUAL_CODE_STATE]: validationFailure is null on every 200; the key filter is always empty.`
+`[STATUS]: SUPPRESSED_COMPLIANCE_BYPASS`
+
+**What stops the heavy node.** The measured spec passes the 200,000-character gate at 5433-5464. The rendered component is measured at 5587-5604, and `446,820 > 200,000` raises 413 with "The component this design produces is 446,820 characters". Log lines 673 (18:20:40Z) and 674 (18:21:54Z) record this refusal. It runs before the fidelity gate at 5766, so the heavy node never reaches the three-key question.
+
+**What still refuses an unmapped spec key.** `unrendered_keys` at 5534-5546 raises 422. Log line 671 (17:38:33Z) records it firing for `componentName`.
+
+**What the route does with a refusal.** At 6485-6506 the handler catches `HTTPException`, records `ingest-refused` for a 4xx with `reason: "the run stopped with HTTP 422"`, and re-raises. Log line 670 (17:30:09Z) records the literal three-key block as an `ingest-refused` with that reason.
+
+`[FILE_PATH]: backend/routes/figma.py:5534-5546, 5587-5604, 6485-6506`
+`[INTENDED_CONSTRAINT]: a deliberate stop keeps its status, its message and its record.`
+`[ACTUAL_CODE_STATE]: both branches raise; the route records and re-raises.`
+`[STATUS]: ARMED_AND_HONEST`
+
+### `backend/prompt_sessions_api.py` and the delete path
+
+**What happens to an empty or unreadable row.** `_discard_losing_tab_package` at 769-830 reads `metadata`. A string that is not valid JSON becomes `{}` at 791-795. With no `session_type` at 798 and no conversation message at 800-812, the function deletes the conversations at 819, the permissions at 823 and the session row at 827.
+
+**What happens to a card the designer deletes.** `delete_session(permanent=False)` at 1391 also accepts `permanent=True`, and 1408 executes `DELETE FROM prompt_sessions`. The route exposes the flag at `routes/prompt_sessions.py:468-470` and passes it at 504. `DesignSeatShell.tsx:184` asks for `?permanent=true`.
+
+**What happens to the conversations before that.** `DesignSeatShell.tsx:181` calls `await remove(...).catch(() => undefined)`. A failed conversation delete is discarded, and the session row is deleted next. The comment at 172-174 promises that a failure leaves the card where it is; the conversation failure does not.
+
+`[FILE_PATH]: backend/prompt_sessions_api.py:769-830, 1391-1413`
+`[INTENDED_CONSTRAINT]: no session row, active, failed or empty, is ever deleted.`
+`[ACTUAL_CODE_STATE]: the orphan path deletes three tables and treats corrupt metadata as empty; the permanent path deletes the row.`
+`[STATUS]: SUPPRESSED_COMPLIANCE_BYPASS`
+
+`[FILE_PATH]: backend/routes/prompt_sessions.py:468-470, 504 and frontend/src/rooms/design/DesignSeatShell.tsx:179-193`
+`[INTENDED_CONSTRAINT]: the design room's card delete must not be a permanent row delete, and a failed child delete must stop the act.`
+`[ACTUAL_CODE_STATE]: permanent=true is requested at 184; the conversation failure is swallowed at 181.`
+`[STATUS]: SUPPRESSED_COMPLIANCE_BYPASS`
+
+`[FILE_PATH]: frontend/src/rooms/console/useConsoleCardActions.ts:110-112`
+`[INTENDED_CONSTRAINT]: a failed delete must be told to the person.`
+`[ACTUAL_CODE_STATE]: the catch writes console.error only; the card stays and no message is shown.`
+`[STATUS]: SUPPRESSED_COMPLIANCE_BYPASS`
+
+### `frontend/src/rooms/design/tools/ToolsSeat.tsx`
+
+**What the designer sees when the server refuses with the validation profile.** Lines 1165-1174 call `reportFailure(raw, status)` and `setDesignPreview(null)`. `reportFailure` calls `reportIngestFailure` at 1248-1273, which persists the server's words to the conversation with `alert: true` and hands them to the chat. The profile is not written to the left-column `<pre>`: the comment at 1160-1163 says it is deliberately not copied into the form's diagnostic zone. The skill requires the raw failure in the left-column scrolling `<pre>` above the component tree.
+
+**What the designer sees when the answer carries blocking findings.** Lines 895-979 keep the drawing, describe the differences in the chat, and ask `Do you accept the drawing as it stands?`. The server raises 422 at `figma.py:5767-5776` whenever `fidelity.blocking` is non-empty, so a 200 answer with `blocking.length > 0` cannot arrive from the live route. The branch that shows the drawing with its differences is unreachable for server-produced results.
+
+`[FILE_PATH]: frontend/src/rooms/design/tools/ToolsSeat.tsx:895-979, 1159-1174, 1248-1273`
+`[INTENDED_CONSTRAINT]: the raw failure belongs in the left `<pre>`; a gated design is not drawn beside a warning.`
+`[ACTUAL_CODE_STATE]: the 422 goes to the chat and the preview is cleared; the blocking branch cannot receive a server 200 with blocking findings.`
+`[STATUS]: SUPPRESSED_COMPLIANCE_BYPASS`
+
+**What is honest in this file.** The failure line is persisted with `alert: true` at 1269, and a failed persist is `console.error` at 1273 while the chat's own write is still offered. `updateComplete` catches at 410-413 and 419 do not reject in Lit and the file says so.
+
+`[FILE_PATH]: frontend/src/rooms/design/tools/ToolsSeat.tsx:1248-1273`
+`[INTENDED_CONSTRAINT]: the failure must survive a reload and be drawn as an error.`
+`[ACTUAL_CODE_STATE]: persistIngestLine(content, true); alert state carried.`
+`[STATUS]: ARMED_AND_HONEST`
+
+### `backend/figma_fidelity.py`
+
+**What the comment says about `RAW_TO_SPEC`.** Lines 84-88 say `TWO KEYS THE PIPELINE EXAMINES AND DOES NOT CARRY`, and say the reason each is accepted is in `design_renderer.ACCEPTED_UNRENDERED`. `arcData` is carried into `spec["arcData"]` at `figma.py:3448-3454`; it is not in `ACCEPTED_UNRENDERED` (`design_renderer.py:111-164` contains `styles` and no `arcData`). `componentProperties` and `maxWidth` are also in `RAW_TO_SPEC` at 138-139, so there are more than two such keys.
+
+`[FILE_PATH]: backend/figma_fidelity.py:84-88`
+`[INTENDED_CONSTRAINT]: the comment must describe the current classification.`
+`[ACTUAL_CODE_STATE]: it describes a two-key accepted set that no longer exists.`
+`[STATUS]: SUPPRESSED_COMPLIANCE_BYPASS`
+
+**What the walk covers.** Line 2288 skips a key only when `key in NOT_A_FACT or key not in RAW_TO_SPEC`. `componentProperties` and `maxWidth` are in `RAW_TO_SPEC` at 138-139, so they are not skipped. The three keys produce comparison rows.
+
+**What the exactness number counts.** Lines 2462-2474 set `exact` to the drawn count and `compared = exact + not_exact + unexamined`, where `unexamined` is the omission count from `key_coverage`. The denominator includes the stated keys no examination covers, so a design cannot print 100% by leaving them out.
+
+**What the accounting closes on.** Line 2102 sets `closed` from the row equation only: `not duplicates and len(rows) == drawn + accepted + missing`. `unexamined` is returned at 2101 and named in the note at 2103-2106, but it is not part of `closed`. The gate still blocks on the omissions at 2157-2160.
+
+`[FILE_PATH]: backend/figma_fidelity.py:2102, 2288, 2462-2474`
+`[INTENDED_CONSTRAINT]: every stated fact is either a row, an accepted fact, or a blocking omission.`
+`[ACTUAL_CODE_STATE]: the walk covers the three keys; exactness includes the omissions; the closed flag alone does not.`
+`[STATUS]: ARMED_AND_HONEST`
+
+**What the gate blocks.** `fidelity_gate` at 2110-2200 collects omissions (2157-2160), `differs` (2171), `uncomparable` (2173), `not-read` (2176), `not-drawn` (2178) and a `defect` outside `INERT_DECLARATIONS` (2187-2190), and returns `"blocks": bool(blocking)` at 2197.
+
+`[FILE_PATH]: backend/figma_fidelity.py:2110-2200`
+`[INTENDED_CONSTRAINT]: an omission or an unexamined defect must stop the ingest.`
+`[ACTUAL_CODE_STATE]: blocks is true for each of those verdicts.`
+`[STATUS]: ARMED_AND_HONEST`
+
+### `backend/design_renderer.py`
+
+**What the renderer reads.** `RENDERED_KEYS` includes `arcData`, `componentProperties` and `maxWidth` at 79-88. `maxWidth` emits `max-width` at 661-662. The three facts have a drawing mapping.
+
+**What is deliberately not drawn.** `ACCEPTED_UNRENDERED` at 111-164 is headed with the singular `THE FIGMA KEY THE PIPELINE DELIBERATELY DOES NOT CARRY (2026-11-02)` and contains `styles` and the other examined facts. `arcData` is absent. `unrendered_keys` at 197-219 refuses any spec key outside `RENDERED_KEYS` and `ACCEPTED_UNRENDERED`; the ingest raises 422 on that list at `figma.py:5534-5546`.
+
+`[FILE_PATH]: backend/design_renderer.py:79-88, 111-164, 197-219`
+`[INTENDED_CONSTRAINT]: a fact is either drawn, accepted with a written reason, or refused.`
+`[ACTUAL_CODE_STATE]: the three keys are drawn; styles is accepted with its reason; an unknown key is refused.`
+`[STATUS]: ARMED_AND_HONEST`
+
+### `backend/card_lifecycle.py` and `backend/routes/design_console.py`
+
+**What a corrupt row becomes.** `card_lifecycle.py:38-42` returns `{}` when the metadata string is not valid JSON. `card_state_of` then reads no `session_type` at 45 and returns `None` at 47-48. A row that cannot be read is treated as "not a card".
+
+`[FILE_PATH]: backend/card_lifecycle.py:33-48`
+`[INTENDED_CONSTRAINT]: a failed read must be reported, not turned into "not a card".`
+`[ACTUAL_CODE_STATE]: JSONDecodeError becomes an empty mask.`
+`[STATUS]: SUPPRESSED_COMPLIANCE_BYPASS`
+
+**What the console does with the same row.** `_card_status` at 57-66 falls back to `{}`. The queue route at 1066-1078 does the same, then sees an empty `kind` and raises 409 with "Session {id} is a live Tools visit. A queue holds cards; close the visit before submitting it." The sentence is a wrong diagnosis of a corrupt row.
+
+**What the console does when a read fails.** At 532-553 a failed conversation-list read is printed and the list stays empty; the code then creates a new conversation. At 570-577 a failed thread read leaves `used` false, so the thread is reused as if unused. At 595-596 a failed new-conversation write is printed and the old thread stays open. At 346, 460 and 1255 a failed package read, description write and close-line write are printed and the handler continues.
+
+`[FILE_PATH]: backend/routes/design_console.py:57-66, 532-553, 570-577, 595-596, 1066-1078`
+`[INTENDED_CONSTRAINT]: an unread value must not be treated as an empty value, and a failed read must be visible to the person.`
+`[ACTUAL_CODE_STATE]: print-only at 346, 460, 538, 553, 575, 596, 1255; an unread list is written over at 543-553; a corrupt row is called a live Tools visit at 1076-1078.`
+`[STATUS]: SUPPRESSED_COMPLIANCE_BYPASS`
+
+**What the console does when the card or queue read fails outright.** Lines 521 and 986 raise 503 with the failure named. Line 287 is a `POST` that writes rows: `get_or_create_design_container` at 305 and `get_or_create_design_tab(tab="tools")` at 409-412. A call to this route is not a read-only assembly; it can create the row that `4f72809b` was reported to be.
+
+`[FILE_PATH]: backend/routes/design_console.py:287-412, 521, 986`
+`[INTENDED_CONSTRAINT]: a failed read is refused; a writer is known to write.`
+`[ACTUAL_CODE_STATE]: 503 on failure; the POST creates the container and the Tools tab row.`
+`[STATUS]: ARMED_AND_HONEST`
+
+### `backend/routes/ai.py`
+
+**What a save does now.** The approval queue is paused. `save_metadata` at 5383-5424 writes `session_type`, `kept_at`, `kept_by`, the preview and the workspace; it does not write `review_stage`. The comment at 5415-5424 states the card stays Closed and editable.
+
+**What happens when the "Card saved." line cannot be written.** Lines 5466-5491 call `_warn` and let the save stand. `_warn` at 961-975 prints and appends to the process-wide `_REQUEST_WARNINGS`; `_drain_warnings` at 976-980 hands the list to the handler's response, and the save response drains at 5644. The comment at 955-958 admits a warning can land in another handler's response. The failure is not silent, but the attribution is process-wide rather than per request.
+
+`[FILE_PATH]: backend/routes/ai.py:961-980, 5383-5424, 5466-5491, 5644`
+`[INTENDED_CONSTRAINT]: a save keeps the card Closed while the queue is paused; a degraded save is reported.`
+`[ACTUAL_CODE_STATE]: no review_stage write; the save line failure is warned and drained into the response.`
+`[STATUS]: ARMED_AND_HONEST`
+
+### `backend/routes/design_reviews.py`
+
+**What the word "approved" means.** The module's own heading at 20-21 says it does not publish and does not write the catalogue: approving a session records the gate, and the catalogue write is a separate act. The limitation is written down. A screen that reads "approved" as a completed catalogue write would be reading it as more than the module does.
+
+`[FILE_PATH]: backend/routes/design_reviews.py:20-21`
+`[INTENDED_CONSTRAINT]: the record must not claim a catalogue write it did not make.`
+`[ACTUAL_CODE_STATE]: the module states the limitation; the catalogue write is not in this path.`
+`[STATUS]: ARMED_AND_HONEST`
+
+### The written record
+
+`frontend/src/rooms/design/CHANGELOG.md:35` says the validation check "no longer raises" and that the four-line profile travels in "the result, the left `<pre>`, the chat and the activity row". It does raise at `figma.py:5489` and `:5772`; `validationFailure` is null on every 200; `ToolsSeat.tsx:1160-1163` sends the profile to the chat and not the left `<pre>`. The same paragraph says the three keys "remain unexamined"; they have comparison branches at `figma_fidelity.py:1346-1450`.
+
+`[FILE_PATH]: frontend/src/rooms/design/CHANGELOG.md:35`
+`[INTENDED_CONSTRAINT]: the written record matches the code.`
+`[ACTUAL_CODE_STATE]: the paragraph is false on the raise, the profile's route and the three keys' examination.`
+`[STATUS]: SUPPRESSED_COMPLIANCE_BYPASS`
+
+`CHANGELOG.md:29` says the save does not write `review_stage`. `ai.py:5415-5424` confirms it. `[STATUS]: ARMED_AND_HONEST`.
+
+`CHANGELOG.md:5` says the queue returns zero cards. The handoff entry at line 39 says the queue returned three; line 5 is the later dated entry and supersedes it. `[STATUS]: ARMED_AND_HONEST (chronological record)`.
+
+### The log
+
+`backend/logs/figma-ingest.jsonl:662` is the 15:30:48Z refusal (job `d25b7109`). `:669` is the 17:06:03Z run with `verdict: "3 fact(s) did not match"` (job `d14f2cd3`). `:670` is the 17:30:09Z refusal with the literal three-key block (job `276a9b5e`). `:671` is the 17:38:33Z refusal naming `componentName` (job `16fcf9cf`). `:673` and `:674` are the 18:20:40Z and 18:21:54Z refusals at 446,820 characters. The log contains both a report and a refusal; the 17:30 entry is a refusal, and the 17:06 entry is a report.
+
+`[FILE_PATH]: backend/logs/figma-ingest.jsonl:662, 669, 670, 671, 673, 674`
+`[INTENDED_CONSTRAINT]: a refusal is recorded as a refusal and a report as a report.`
+`[ACTUAL_CODE_STATE]: the kinds and reasons are recorded as above.`
+`[STATUS]: ARMED_AND_HONEST`
+
+### The working tree
+
+The uncommitted delta is 19 files, 111 insertions, 4063 deletions. Eighteen tracked `design/` documents are deleted: `ARCHITECTURE.md`, `CHANGELOG.md`, `ONE-CHAT-PER-TAB.md`, `README.md`, `TODO.md`, `TOOLS-SEAT-SPLIT-PLAN-2026-10-31.md`, `WORKING-RULES.md`, `figma-ingest/CHANGELOG.md`, `plans/00-DATABASE.md`, `plans/01-INGEST.md`, `plans/02-APPROVALS.md`, `plans/03-CATALOGUES.md`, `plans/04-UX-TAB.md`, `plans/05-SEATS.md`, `plans/06-CARDS-AND-CONSOLE.md`, `slots/SLOT-CHANGELOG.md` and `slots/SLOT-PLAN.md`. `git diff --numstat -- design` reports 0 insertions and 4062 deletions. No replacement text of equivalent size is added on this branch.
+
+`README.md:245` was changed from 67 to 74 trusted components. The catalog holds 75, and the gate reports the drift as `[blocking]`.
+
+`[FILE_PATH]: design/ (18 tracked documents)`
+`[INTENDED_CONSTRAINT]: architecture preservation; no net-destructive deletion.`
+`[ACTUAL_CODE_STATE]: 4062 lines deleted; 0 added.`
+`[STATUS]: SUPPRESSED_COMPLIANCE_BYPASS`
+
+`[FILE_PATH]: README.md:245`
+`[INTENDED_CONSTRAINT]: the documented count equals the catalog count.`
+`[ACTUAL_CODE_STATE]: 74 stated; 75 held; the gate reports "[blocking] doc-claim-drift".`
+`[STATUS]: SUPPRESSED_COMPLIANCE_BYPASS`
+
+### What was not read
+
+The database was not queried. The states of `deb5a8eb`, `79ce2e2d`, `57a1503d` and `4f72809b`, the four removed rows and the orphan activity row were not read. The code paths that would produce those outcomes are recorded above; the rows themselves are not evidence in this record.
+
+The Design room was not loaded in a browser and no screenshot was taken. `tsc -b --noEmit` exited 0, and the claimed comment break at `a2ui-primitives.ts:586-589` is absent from the file. The runtime behavior of the card grid and the room was not observed.
+
+The repair plan that follows from this record is in [REPAIR-PLAN-2026-11-08.md](REPAIR-PLAN-2026-11-08.md).
+
+## 2026-11-08 (approval queue paused) — the cards are editable again; the queue is preserved
+
+**The three saved cards were released from the Supervisor Queue.** `deb5a8eb` "right-column-panel-container", `79ce2e2d` "Figma Wireframes for AI Prompt Platform" and `57a1503d` "Figma Wireframe Design Reference Prompt" had `review_stage=in-review` removed. Each is **Closed** and unlocked, each conversation carries a release line, and the queue returns zero cards. The release changed no content, no preview and no conversation history.
+
+**A save no longer sends a card into review.** The save path in `backend/routes/ai.py` used to write `review_stage=in-review` and the approval routing mask on every design save, so a card became read-only the moment it was kept. That block is removed for the current testing; a save keeps the card Closed and editable.
+
+**The queue itself is preserved for later.** `backend/card_lifecycle.py`, `GET /api/design/queue`, the read-only ledger, the 423 refusals and `POST /api/design/sessions/{id}/queue` are untouched. When approvals return, the queue endpoint is the explicit act that sends a card to the supervisor. Nothing about the queue was deleted or disabled in code; it is simply not part of the current save.
+
+**Verified.** The Design console returned six cards: the two design systems, the three saved cards as Closed and unlocked, and `4f72809b` as Open. `GET /api/design/queue` returned zero cards. The card read for `deb5a8eb` returned `Closed` with `locked: false`, and `render-design` returned its stored preview with `card_state: Closed` and `locked: false`. The backend compiles.
+
+## 2026-11-08 (card list correction) — every saved card is drawn, and the blank column is gone
+
+**The card the designer made is back in the Design console.** The console had hidden every card in `Pending_Approval`; it now draws a queued card with its state and its lock, so `deb5a8eb` "right-column-panel-container", `79ce2e2d` "Figma Wireframes for AI Prompt Platform" and `57a1503d` "Figma Wireframe Design Reference Prompt" are drawn beside the live Open row instead of disappearing. The lock still refuses every change; the card is present and read-only.
+
+**The empty "Design — Tools" column in the global console is gone.** Four blank rows were removed with their conversations: `ae788ef1` and `693914ba`, closed visits holding only a greeting and a close line, and `4b8ad59a` and `c6406e1b`, untyped duplicate rows with no messages at all. The live Tools row `4f72809b` and the three saved cards were kept. The global console returned the three saved cards and no blank "Design — Tools" card; the Design console returned the two design systems, `4f72809b` as Open, and the three saved cards as Pending_Approval and locked.
+
+**The duplicate rows cannot return.** A losing tab creator made a session and a conversation, then the one-per-tab index refused its kind; it read the winner and left its own untyped row behind, which the global console listed as a package. `get_or_create_design_tab` now removes the losing row and its empty conversation. A race test confirmed the session, conversation and permission rows were removed, and the live row was untouched.
+
+**Verified.** The Design console's card read returned six cards: the two systems, `4f72809b` as Open, and the three saved cards as Pending_Approval with `locked: true`. The global console returned fourteen cards, the three saved design cards among them, and zero blank "Design — Tools" cards. The backend compiles. This was verified through the running server; the cards were not clicked through in the browser.
+
+## 2026-11-08 (handoff) — the card lifecycle, the vault lock, and the supervisor queue
+
+**The designer now sees the card's lifecycle instead of a duplicate.** The Design console draws the live Tools row as **Open** and the closed blank visit as **Closed**. The three saved cards in review — `deb5a8eb` "right-column-panel-container", `79ce2e2d` "Figma Wireframes for AI Prompt Platform" and `57a1503d` "Figma Wireframe Design Reference Prompt" — are not drawn in that list. They stand in the Supervisor Queue as **Pending_Approval** with `locked: true`, and the queue read returned all three. The rows, their conversations and their activity remain whole; only the designer's workspace list omits them.
+
+**The lifecycle is one enum and one reader.** `backend/card_lifecycle.py` defines `Open`, `Closed`, `Pending_Approval` and `Queued_For_Share`, the two locked states, the row reader and the refusal sentence. `frontend/src/rooms/design/cardLifecycle.ts` carries the same four names to the browser; no surface compares a label or a colour to decide a lock. A live `design_tab` Tools row is Open. A `design_session` with `share_stage=queued` is Queued_For_Share; one with `review_stage=in-review` is Pending_Approval; every other `design_session` is Closed. An approved card is Closed and its footer reads Approved. The routing mask in `metadata.routing` records where the card was sent; the stage decides whether it is still queued.
+
+**The queued card is locked in the panel and at the write.** For a locked card, `buildContent` returns no ingest form, no middle column and no footer; the left column draws a read-only ledger naming the state, the card, the reviewer and the reason. The Tools page evaluates the state before an ingest, a save or a discard and answers with the state's refusal; the leave question is not asked because neither answer could run. The server refuses the same acts: the save answers 423 before the model call, the close answers 423, the ingest answers 423 before a job exists and 400 when a named session arrives without the person's id, and a second queue submission answers 409. The save does not write `review_stage`: the queue is paused by the owner's 2026-11-08 ruling, and the card stays Closed until `POST /api/design/sessions/{id}/queue` is called; the page writes the card's state into its tree and the ledger replaces the canvas immediately.
+
+**The queue is a routing change, not a copy.** `POST /api/design/sessions/{id}/queue` with `destination: "approval"` writes `review_stage=in-review`; with `destination: "share"` it writes `share_stage=queued`. Both update the routing mask and append the state change to the session's own conversation. The row is not deactivated, archived or purged. A live Tools row is refused with 409 because a queue holds cards and the visit must be closed first. The review writer now records the approval routing as well.
+
+**The console's query and the supervisor's read.** The design console's card query filters the locked states out of the grid. `GET /api/design/queue` returns exactly those rows, permission-scoped through `session_permissions`, with `owner_id`, `permission` and `queue` on each card. The global console's design cards carry `state` and `locked`, so its wide view shows a queued card without pretending it is in the designer's workspace. `design_card` remains the one builder; the card shape gained `state`, `locked`, `routing` and `reviewer`.
+
+**The validation check reports; it does not withhold the drawing.** The `INGEST_VALIDATION_FAILURE` profile is unchanged, and the check still runs before the renderer. It no longer raises. A design that states `arcData`, `componentProperties` or `maxWidth` is drawn from what was measured, the preview is shown, and the exact four-line profile travels in the result, the left `<pre>`, the chat and the activity row. The old blocked run at `09:30:48` for session `deb5a8eb`, job `d25b7109`, node `40001066:3272` holds the profile as a refusal; the new path records the same profile on an `ingest-failed` row beside the drawing. The three keys remain unexamined; the component is misshapen where they apply, and the report says so. The parser keys were not fixed, mocked or defaulted. The size gate is unchanged at 200,000 characters of renderable design, about 50,000 tokens; a design at 150,000 tokens would be refused earlier with `TOO LARGE TO INGEST`. The heavy node passed the size gate; its report is the validation profile, not size.
+
+**The original plan, assessed.** `APPROVAL-QUEUE-PROMPT.md` and `CONTINUE-PLAN-PROMPT.md` proposed a separate pending-entry record, a separate log conversation, a five-read loop and a new approval table. The record shows those are not needed: the `design_session` row is the entry, its conversation is the log, `POST /api/design/sessions/{id}/review` is the state writer and the queue endpoint is the routing. The card state and the queue are built. What remains is the supervisor surface: the Approvals tab does not draw the queue cards, bind the selected card's log or walk the approve and changes decision with the existing commit. The advanced console filter, the mirrored-frame, partial-arc and truncated-line facts, the one log writer, the three chat copies and the passing round trip remain; none is a prerequisite for the state machine. The separate table, the separate log and the five-read loop are not to be built.
+
+**Verified.** `GET /api/design/queue` returned three cards, all `Pending_Approval` and locked. `POST /api/design/console` returned the two design systems, `ae788ef1` as Open and `693914ba` as Closed, with no queued card. On `deb5a8eb`, close, queue, ingest and save answered 423, 409, 423 and 423. The `render-design` assembly for that card returned `card_state: Pending_Approval` and `locked: true`. The heavy node `40001066:3272` was run through the ingest without the stopping check: it returned a preview module of 446,869 characters, a `validationFailure` naming `arcData`, `componentProperties` and `maxWidth`, and three blocking rows. The component is drawn; the profile is the report. The backend compiles and the frontend type check exits zero.
+
+**What was not verified.** The drawn heavy component and its diagnostic and chat were not clicked through in the browser. The route's activity row for the new non-blocking path was not written by the direct run; the row at `09:30:48` is the old refusal. The supervisor walk was not run: the approval decision that commits a component is not wired to a supervisor chat, and the review endpoint records the gate without writing the catalogue. The sharing queue has a read and a submission; it has no disposition. The duplicate "Card saved. This session is in review." line remains when the save runs twice, and the live working row still carries the default "Design — Tools" title until a save names it.
+
+**The handoff.** `HANDOFF-PROMPT.md` records this state, the plan assessment, the next work and the constraints. `CONTINUE-PLAN-PROMPT.md` and `APPROVAL-QUEUE-PROMPT.md` carry a note that the handoff is the current state.
+
+**Files changed for this part.** `backend/card_lifecycle.py` (new), `frontend/src/rooms/design/cardLifecycle.ts` (new), `backend/routes/design_console.py`, `backend/routes/ai.py`, `backend/routes/design_reviews.py`, `backend/routes/figma.py`, `frontend/src/rooms/design/tools/content.ts`, `frontend/src/rooms/design/tools/ToolsSeat.tsx`, `frontend/src/rooms/design/console/useDesignConsole.ts`, `frontend/src/rooms/design/console/leftColumn.ts`, `frontend/src/rooms/design/DesignSeatShell.tsx`, `frontend/src/rooms/design/HANDOFF-PROMPT.md` (new), `frontend/src/rooms/design/APPROVAL-QUEUE-PROMPT.md` and `frontend/src/rooms/design/CONTINUE-PLAN-PROMPT.md` (notes).
+
+## 2026-11-08 (later still) — the page per visit, the saved run, and the honest error
+
+**The designer receives a new page on every press.** The Design room now holds one page. A tab press creates that tab's page, and a card press while Tools stands creates a new Tools page; the page that stood is disposed with its chat, its drawing, its draft, its filter and its live state. The Tools page is keyed by the visit, not only by the tab. The room clears the Tools content on entry and on leave, and a content report from a page that no longer stands is ignored. While the Tools session is read, the left column shows its own ring and the middle is empty; the console's card grid is not a stand-in. The Tools chat binds only to the session the Tools answer states (`session.design_session_id`), never to the console's package map. A new visit starts with no session until the server names one, and the kept mark, preview, live conversation, failure mark and third-column flag reset when the server names a different session. The owner checked this navigation and it is the state this record starts from.
+
+**The card comes from the server.** `design_card` in `backend/routes/design_console.py` is the one builder of the card's shape. `GET /api/design/cards/{session_id}` returns one saved card in that shape, and the save places the server's card. The front end no longer invents a Pending state or empty colours. A failed card read is stated, and no card is invented. A card id that is not this person's saved session is refused with its reason; the working row is not used instead. A read failure is a 503, not a missing card.
+
+**The leave question has two answers.** Leaving Tools offers Save, which makes or updates the card, and Discard, which removes the working visit. A card the visit opened is kept by its record. If the question cannot be drawn, nothing is saved and nothing is deleted; the room says so. A recorded failure counts as work, the question names it, and a saved card asks only for a field or a draft made since it was opened. The third answer that kept the visit for the next press is gone.
+
+**The saved run returns with the card.** The save sends the whole preview: the compiled drawing, the facts, the values, the steps, the measured tree, the annotations, the specs and the patterns. The server stores it in the session's `metadata.preview`; a save with no preview keeps the stored one, and a save that sends null clears it. The `render-design` assembly returns the stored preview, and the Tools page applies it through the same setter a live run uses, so the third column, the drawing and the facts return. The warning that a save would lose the preview is gone, because it is no longer true. A card saved from a failed run has no preview and its chat carries the failure. The passing save's restore is built and has not yet been proven by a passing run.
+
+**The failure is the server's own words, and the alarm holds.** The ingest files its activity against the Tools session's own row (`design_session_id`), not the room container. A terminal failure or refusal is written once to the log file and `figma_ingest_activity`, with the facts. The failure line in the conversation is the server's raw error, with `metadata.alert: true`; the history readers carry `alert`, so the card's chat draws the failure as an error after a reload. The 422 names one fact per line. The stroke comparison reads the whole colour, so `rgba(78, 104, 210, 0.5)` is no longer cut at `rgba(78,`. The pass line uses the server's verdict and the exactness count, not a blanket sentence.
+
+**Tested.** Node `40001066:3272` was submitted through the Tools form. It failed after five reads with a 422 naming `arcData` as a stated fact no examination covers, and the stroke fact whose drawn value the parser had cut. The chat held the failure; the activity row at `07:43:07` named session `57a1503d`, job `eff8bdb0`, node `40001066:3272`, and two facts. The failed session was saved as card `57a1503d`, "Figma Wireframe Design Reference Prompt", kept at `07:53:05`, in review, conversation `93c25c3e`; its chat holds the failure and it has no preview. The next Tools visit is `79ce2e2d`, conversation `0f2ab174`, one message. The node did not hit the size limit; the refusal was the fidelity gate.
+
+**The catalogue audit is manual.** The repository-wide audit (`npm run catalog:check`) no longer runs in the approval or the removal. Those paths no longer wait for it or return a `catalogCheck` verdict; the approval answers for the component it registered. The audit remains a manual check, and the catalogue view reads the last report with its checked-at time. The last report says 75 components, 40 findings, 1 blocking; the blocking finding is a README count.
+
+**The plan.** `CONTINUE-PLAN-PROMPT.md` now records this state and the steps that remain. The approval queue is still not built: the card's state stops at `in-review`, and no pending entry, log conversation, selection walk or commit from the chat exists. The gate still skips `strokeCap`, `strokeJoin`, `dashPattern` and `maxWidth`, and counts carried facts as drawn. The running log still has two writers with `persisted` and `tab`, and the three chat copies remain. The seats are still host elements; the surface-descendant seat is not implemented. The ingest has not passed.
+
+**What was not verified.** The passing save's preview restore, the red alert after a reload in the browser, and the approval and removal without the audit were not run end to end. The failed card's chat holds the failure line, but its text was saved before the verbatim change, so it is the old block; a new failure stores the server's raw text. The ingest still fails on `arcData`.
+
+**Files changed for this part.** `frontend/src/rooms/design/DesignRoom.tsx`, `frontend/src/rooms/design/DesignSeatShell.tsx`, `frontend/src/rooms/design/tools/ToolsSeat.tsx`, `frontend/src/rooms/design/console/useDesignConsole.ts`, `frontend/src/rooms/design/console/leftColumn.ts`, `frontend/src/rooms/design/tools/conversation.ts`, `frontend/src/rooms/design/chat/conversation.ts`, `frontend/src/rooms/design/chat/console-conversation.ts`, `frontend/src/rooms/design/chat/chat-tab.ts`, `frontend/src/rooms/design/chat/design-chat.ts`, `backend/routes/ai.py`, `backend/routes/figma.py`, `backend/routes/design_console.py`, `backend/figma_fidelity.py`, `backend/conversation_api.py`, `backend/prompt_sessions_api.py`. `frontend/src/rooms/design/chat/console-chat.ts` was removed.
+
+## 2026-11-08 (later) — the session, the card, and the running log
+
+**A tab press starts a new session; a card opens only from its card.** Pressing Tools no longer opens the newest kept card. The server did that whenever the tab's own conversation held no person's turn. That fallback is removed. The tab now uses its own working session. A card opens when the card sends its own session id; the saved card then returns its own name, its Figma address and its conversation. This was checked against the running server: a fresh Tools press returned the working session with an empty Title and address and its own conversation, and the saved card returned the card itself with its name and address.
+
+**The card press moves to the Tools page at once; the order is still wrong.** A purple cover with the card's name and “Opening…” was placed over the page while the card was read. It hid the page and any failure behind it and did not fix the order, so it is removed. The Tools page still draws the previous session until the card's read answers, and the card then replaces it. The earlier attempt made the page wait for the card before it stood, so the console stayed on screen and the press appeared to do nothing. Both attempts are recorded in `UNDO-WORKAROUNDS-PROMPT.md`; the card's page must be built from the card's own record, without a cover and without hiding errors. If a newer press arrives while an older read is running, the older answer is discarded.
+
+**A saved card joins the console's own list in place.** The console is no longer re-read when Home is pressed. That re-read rebuilt the card grid under the pointer, which is how the card could stop answering and stop showing its hover. The save now hands its card to the console from the save's own answer; the design-system cards stay first, and the grid is not rebuilt. The card's status and category colours are not in that answer and are left empty, so a card saved this way may wear different colours from a card the console reads itself. Its name, description, state and click are present.
+
+**The failure and pass lines are written by the seat that made the run.** The chat used to write a host line only while it was tied to a conversation; an ingest could fail before that tie and the line was shown and lost. The Tools seat now writes the line into this session's own conversation before showing it, and the chat draws it without a second write. A line for the Tools session is ignored by the other tabs' chats. A card reopened later reads its conversation and the line is there.
+
+**Leaving Tools ends the visit.** The answer that kept the visit for the next press is gone. Leaving offers Save, which makes the card, or Discard, which removes the visit. A visit with no work is removed without a question. A card the visit opened is kept by its own kept mark and is not deleted; the next press of Tools is a new session. The page now carries whether it is a kept card, so leaving a card does not treat its saved work as unsaved.
+
+**A discard cannot remove a kept card.** The discard reads the record's own kept mark before deleting; the visit flag remains as the fast path.
+
+**The ingest did not pass in this session.** The owner set the ingestion aside to repair the session and card process. The last measured run of node 40001066:4301 refused after five reads. The refusal named three faults: two layers share a name and were counted as one fact twice; `componentProperties` and `locked` were treated as visual facts nobody had examined; and the `copolt` rectangle's image fill never reached the measured design. The working tree now distinguishes the rows by the layer's own id, treats those two instance facts as configuration, and carries the image fill as the picture itself in the drawing. The measured design was checked to carry the image; the full run was not repeated before this handoff, so the ingest's pass is not claimed. The saved card “SCE Enterprise AI Prompt Platform Wireframes” has its Figma address and its conversation, and no drawing.
+
+**The handoff.** `UNDO-WORKAROUNDS-PROMPT.md` lists every shortcut and workaround from this session, what each one hid, and what has to be undone in the next chat. It also carries the record's evidence, the ingest's unfinished state, and what not to do.
+
+**What was not checked in the browser.** The card press, its hover, the loading state and the error line on a reopened card were not clicked through after these changes. The frontend type check and the backend compile pass; the answers above about the new session, the saved card and the kept fact were read from the running server. The approval tab's running log is not tied to a card's conversation; the card's review state and its review entry are recorded. The advanced filter over the console cards is not built.
+
+**Files changed for this part.** `frontend/src/rooms/design/DesignRoom.tsx`, `frontend/src/rooms/design/DesignSeatShell.tsx`, `frontend/src/rooms/design/tools/ToolsSeat.tsx`, `frontend/src/rooms/design/tools/tools-chat.ts`, `frontend/src/rooms/design/chat/chat-tab.ts`, `frontend/src/rooms/design/chat/design-chat.ts`, `frontend/src/rooms/design/console/useDesignConsole.ts`, `backend/routes/ai.py`, `backend/routes/figma.py`, `backend/figma_fidelity.py`.
+
+## 2026-11-08 — the ingest draws from the file, and every outcome is a conversation
+
+**What the designer receives.** A Figma link produces one of two results. Either the preview is the file, parameter by parameter, drawn in the middle column from memory, or the run fails after five reads and the chat carries one refusal that names every layer and fact that never matched. Nothing is written to disk during the preview, no activity row is made, and no catalogue file is read.
+
+**The typed module.** Every value the file states — its geometry, paints, layout, style references, constraints and vector paths — is written into the generated `.ts` module as a typed property and a frozen object. A value that cannot be typed exactly stops the run. The module is checked by the TypeScript compiler from an in-memory source. The typed block is the record; the browser receives a compiled JavaScript form with the inert behaviour seam inlined, and draws it from a blob. The preview writes no file and serves no address.
+
+**The gate.** The proof covers visual facts only. Style references, bindings, constraints, maximum widths, caps, joins, dash patterns, auto-resize, sizing modes and boolean operations are configuration: they are carried in the typed block and produce no row, no reason and no error. Visual facts must be drawn; a carried fact counts as drawn. The stroke alignment is drawn for outside, center and inside, and a stroke-only vector is drawn from its own stroke geometry. A design's text and font names are escaped for backticks, `${` and backslashes before they enter the module's template. The character limit is 200,000; the node limit remains 400.
+
+**Five reads, one refusal.** The ingest reads both channels, rebuilds the typed module, draws it and proves it. A failed proof discards the attempt and re-reads, at most five times. The fifth failure returns one refusal that names every fact that never matched, and no preview is stored. A successful run is held in memory until the session is saved or approved.
+
+**The catalogue is read at approval, not before.** The ingest no longer checks the tag, the layer names, the existing component or the catalogue names. A child pattern is named from its Figma layer. The comparison to what exists is made in the commit, which refuses a replacement until the designer answers. The preview and a saved draft are blind to the catalogue, even when a component shares the name.
+
+**The conversation.** The run's steps are not a second or third copy. The pending column says that it is processing and to stand by. The completed third column keeps the run's step disclosure. The chat carries the result and the next steps: the success message asks approve or discard; the failure message has a header, the code, the cause, a numbered repair list, the raw error in its own block, and a copy action. A failure is reported once per run, not by both the poll and the request. The messages are written under the active conversation id, so a saved card reopens with its audit log. A failure opens the chat without resetting the left column, so the left keeps its width and padding and the chat gripper no longer snaps it.
+
+**The tabs and their chats are bound together.** Each tab has its own seat and its own package, and the seat reads the surface that belongs to its tab. Tools reads the tools package; pressing the Tools tab starts a new session, and a saved Tools session is opened by its card on the console. UX reads the UX package; Chat reads the design console. The Chat tab is the design console chat, the advanced filter over the console cards, not a second Tools chat and not the global Console at the top of the site. Its conversation and its conversation list come from the same design console package. The earlier code took the Chat tab's conversation from the console package while its list came from a separate chat package; the two halves disagreed, so the tab could show another tab's thread. The separate chat package is no longer a source for the Chat tab, the Tools package is never read there, and the global Console is a different room the Design seat does not receive. A tab switch switches the package, the conversation and the list together; a tab with no conversation starts from its own package rather than borrowing one. The advanced filter itself, where the chat manages the design console cards as they grow into the hundreds, is not built; the binding it needs is in place.
+
+**The leave question and the card.** The header now asks the Design room's leave question before it changes the room, with Save and Discard. Save runs the existing save, which relabels the working `design_tab` row to `design_session`, files it under the design category, stores the conversation id and starts the next Design visit fresh. The card is the record; the console lists it. The database check found no `design_session` rows and one Tools `design_tab` row, which is the proof that the process had never run; the wiring was the missing part. The pending approval stage and the done side of the card remain to be connected to the review writer.
+
+**The chat type.** The conversation and ingest messages use IBM Plex Sans at 13 pixels with 1.5 line height. Headers are 14 pixels bold; notes and the raw-error block are 12 pixels. Bold, bullets, numbered lists, blank-line spacing and the fenced raw error are rendered from the message's own markers. The result turns keep their existing 16-pixel rich output. The renderer keeps the assistant's markers instead of flattening them.
+
+**Verification.** The frontend type check is zero and the backend compiles. The 25-fact node and the 187-fact node both pass with every visual fact drawn. The five-attempt refusal was reproduced. The compiled module was imported and drawn in the page. The workspace remains local; no commit was made.
+
 ## 2026-10-24 (closing the tab) — the shell residue, the TLS banner, and the room record
 
 **The shell no longer carries a Design render path.** The sandbox condition in
