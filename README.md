@@ -5,10 +5,10 @@
 **Raibach Interactive Design Studio** · John Holt  
 Version **0.9.1** · A2UI Protocol Compliant · 2026-11-09
 
-> ## [`Core-Concept.md`](AGENTS-instructions/Core-Concept.md)
+> ## 
 > The **A2UI operating rules** — the architecture facts, the three layers and the component rules, with the data-binding, data-flow and user-action documents beside it in `AGENTS-instructions/`.
 >
-> ** How this repo is run:** [`THE_METHOD.md`](AGENTS-instructions/THE_METHOD.md) — live-verification design engineering. Claims are hypotheses; only observed runtime behavior is knowledge. Includes the suppression taxonomy and the AI-session steering procedure.
+> ** How this repo is run:** [`THE_METHOD.md`](AGENTS-instructions/THE_METHOD.md) — live-verification design engineering. Claims are hypotheses; only observed runtime behavior is knowledge. Includes the suppression taxonomy and the AI-session steering procedure. [`Core-Concept.md`](AGENTS-instructions/Core-Concept.md)
 
 ---
 
