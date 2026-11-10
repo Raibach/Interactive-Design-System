@@ -9,6 +9,10 @@ Version **0.9.1** · A2UI Protocol Compliant · 2026-08-01
 https://site--semantic-design-systems--mgtvxtd7xr2v.code.run
 Demo pin: (see resume)
 
+> The **A2UI Protocol v0.9.1 implementation & conformance specification** — every normative requirement of the protocol mapped, file by file, to the code that implements it, with an honest built/pending status map.
+>
+> **🧭 How this repo is run:** [`READ-ME/THE_METHOD.md`](READ-ME/THE_METHOD.md) — live-verification design engineering. Claims are hypotheses; only observed runtime behavior is knowledge. Includes the suppression taxonomy and the AI-session steering procedure.
+
 ---
 
 ## Architecture: React Shell + AI Surface
@@ -19,6 +23,38 @@ This project follows the **React Shell + AI Surface** pattern — the emerging i
 - **The AI Surface**: Manages dynamic content generation, intent classification, and multi-modal interactions (text, image, speech) embedded within the shell.
 
 **Non-negotiable: the user must never stare at a blank page.** The deterministic shell always renders — navigation, frame, error states, slot containers — regardless of what the AI does or doesn't do. The AI fills slots *inside* a shell that already exists. If the AI fails, the shell shows the failure. If the AI is slow, the shell shows a loading state. The shell is never absent.
+
+### How MCP and the Lit catalog work with the shell
+
+The shell is the part that never moves. It owns the frame, the navigation, the left and right columns, and the failure states. MCP is how outside work reaches that frame: a pipeline reads a source, takes the facts the source states, and hands them to the shell's assembly, which decides which slot they fill. The Figma reader below is the working example. The REST API and the desktop MCP server are its two readers, and their replies are merged into one measured design before the shell draws it.
+
+The Lit catalog is the set of components the shell is allowed to draw. A surface is assembled from that fixed list; no component is invented at request time and no markup is generated from nothing. The catalog is the schema the server accepts, the registry is the list of names the browser may resolve to an element, and the Lit element is the thing that draws. A name outside the catalog is refused, so the shell never receives a surface it cannot draw. The frame stays whole even when the content behind it fails.
+
+---
+
+## Systems Overview: MCP Pipelines and Independent Model Governance
+
+**The external capture (the MCP pipelines).**
+Cloud providers ship MCP servers that connect corporate production workflows to their own clouds.
+
+**The internal alternative (model-agnostic RIDS).**
+This system is built on open standards (A2UI, MCP) with no dependency on one model provider. The shell is the gatekeeper, so data stays inside the enterprise's own pipelines and models can be replaced without giving up the component tree or the production logic.
+
+This is a reference implementation with no production payloads. The governance rules, the catalog checks and the protocol conformance are implemented and run on every build; populating payloads is ingestion.
+
+### Overriding the Figma Canvas: Two Readers, One Measured Design
+
+The Figma canvas is read directly. The owner did not hold an executive Figma account, so the design is imported into Raibach IDS rather than through Figma's own export path. Raibach IDS assembles the component; Figma remains the source of the measurements.
+
+Two readers supply the same file. The REST API (`GET /v1/files/<key>/nodes?ids=<node>&geometry=paths`) returns the node tree, the geometry and the vector path data. The desktop MCP server at `127.0.0.1:3845` returns the facts the REST response does not carry: the behavioral annotations, the reference code, the designer's descriptions, and the layout and style facts. `_merge_mcp_rest` in `backend/routes/figma.py` joins the two replies into one measured design. The MCP reader is absent on a deployed server, and the pipeline says so rather than inventing the missing facts.
+
+Neither reader interprets the file. A fact one channel states is taken from that channel; a fact both state must agree, and a disagreement is reported with both values. The renderer draws the measured design, so the component the application shows is the file's own geometry rather than a picture exported from Figma.
+
+A **prompt-package lifecycle workspace** built on the A2UI (Agent-to-User Interface) protocol. The AI assembles every pixel at runtime from a trusted component catalog — no URL routing, no static pages, no hardcoded layouts. Navigation is an AI command that returns a spec-compliant envelope through a single unified endpoint.
+
+**The product:** prompt *packages* — configuration + conversation + execution trace + governance metadata — bundled as one versioned, shareable, contributor-owned unit. The package is the aggregate root; the user is not the package.
+
+---
 
 ## Conversation Design: Task-Based, Context-Aware, Isolated to Each Tab
 
@@ -162,22 +198,6 @@ So the honest shape of an "AI governance level" for this system: structure is go
 
 ---
 
-## Systems Overview: MCP Pipelines and Independent Model Governance
-
-**The external capture (the MCP pipelines).**
-Cloud providers ship MCP servers that connect corporate production workflows to their own clouds.
-
-**The internal alternative (model-agnostic RIDS).**
-This system is built on open standards (A2UI, MCP) with no dependency on one model provider. The shell is the gatekeeper, so data stays inside the enterprise's own pipelines and models can be replaced without giving up the component tree or the production logic.
-
-This is a reference implementation with no production payloads. The governance rules, the catalog checks and the protocol conformance are implemented and run on every build; populating payloads is ingestion.
-
-A **prompt-package lifecycle workspace** built on the A2UI (Agent-to-User Interface) protocol. The AI assembles every pixel at runtime from a trusted component catalog — no URL routing, no static pages, no hardcoded layouts. Navigation is an AI command that returns a spec-compliant envelope through a single unified endpoint.
-
-**The product:** prompt *packages* — configuration + conversation + execution trace + governance metadata — bundled as one versioned, shareable, contributor-owned unit. The package is the aggregate root; the user is not the package.
-
----
-
 ## Constraint, Compute, Custody — Measured
 
 Cost here follows from the design. Assembly does not need a model that thinks; it needs a model that moves, and what allows that is a closed answer space: a fixed catalog, a fixed set of seats, and values bound by path.
@@ -227,7 +247,7 @@ Cost here follows from the design. Assembly does not need a model that thinks; i
 |-----------|---------------|
 | **Shell Always Visible** | The deterministic React shell renders unconditionally — nav, frame, error states, slot containers. The user never stares at a blank page. AI failure = shell shows the failure, not nothing. |
 | **AI Fills Slots** | Slots are the loading contract (left/middle/right). AI decides which prompt blocks, data, and chat populate them. It does not create or remove slots. |
-| **Zero-Trust Catalog** | Every component validated against `catalogs/<pipeline>/catalog.json`. Unknown → HTTP 503. No silent failures. |
+| **Zero-Trust Catalog** | Every component validated against `component-catalog.json`. Unknown → HTTP 503. No silent failures. |
 | **Fail Loud** | Invalid AI responses → 503 with diagnostics. Database down → 503. Empty Figma spec → 503 with exact reason. Never silently degrade. |
 | **No Executable Code** | `eval()` eliminated. `innerHTML` blocked. Buttons dispatch declarative `a2ui:action` events only. |
 | **Package-First** | A composer creates the draft package row on mount. Chat is scoped from keystroke one. |
@@ -237,25 +257,17 @@ Cost here follows from the design. Assembly does not need a model that thinks; i
 
 ## Component Catalog
 
-67 trusted components — 17 A2UI Basic Catalog primitives + 50 project-specific Lit elements — typed with `ChildList` / `DynamicString` per validator rules. This number is measured from `catalogs/prompt-composer/catalog.json`; `npm run catalog:check` compares the docs against the catalog and reports a count that has drifted as a `doc-claim-drift` finding (`blocking` is that finding's severity — which row to read first — not a veto: the check reports and never gates, and exits 0 whatever it finds). That check is run on request and is NOT part of `npm run build` — the build is `tsc -b && vite build`. The live count is printed at backend startup (`✅ A2UI Catalog loaded — 67 trusted components`). Specified in [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md) §4.3.
+75 trusted components — the live count is the catalog's, asserted at backend startup (`✅ A2UI Catalog loaded — 75 trusted components`) and checked by `npm run catalog:check`. The component shapes are typed with `ChildList` / `DynamicString` per the validator rules.
 
 ```
 A2UI Basic:     Column · Row · Text · Image · Button · Card · ActionGroup
                 SectionEditor · DecisionDialog · ConsoleCardGrid
-                CompiledOutput · ChatPanel · TraceFeed · AgentFlow
-                RoomEmbed · OutputControls · CanvasFooter
+                CompiledOutput · ChatPanel
 Workspace:      workspace-layout · prompt-section-editor · compiled-output-viewer
-                chat-panel · chat-header · trace-feed · agent-flow · room-embed · output-controls · canvas-footer · chat-repair-actions
-                version-trace · token-cost-readout · status-readout
-                output-panel · search-bar
-                filter-pill · footer-bar · chat-navigation-bar · agent-card
-                prompt-section · control-bar · add-section-button
-                ai-surface-sandbox · error-banner · prompt-container
-                prompt-input-section · gripper-prompt-input · role-dropdown
-                role-tile · status-bar-prompt-input · prompt-textarea
-                model-selector-button · user-response-bubble
-Design room:    design-left-panel · design-middle-container · component-preview · draft-preview
-                figma-ingest-form · figma-layers-view
+                chat-panel · version-trace · token-cost-readout · status-readout
+                output-panel · search-bar · filter-pill · footer-bar
+                chat-navigation-bar · agent-card · featured-card
+                prompt-section · add-section-button
 ```
 
 ---
@@ -334,11 +346,11 @@ Docker on **Northflank** (`prompt-composer-console`, us-central). Production dep
 
 ## Documentation
 
-- [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md) — A2UI Protocol v0.9.1 implementation & conformance specification (requirements → code, verified status map)
-- [`READ-ME/THE_METHOD.md`](READ-ME/THE_METHOD.md) — Live-verification design engineering: the working doctrine
-- [`READ-ME/A2UI_TRUE_VS_FAKE_AUDIT.md`](READ-ME/A2UI_TRUE_VS_FAKE_AUDIT.md) — Live-verified compliance ledger
-- [`CHANGELOG.md`](CHANGELOG.md) — Release history (includes the DeepSeek restoration battle)
-- [`FIGMA/CONSOLE_CONTRACTS.md`](FIGMA/CONSOLE_CONTRACTS.md) — Console surface data contract
+- [`Core-Concept.md`](AGENTS-instructions/Core-Concept.md) — the A2UI operating rules: the architecture facts, the three layers and the component rules
+- [`THE_METHOD.md`](AGENTS-instructions/THE_METHOD.md) — live-verification design engineering: the working doctrine
+- [`THE_ZERO_TRUST_REPAIR.md`](AGENTS-instructions/THE_ZERO_TRUST_REPAIR.md) — the zero-trust repair record, written from measurements
+- [`CHANGELOG.md`](frontend/src/rooms/design/CHANGELOG.md) — the Design room's record: the current work, the audit and the repair plan
+- [`THE_CONVERSATION_CONTRACT.md`](AGENTS-instructions/THE_CONVERSATION_CONTRACT.md) — how the chat and the console behave, as invariants
 
 ---
 
