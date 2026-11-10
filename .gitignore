@@ -329,3 +329,11 @@ product/mitosis-main/
 
 
 /START-SITES.command
+
+# ── LOCAL EVIDENCE, LARGE ARCHIVES, GENERATED VECTOR DATA (owner, 2026-11-10) ─────────────
+# These live on this machine only; they are not source and do not travel to GitHub.
+/EVIDENCE/
+/design/approval-reviews/Agentic-opensource/
+/design/approval-reviews/processmaker-develop.zip
+/governance/vector/system.db
+/figma-ingest-plan.pdf
