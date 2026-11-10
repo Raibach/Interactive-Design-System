@@ -1,31 +1,17 @@
 # Interactive Design System Manager
 
-> **One surface. Any payload. AI fills the slots.**
+> **Deterministic runtime protocols, data schemas, and governance architectures - One surface. Any payload. AI fills the slots.**
 
 **Raibach Interactive Design Studio** · John Holt  
-Version **0.9.1** · A2UI Protocol Compliant
+Version **0.9.1** · A2UI Protocol Compliant · 2026-08-01
 
-An AI-native interface system. A deterministic shell holds the frame — navigation, layout, error
-and loading states — and the AI fills the slots inside it from a trusted catalogue of components.
-It does not invent screens; it composes them, and a name outside the catalogue is refused.
+## Demo: Wireframe interactive prototype
+https://site--semantic-design-systems--mgtvxtd7xr2v.code.run
+Demo pin: (see resume)
 
-## See it
-
-**Request pin access.** The studio runs on a private instance; ask for the pin through
-[john.holtportfolio.com](https://john.holtportfolio.com) and the demo opens on the doors described
-below.
-
-What you are looking at is six rooms behind one navigation — **Console, Composer, Design, Product,
-Development** and **Governance** — each with its own chat, its own working area, and its own way of
-being assembled. The shell is the same in every room; only what is inside it changes.
-
-This document describes the product. It is not a developer guide: this repository is a
-demonstration of the work, not a codebase open for contribution.
-
-## The one idea
-
-The interface never changes. The AI delivers different levels of access. Everything below is a
-consequence of that sentence.
+> The **A2UI Protocol v0.9.1 implementation & conformance specification** — every normative requirement of the protocol mapped, file by file, to the code that implements it, with an honest built/pending status map.
+>
+> **🧭 How this repo is run:** [`READ-ME/THE_METHOD.md`](READ-ME/THE_METHOD.md) — live-verification design engineering. Claims are hypotheses; only observed runtime behavior is knowledge. Includes the suppression taxonomy and the AI-session steering procedure.
 
 ---
 
@@ -38,20 +24,63 @@ This project follows the **React Shell + AI Surface** pattern — the emerging i
 
 **Non-negotiable: the user must never stare at a blank page.** The deterministic shell always renders — navigation, frame, error states, slot containers — regardless of what the AI does or doesn't do. The AI fills slots *inside* a shell that already exists. If the AI fails, the shell shows the failure. If the AI is slow, the shell shows a loading state. The shell is never absent.
 
-## Why the usual AI-governance layer is largely not needed here
+### How MCP and the Lit catalog work with the shell
 
-The AI-governance question is drift and grounding — is the system's behaviour shifting away from a
-baseline over time, and is the answer actually supported by what it read. Add quality and
-regression evals, plus cost, latency and trace logging. That layer exists because an open-ended
-generative system cannot enumerate its possible outputs, so you watch statistics forever.
+The shell is the part that never moves. It owns the frame, the navigation, the left and right columns, and the failure states. MCP is how outside work reaches that frame: a pipeline reads a source, takes the facts the source states, and hands them to the shell's assembly, which decides which slot they fill. The Figma reader below is the working example. The REST API and the desktop MCP server are its two readers, and their replies are merged into one measured design before the shell draws it.
 
-It is largely unnecessary here. The model composes only from the human-curated catalogue, and a
-name outside it is refused loudly — so drift stops being a statistical thing to watch and becomes
-a binary violation to reject. For structure, classical drift monitoring is obsolete as a method.
-What genuinely remains — the free-text layer — is judged per run and written down as a row, not
-watched as a graph.
+The Lit catalog is the set of components the shell is allowed to draw. A surface is assembled from that fixed list; no component is invented at request time and no markup is generated from nothing. The catalog is the schema the server accepts, the registry is the list of names the browser may resolve to an element, and the Lit element is the thing that draws. A name outside the catalog is refused, so the shell never receives a surface it cannot draw. The frame stays whole even when the content behind it fails.
 
-> **The failure doctrine:** [`AGENTS-instructions/READ-ME/THE_SELF_REPORTING_SYSTEM.md`](AGENTS-instructions/READ-ME/THE_SELF_REPORTING_SYSTEM.md)
+---
+
+## Systems Overview: MCP Pipelines and Independent Model Governance
+
+**The external capture (the MCP pipelines).**
+Cloud providers ship MCP servers that connect corporate production workflows to their own clouds.
+
+**The internal alternative (model-agnostic RIDS).**
+This system is built on open standards (A2UI, MCP) with no dependency on one model provider. The shell is the gatekeeper, so data stays inside the enterprise's own pipelines and models can be replaced without giving up the component tree or the production logic.
+
+This is a reference implementation with no production payloads. The governance rules, the catalog checks and the protocol conformance are implemented and run on every build; populating payloads is ingestion.
+
+### Overriding the Figma Canvas: Two Readers, One Measured Design
+
+The Figma canvas is read directly. The owner did not hold an executive Figma account, so the design is imported into Raibach IDS rather than through Figma's own export path. Raibach IDS assembles the component; Figma remains the source of the measurements.
+
+Two readers supply the same file. The REST API (`GET /v1/files/<key>/nodes?ids=<node>&geometry=paths`) returns the node tree, the geometry and the vector path data. The desktop MCP server at `127.0.0.1:3845` returns the facts the REST response does not carry: the behavioral annotations, the reference code, the designer's descriptions, and the layout and style facts. `_merge_mcp_rest` in `backend/routes/figma.py` joins the two replies into one measured design. The MCP reader is absent on a deployed server, and the pipeline says so rather than inventing the missing facts.
+
+Neither reader interprets the file. A fact one channel states is taken from that channel; a fact both state must agree, and a disagreement is reported with both values. The renderer draws the measured design, so the component the application shows is the file's own geometry rather than a picture exported from Figma.
+
+A **prompt-package lifecycle workspace** built on the A2UI (Agent-to-User Interface) protocol. The AI assembles every pixel at runtime from a trusted component catalog — no URL routing, no static pages, no hardcoded layouts. Navigation is an AI command that returns a spec-compliant envelope through a single unified endpoint.
+
+**The product:** prompt *packages* — configuration + conversation + execution trace + governance metadata — bundled as one versioned, shareable, contributor-owned unit. The package is the aggregate root; the user is not the package.
+
+---
+
+## Conversation Design: Task-Based, Context-Aware, Isolated to Each Tab
+
+The user opens a tab and finds the work they left there, not a chat box waiting for a general question. The conversation opens the last conversation the tab lists, shows the last activity, and asks where the user would like to pick up. It does not introduce itself on every visit, and it does not offer a general chat that could belong to any tab.
+
+The design has four parts: the tab's own conversation and its list; the frame every tab shares, whose view slot holds whatever the tab puts there; the conversations bar, which carries the count, the last saved time and the new and remove controls; and the console in the left column, with the design-system selector, the application's tree and the activity cards.
+
+The conversation manages that surface. The user's selection in the left column is its context; a card opens its last conversation and last activity, and the question it asks comes from that work. Each tab owns its conversation, and no tab reads the whole system's chats. The conversation does not sit apart as a general assistant; it carries the work in the surface forward. The column that carries the conversation is a surface too, not a chat transcript: it can serve text, an image, instructions, or an interface with cards and buttons. The user sees a chat's face because the user already knows how to read it and how to type into it; underneath, it is the output surface of the tab's work, and the tab decides what the column is for.
+
+The rule is in [`design/ONE-CHAT-PER-TAB.md`](design/ONE-CHAT-PER-TAB.md), the console's structure in [`design/ARCHITECTURE.md`](design/ARCHITECTURE.md), and the open work in [`design/plans/05-SEATS.md`](design/plans/05-SEATS.md) and [`design/plans/06-CARDS-AND-CONSOLE.md`](design/plans/06-CARDS-AND-CONSOLE.md). The Approve tab follows the same rule: the surface in the column is the review, not a separate dashboard. The detailed state is in those documents.
+
+GOVERNANCE
+
+The AI governance question — drift and grounding
+LLM observability (or AI evaluation & monitoring). 
+
+Drift — watch the system's behavior/output distribution shift away from a baseline over time.
+Grounding / faithfulness — is the answer actually supported by what it read? (Hallucination detection is the inverse measure.)
+Quality & regression evals — score answers, catch version-to-version regressions.
+Plus cost/latency/trace logging.
+It exists because for open-ended generative systems you can't enumerate the possible outputs — so you watch statistics forever.
+
+Why that layer is largely not needed here — and what remains. My own ARCHITECTURE-IS-THE-GOVERNANCE.md already draws this line: the model composes only from the human-curated catalogue, and a name outside it gets a loud 503 — so "drift" stops being a statistical thing to watch and becomes a binary violation to reject. For structure, classical drift monitoring is obsolete as a method. The document itself names the pots it does not cover — and one of them is exactly what you're circling: it says the evals / model-risk pots "are different purchases."
+
+> **This section's argument, written out as doctrine:**
+> [`AGENTS-instructions/READ-ME/THE_SELF_REPORTING_SYSTEM.md`](AGENTS-instructions/READ-ME/THE_SELF_REPORTING_SYSTEM.md)
 > — self-reporting, not self-healing; the failure vault; the morning brief; the
 > seven-or-thirty-day window; the purge. When the code and the doctrine disagree, the
 > code is wrong.
@@ -161,27 +190,11 @@ each interaction, a session that survives the journey, a store and a view — do
 
 What remains genuinely real — and already exists in your system, measured tonight:
 
-Grounding is already judged, per run, in plain English. The `run_evaluations` table stores one judgment per run — cleared or failed — each with the judge's written sentence; rows like "it explicitly did not read them and instead restated headline-level summaries" are grounding verdicts, stored as database rows. They are written by the house's own evaluation judge and surfaced as the Eval tab's feed in the seat.
+Grounding is already judged, per run, in plain English. The run_evaluations table holds 53 judged runs right now (32 failed / 21 cleared), each with the judge's written sentence — rows like "it explicitly did not read them and instead restated headline-level summaries." That is a grounding verdict, stored as a database row. It's written by the house's own evaluation-judge and surfaced as the Eval tab's feed in the seat.
 Cost ledger: usage_metrics — per-call, priced, cache-split aware.
 Provenance: memory_provenance + vector ids into the local store (the Milvus tie-in).
-Conformance: the deterministic stand-ins for structure-drift — the catalogue gate, the fidelity gate, and the catalogue check.
+Conformance: the deterministic stand-ins for structure-drift — catalogue gate, catalog:check, fidelity gate.
 So the honest shape of an "AI governance level" for this system: structure is governed by the boundary (binary), and the free-text layer is governed by the per-run judge — which is already writing rows. Those rows are also why your queue item #1 was run_evaluations: I verified its semantics tonight (writer, routes, judge, surface) — the next step per the queue is to own / describe / test that chain inside the room, so the AI ledger is curated content, not just ingested tables.
-
----
-
-## Systems Overview: MCP Pipelines and Independent Model Governance
-
-**The external capture (the MCP pipelines).**
-Cloud providers ship MCP servers that connect corporate production workflows to their own clouds.
-
-**The internal alternative (model-agnostic RIDS).**
-This system is built on open standards (A2UI, MCP) with no dependency on one model provider. The shell is the gatekeeper, so data stays inside the enterprise's own pipelines and models can be replaced without giving up the component tree or the production logic.
-
-This is a reference implementation with no production payloads. The governance rules, the catalogue checks and the protocol conformance are implemented and can be re-run on request; populating payloads is ingestion.
-
-A **prompt-package lifecycle workspace** built on the A2UI (Agent-to-User Interface) protocol. The AI assembles every pixel at runtime from a trusted component catalog — no URL routing, no static pages, no hardcoded layouts. Navigation is an AI command that returns a spec-compliant envelope through a single unified endpoint.
-
-**The product:** prompt *packages* — configuration + conversation + execution trace + governance metadata — bundled as one versioned, shareable, contributor-owned unit. The package is the aggregate root; the user is not the package.
 
 ---
 
@@ -205,273 +218,146 @@ Cost here follows from the design. Assembly does not need a model that thinks; i
 
 ---
 
-## How it is built
-
-Every room draws into three seats: a working area on the left, the compiled result in the
-middle, and the conversation on the right. The AI decides what fills those seats; it never
-creates or removes them.
-
-Four rules hold the whole thing together:
-
-- **The shell is never blank.** Navigation, frame, error states and loading states always render.
-  If the AI fails, the shell shows the failure; if it is slow, the shell shows the wait.
-- **The AI fills slots; it never invents the frame.**
-- **Unknown is refused, not guessed.** A component outside the catalogue is a loud refusal with
-  the reason, never a silent fallback.
-- **The record tells the truth** — including about what has not been built yet.
-
----
-
-## The catalogue is the contract
-
-Sixty-six components stand in the Composer's catalogue, each typed and validated before anything
-is drawn, and every surface carries its own — the Composer's, the Design room's, and the
-primitives both are built from. The AI composes from a fixed set of known parts instead of
-writing screens. Adding a component is a deliberate act: it is drawn in Figma, ingested through
-the design seat, and approved before the model may use it.
-
----
-
-## What is in this repository
-
-The core of the studio and the first three rooms — **Console, Composer and Design** — with their
-seats, their components, their assembly logic and their records.
-
-The programs the other three rooms frame (the analytics application, the development agent, the
-governance observatory) are third-party work that runs beside the studio. They are deliberately
-not in this repository.
-
-## Built with
-
-React and Lit on the front, Python (FastAPI) and PostgreSQL behind it, a component catalogue as
-the contract between them, and DeepSeek as the model that fills the slots.
-
----
-
-## What is already real, and what is not
-
-**Built and measured.** Grounding is judged per run in plain English — one row per run, cleared or
-failed, with the judge's written sentence. Cost is recorded per call and priced. Assembly is
-constrained by the catalogue, so structure is checked by the boundary rather than watched over
-time.
-
-**Designed, not shipped.** The compliance gate — design, product and one developer verdict before
-anything reaches a front end. The customer-side measurement — a served-at timestamp, a component
-identity on every interaction, a session that survives the journey. Both are written down as
-doctrine; neither is built.
-
-That distinction is deliberate. A demonstration that claims more than it does is worth nothing.
-
----
-
-## Sovereign shell audit 2026-10-24
-
-> This is the working audit, kept in the top-level README for visibility. The product
-> description above is the introduction.
-
-2026-10-24. Read-only: this audit changed no code. Every claim was read in the code.
-
-The room records hold the detail. [Design](frontend/src/rooms/design/README.md) and
-[Product](frontend/src/rooms/product/README.md) are the room-level READMEs; this audit is the
-global summary.
-
-### The standing check — run at the start of every refinement turn
-
-The shell is the first thing to inspect, before the next room is touched. These commands are the
-check, in order:
+## Architecture at a Glance
 
 ```
-wc -l frontend/src/pages/WritingAreaIndex.tsx
-rg -n "useTabGate|handleTabChangeWithGate|room-handoff-cover|DesignRoom|designTree|designRendererRef|useDesignSurface|useDesignPreview" frontend/src/pages/WritingAreaIndex.tsx
-rg -n "ProductBox|ConsoleBox|DesignBox|GovernanceRoom|DevelopmentRoom|useGovernance|useDevelopment|workspaceTree|assembleGovernanceSurface" frontend/src/pages/WritingAreaIndex.tsx
-rg -n "workspace-layout|product-workspace" frontend/src/rooms frontend/src/pages
-rg -n "from ['\"]@/(components|shared)" frontend/src/rooms/<room>
-npm run typecheck
+┌──────────────────────────────────────────────────────────────────┐
+│                        A2UI v0.9.1 Surface                      │
+│                                                                  │
+│  POST /api/ai/assemble-surface                                   │
+│  ┌────────────┐  ┌─────────────────┐  ┌───────────────────┐     │
+│  │  Section    │  │   Compiled      │  │     Chat          │     │
+│  │  Editor     │  │   Output        │  │     Panel         │     │
+│  │  (left)     │  │   (middle)      │  │     (right)      │     │
+│  └────────────┘  └─────────────────┘  └───────────────────┘     │
+│                                                                  │
+│  Intents: render-console · render-composer · render-session:{id} │
+│  Envelope: createSurface → updateComponents → updateDataModel    │
+└──────────────────────────────────────────────────────────────────┘
+         │                    │                     │
+    PostgreSQL       LLM providers        Zilliz Cloud
+    (42 tables)      (AI assembly)       (vector memory)
 ```
 
-What each must show:
+---
 
-- the gate/design names: **nothing**. The first line must be empty.
-- the room names: only the boundaries the room has not yet taken. Any room-specific state, effect
-  or hook is a finding, not a baseline.
-- the workspace lines: the wrapper each room actually draws. A room on the shared wrapper is a
-  finding until its own wrapper is in place.
-- the shared imports: the drawing pieces the room may share, and the behavior it must not.
-- the typecheck: zero.
+## Key Principles
 
-A turn that does not run the check does not start.
+| Principle | Implementation |
+|-----------|---------------|
+| **Shell Always Visible** | The deterministic React shell renders unconditionally — nav, frame, error states, slot containers. The user never stares at a blank page. AI failure = shell shows the failure, not nothing. |
+| **AI Fills Slots** | Slots are the loading contract (left/middle/right). AI decides which prompt blocks, data, and chat populate them. It does not create or remove slots. |
+| **Zero-Trust Catalog** | Every component validated against `component-catalog.json`. Unknown → HTTP 503. No silent failures. |
+| **Fail Loud** | Invalid AI responses → 503 with diagnostics. Database down → 503. Empty Figma spec → 503 with exact reason. Never silently degrade. |
+| **No Executable Code** | `eval()` eliminated. `innerHTML` blocked. Buttons dispatch declarative `a2ui:action` events only. |
+| **Package-First** | A composer creates the draft package row on mount. Chat is scoped from keystroke one. |
+| **Honest Code** | Comments tell the truth about what the code does. If something is hardcoded, the comment says so. No "AI is the Architect" over fixed layouts. |
 
-### The shell today — 4,154 lines
+---
 
-*Updated 2026-10-24 after the Design residue was removed from the shell: the shell is 4,154
-lines. The Design row and the count are current; the other anchors below shifted with the cuts
-and are approximate.*
+## Component Catalog
 
-| block | anchors in `WritingAreaIndex.tsx` | verdict | next |
-| --- | --- | --- | --- |
-| Design | `DesignBox` mount 4139; the design-boundary comment 8–11; the tools-door comment 3594; sandbox condition 4018 | the box is clean; the sandbox no longer mounts for Design; only the import and mount remain | done 2026-10-24; details in [rooms/design/README.md](frontend/src/rooms/design/README.md); the shared design wrapper is the next structural cut |
-| Governance | `GovernanceBox` mount 4156; nav boundary 4000–4002; path/navigate state 354–355 | the box, container, trace hook and nav boundary own it; the shell keeps the nav and the mount | done 2026-10-24 |
-| Development | refs 674–675; type imports 79–80; `useDevelopmentRoom` 3391; sandbox arm 4097–4099; ground 33/353–365 | the room and hook are in the folder; the shell owns the refs, hook call, ground and sandbox arm | [PLAN-sovereign-development.md](frontend/src/rooms/development/PLAN-sovereign-development.md); after it, the sandbox holds only the Composer |
-| Product | `pendingProductAction` 187; the card door 3577; `ProductBox` 4581 | boxed; the boundary still passes the card action and the shared draft/chat helpers | decide the card door's owner; move the helpers |
-| Console | `isAIAssembling` 255; the failure flags 256–260; `ConsoleBox` 4589; the shared assembly and tree refs | boxed; its assembly, failure and tree boundary are still shared with the Composer | move the console's assembly and failure into the room; the Composer's shared door remains |
-| Composer and shell | `workspaceTree` 283; `surfaceDataModel` 511; the sandbox renderer and the assembly | the last room; after Development, the sandbox holds only the Composer | box the Composer; delete `ai-surface-sandbox`, its slot routing, `SELF_GATED_ROOMS` and the assembly; the shell becomes navigation |
+75 trusted components — the live count is the catalog's, asserted at backend startup (`✅ A2UI Catalog loaded — 75 trusted components`) and checked by `npm run catalog:check`. The component shapes are typed with `ChildList` / `DynamicString` per the validator rules.
 
-#### Already clean
+```
+A2UI Basic:     Column · Row · Text · Image · Button · Card · ActionGroup
+                SectionEditor · DecisionDialog · ConsoleCardGrid
+                CompiledOutput · ChatPanel
+Workspace:      workspace-layout · prompt-section-editor · compiled-output-viewer
+                chat-panel · version-trace · token-cost-readout · status-readout
+                output-panel · search-bar · filter-pill · footer-bar
+                chat-navigation-bar · agent-card · featured-card
+                prompt-section · add-section-button
+```
 
-- No `useTabGate`, no `handleTabChangeWithGate`, no `room-handoff-cover` anywhere in the code.
-- No design tree, renderer, preview, surface hook or width effect in the shell. The Design tab is a
-  `DesignBox` mount and nothing else.
-- The typecheck is zero.
+---
 
-#### Stale or dead, and therefore a finding
+## Tech Stack
 
-- `assembleGovernanceSurface` is no longer in the shell. On 2026-10-24 it moved with its tree and
-  its dead renderer effect to `rooms/governance/useGovernanceSurface.ts`, the room's own door. It
-  is still not called; the application's own loader is the room's opening.
-- The `data-room-root` markers in `ProductRoom`, `DevelopmentRoom`, `ConsoleBox` and `DesignBox`
-  have **no reader** now that the gate is deleted. They were the gate's contract. Keep the keys;
-  the markers are inert and should be removed with each room's next cut or kept only as a naming
-  convention, stated once.
-- The `rooms/product/README.md` still lists `useProductGate.ts`, `useGuardProductExit.ts` and
-  `useDiscardProductProject.ts`, which are gone. The room's docs are part of the audit's cleanup.
+| Layer | Technology |
+|-------|-----------|
+| **Frontend** | React 18 + Lit 3.x (hybrid) · Vite · npm · Tailwind · TypeScript |
+| **Backend** | FastAPI · PostgreSQL 15 · Zilliz Cloud (Milvus) · LLM providers (Z.ai GLM primary, DeepSeek) |
+| **Components** | Lit Web Components (Shadow DOM) · Figma API spec-driven |
+| **Deploy** | Docker · Northflank (us-central) · Cloudflare Tunnel |
 
-### The shared and external dependencies, by box
+---
 
-| box | its own files | shared structural file | shared behavior | external or cross-room |
-| --- | --- | --- | --- | --- |
-| Product | `product-workspace` (2,211), `product-chat-panel`, `ProductBox`/container | none for the wrapper; the shared chat parts are drawings | `room-embed` in the middle; the card door | the builder frame; `useOpenCardFromConsole` |
-| Console | `console-chat-panel`, `ConsoleBox`/container | `workspace-layout` (shared) | the shared `assembleSurfaceThenRepairs`, the failure flags, the card door | the card door; the Composer's shared assembly |
-| Design | `design-chat`, `design-renderer`, `DesignBox`/container, `tools`, `ux` | `workspace-layout` (shared) | `actionLink`/`promptSections` still imported by `design-chat`; shared chat parts | `tools-tab`/`figma-*`; `ux-app-frame`; the PostHog app; the card door |
-| Governance | `governance-chat-panel`, `GovernanceRoom` | `workspace-layout` (shared, used directly in `GovernanceRoom.tsx:125`) | the shell's `useGovernanceChrome`/`useGovernanceRoom` and trace effects; the evals seat | the embedded application; `evals-mount` |
-| Development | `DevelopmentRoom`, `useDevelopmentRoom` | `workspace-layout` (shared, used directly in `DevelopmentRoom.tsx:45`) | **the shared `<chat-panel>`**; the shell calls its hook | the builder frame |
-| Composer | the shell's own room | `workspace-layout` (shared) | **the shared `<chat-panel>`**; `actionLink`/`promptSections`; the assembly | none; it is the shell's default room |
+## Repository Layout
 
-The shared parts the seats import — `chat-header`, `chat-messages`, `chat-input`,
-`chat-action-bar`, `chat-navigation-bar`, the folds — are **drawings** and stay shared. The seat
-file is the behavior and must be the room's. The table shows where that rule is met and where it is
-not.
+```
+backend/
+├── main.py              # App setup, startup, router includes
+├── deps.py              # A2UI catalog loader, shared helpers
+├── services.py          # Database service startup
+├── figma_service.py     # Figma API → Lit spec extractor
+├── grace_gui.py         # AI system prompts & assembly logic
+└── routes/              # 11 topic routers
+    ├── ai.py                # Manifest, assemble-surface, save, audit
+    ├── conversations.py    # Conversation + message CRUD
+    ├── prompt_sessions.py  # Packages, versions, permissions
+    ├── projects.py         # Project CRUD
+    ├── memory.py           # Memory storage (dictation)
+    ├── figma.py            # Figma API proxy
+    ├── milvus.py           # Zilliz/Milvus vectors
+    ├── agent_rpc.py        # JSON-RPC 2.0 agent integration
+    ├── teacher.py          # Teacher query, model ensure
+    ├── misc.py             # Health, news, PDF, reasoning
+    └── files.py            # Documentation file I/O
 
-### The `workspace` finding — the global wrapper
+frontend/
+├── src/
+│   ├── App.tsx              # Root app with routes
+│   ├── components/
+│   │   ├── A2UI/            # A2UI surface container
+│   │   └── lit/             # Lit web components (agent-card, workspace-layout, …)
+│   ├── pages/               # WritingAreaIndex (main surface)
+│   ├── hooks/               # React hooks
+│   └── shared/              # Surface contract, tag registry
+└── scripts/                  # Manifest generator, Figma sync
+```
 
-This is the file the owner remembers.
+---
 
-- `frontend/src/components/lit/workspace-layout.ts` — 2,211 lines. It owns the three-column split,
-  the pane widths, `isThirdOpen`, `chatLoadWidth`, `splitEqually`, the grips, the collapse and the
-  right column's over-state.
-- `frontend/src/rooms/product/product-workspace.ts` — 2,211 lines, the exact copy under the room's
-  own tag. `ProductRoom.tsx` imports it and mounts `<product-workspace>`. Product is insulated.
-- Development and Governance mount the shared `<workspace-layout>` directly. Design and the Console
-  receive it through their surfaces; the Composer receives it through the sandbox. Their surface
-  roots name the shared tag, and their rooms write its properties:
-  - Product: `chatLoadWidth = 600`, `isThirdOpen = true` (`ProductRoomContainer.tsx:123–124`).
-  - Development: `isThirdOpen = false` (`useDevelopmentRoom.ts:46`).
-  - Governance: `isThirdOpen = false` (`useGovernanceRoom.ts:47–48`).
-  - Design: the tree root carries `isThirdOpen: true` (`DesignSeatShell.tsx:315–318`).
-  - Console: the console's tree root carries `isThirdOpen: false`.
-  - Composer: the shell writes `chatLoadWidth = 650` and calls `splitEqually` on the shared layout.
+## Quick Start
 
-One class, six rooms. A change to the shared file changes every tab's wrapper at once. The Product
-copy is the proof that the room can own it. This is the nightmare the owner named, and it is still
-in place for five of the six rooms.
+```bash
+# Frontend build (required for local dev)
+cd frontend && npm install && npm run build
 
-The audit's recommendation:
+# Start backend + serve UI
+bash RESTART-LOCAL.sh
 
-- **Every sovereign room owns its wrapper.** Copy `workspace-layout.ts` into the room under the
-  room's tag (`design-workspace`, `console-workspace`, `governance-workspace`,
-  `development-workspace`), exactly as Product did. The room's tree maps the catalog's trusted
-  `workspace-layout` name to the room's tag at the room boundary, the same way `chat-panel` is
-  mapped to `design-chat`. The server and the catalog do not change; the client resolves the name
-  to the room's element.
-- **The Composer keeps the shared layout until it becomes a room.** The shared file is the
-  Composer's own wrapper and the source from which the copies are made.
-- **The trade is recorded:** each copy is 2,211 lines and must be kept in step for a shared drawing
-  fix. The owner's priority is sovereignty over deduplication; Product already accepted the cost.
-  If the duplication becomes the problem, the next step is to split the shared file into a
-  drawing-only base and a room wrapper; that is a later cut, not this one.
+# Open
+open http://localhost:5001
+```
 
-The first cut is Design: `rooms/design/design-workspace.ts` as the copy, the design tree mapped to
-it, the design's chat width and column state written on the room's element. Then the Console, the
-Governance room and the Development room. The Composer is last.
+- **Health:** `GET /api/health` → `{"database":"connected","milvus":"connected"}`
+- **Dev PIN:** `7377`
+- **Dev mode:** global no-cache middleware — no stale bytes
 
-### The seats
+---
 
-- Product, Console, Design and Governance each draw their own seat file. That is correct.
-- Development draws the shared `<chat-panel>`; it is not a full sovereign box yet. Its own room
-  folder has the package and the rail list, but the seat is shared. It needs its own copy before it
-  can be called sovereign.
-- The Composer draws the shared `<chat-panel>`; it is the shared seat's owner until the Composer
-  leaves the shell.
-- The Design seat is its own file, but it still imports the Composer's writing acts
-  (`parseWriteSeatAction`, `parseRunAction`, `parseSaveAction`, `parseSetTitleAction` and the rest
-  from `shared/actionLink`, plus `shared/promptSections`). That is shared **behavior**, not a
-  drawing. The Console copy severed it; the Design copy still carries it. This is the Stage 5 cut
-  in the Design plan, and the audit confirms it is still present.
+## Deployment
 
-### The shared drawings and the external applications
+Docker on **Northflank** (`prompt-composer-console`, us-central). Production deploys via git push to `main` (CI/CD) or the local `DEPLOY-NORTHFLANK.sh` runbook. The image is a **multi-stage build**: the frontend compiles inside a Node stage (including manifest generation), so no build artifacts live in the repository.
 
-- `a2ui-renderer.ts`, `tag-registry.ts` and the catalogues are the shared drawing contract. They are
-  unavoidable for an A2UI surface. The room's boundary must map a trusted catalog name to the
-  room's own element when the room owns that element; a change to the resolver or the catalog can
-  affect every room, so a resolver change is audited like a shared drawing change.
-- `room-embed.ts` (626 lines) is the shared embed for the flow/canvas; the Product, Console and
-  Design chat panels use it, and the Composer's middle uses it. It is a drawing with slots, but a
-  change reaches all three rooms. Keep it in the audit's shared list; a room that needs different
-  behavior gets its own copy.
-- `builder-embed` (the builder), `ux-app-frame`/`posthog-master` (the analytics application) and the
-  Development app are external applications behind frames. They are not frontend state owners. The
-  PostHog app is framed at `/posthog`; nothing imports its code.
-- `shared/arrival`, `shared/autoAdvice`, `shared/error-registry`, `shared/uxCapture`,
-  `conversationStorage`, `apiHelper` and `authService` are generic infrastructure. They are
-  allowed; each room imports them directly and none of them owns a room's structure.
-- `shared/actionLink` and `shared/promptSections` are the Composer's acts. A room seat that still
-  imports them is carrying the Composer's behavior. The Design seat does; the Console seat does
-  not; the Product and Governance seats are checked in their own cuts; the Development shared seat
-  carries them by definition.
-- `useOpenCardFromConsole`, `evals-mount` and the named window events (`navigate-console`,
-  `navigate-tab`, `open-console`, `design-tools-open`, `a2ui:composer-opened`) are **cross-room
-  doors**. They are allowed only when they are explicit, one-way and named. They are the seams the
-  boxes use to reach each other; they are not a room's private state.
-
-### What the shell still keeps that it should not
-
-- The development room's hook call and refs. The hook lives in the room folder; the room can call
-  it. The current plan is [rooms/development/PLAN-sovereign-development.md](frontend/src/rooms/development/PLAN-sovereign-development.md).
-- The Product card action and the shared draft/chat helpers passed into `ProductBox`.
-- The Console's assembly, failure flags and tree boundary, shared with the Composer.
-- The Composer itself, which is the shell's default room and the owner of the shared seat/layout.
-- The shell's A2UI sandbox. It is a temporary host, not a room. After Development leaves it, only
-  the Composer mounts it; the Composer's box deletes it entirely.
-
-### The next cuts, in order
-
-1. The small corrections: the dead `data-room-root` markers and the stale Product README.
-2. The Governance block is moved (2026-10-24): the room owns its box, container and traces.
-3. The Development room: the [sovereign Development plan](frontend/src/rooms/development/PLAN-sovereign-development.md)
-   moves its ground, refs, hook and sandbox arm out, then gives it its own wrapper and seat.
-4. The Product and Console boundaries: the card door, the shared assembly and the failure flags.
-5. The Composer: the last room. Its box deletes the A2UI sandbox, its slot routing,
-   `SELF_GATED_ROOMS` and the shared assembly; the shell becomes navigation only.
-6. In parallel, the room wrappers: Design first (`design-workspace`), then Console, Governance and
-   Development. The Composer keeps the shared layout.
-
-### The rule this audit leaves behind
-
-A sovereign box owns its ground, its wrapper, its gate, its seat, its conversations and its
-loading. It may use the catalog's drawings and the app's generic infrastructure. It may not use a
-shared file that owns its structure, its state or its behavior. A cross-room door is named and
-one-way. The shell is navigation and the rooms it mounts; everything else is a finding.
-
+---
 
 ## Documentation
 
-- [Sovereign shell audit](#sovereign-shell-audit-2026-10-24) — the shell and shared-dependency check
-- [`AGENTS-instructions/THE_METHOD.md`](AGENTS-instructions/THE_METHOD.md) — Live-verification design engineering: the working doctrine
-- [`AGENTS-instructions/READ-ME/A2UI_TRUE_VS_FAKE_AUDIT.md`](AGENTS-instructions/READ-ME/A2UI_TRUE_VS_FAKE_AUDIT.md) — Live-verified compliance ledger
-- [`CHANGELOG.md`](CHANGELOG.md) — Release history (includes the DeepSeek restoration battle)
-- [`SECURITY-AND-COMPLIANCE.md`](SECURITY-AND-COMPLIANCE.md) — The compliance gate and its limits
-- [`USER-FLOW.md`](USER-FLOW.md) — The journey the gate governs
+- [`Core-Concept.md`](AGENTS-instructions/Core-Concept.md) — the A2UI operating rules: the architecture facts, the three layers and the component rules
+- [`THE_METHOD.md`](AGENTS-instructions/THE_METHOD.md) — live-verification design engineering: the working doctrine
+- [`THE_ZERO_TRUST_REPAIR.md`](AGENTS-instructions/THE_ZERO_TRUST_REPAIR.md) — the zero-trust repair record, written from measurements
+- [`CHANGELOG.md`](frontend/src/rooms/design/CHANGELOG.md) — the Design room's record: the current work, the audit and the repair plan
+- [`THE_CONVERSATION_CONTRACT.md`](AGENTS-instructions/THE_CONVERSATION_CONTRACT.md) — how the chat and the console behave, as invariants
 
-> The documents above are the ones that exist in this repository.
+---
+
+## Roadmap
+
+- **Phase 3:** Generic adjacency-list renderer + JSON Pointer data binding
+- **Phase 4:** Remaining docs cleanup, advanced contributor workflows
 
 ---
 
