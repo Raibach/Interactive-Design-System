@@ -72,6 +72,39 @@ TABLE_DEFINITIONS = {
             created_at TIMESTAMP DEFAULT NOW()
         )
     """,
+    'surface_turns': """
+        CREATE TABLE IF NOT EXISTS surface_turns (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            message_id UUID REFERENCES conversation_messages(id) ON DELETE CASCADE,
+            conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+            package_id UUID,
+            plan JSONB NOT NULL DEFAULT '{}',
+            shown_ids TEXT[] NOT NULL DEFAULT '{}',
+            namespace VARCHAR(40) NOT NULL DEFAULT 'console',
+            model_version VARCHAR(40) NOT NULL,
+            eligibility_version VARCHAR(40) NOT NULL,
+            origin VARCHAR(16) NOT NULL DEFAULT 'turn' CHECK (origin IN ('turn', 'refresh')),
+            shown_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    """,
+    'surface_actions': """
+        CREATE TABLE IF NOT EXISTS surface_actions (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            surface_turn_id UUID NOT NULL REFERENCES surface_turns(id) ON DELETE CASCADE,
+            item_id TEXT NOT NULL,
+            action VARCHAR(40) NOT NULL,
+            actor UUID NOT NULL,
+            result JSONB NOT NULL DEFAULT '{}',
+            at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE (surface_turn_id, item_id, action)
+        )
+    """,
+    'surface_settings': """
+        CREATE TABLE IF NOT EXISTS surface_settings (
+            conversation_id UUID PRIMARY KEY REFERENCES conversations(id) ON DELETE CASCADE,
+            retention INT NOT NULL DEFAULT 50 CHECK (retention > 0)
+        )
+    """,
     'user_memories': """
         CREATE TABLE IF NOT EXISTS user_memories (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1083,6 +1116,9 @@ INDEX_DEFINITIONS = [
     "CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations(user_id, updated_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_conversations_project ON conversations(project_id)",
     "CREATE INDEX IF NOT EXISTS idx_messages_conversation ON conversation_messages(conversation_id, created_at)",
+    # ONE TURN SET PER MESSAGE; refresh sets are exempt and supersede by shown_at.
+    "CREATE UNIQUE INDEX IF NOT EXISTS surface_turns_one_turn_per_message ON surface_turns (message_id) WHERE message_id IS NOT NULL AND origin = 'turn'",
+    "CREATE INDEX IF NOT EXISTS surface_turns_active ON surface_turns (conversation_id, shown_at DESC, id DESC) WHERE message_id IS NOT NULL",
     "CREATE INDEX IF NOT EXISTS idx_user_memories_user ON user_memories(user_id, created_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_prompt_sessions_user ON prompt_sessions(user_id)",
     "CREATE INDEX IF NOT EXISTS idx_prompt_versions_session ON prompt_versions(session_id, version_number)",

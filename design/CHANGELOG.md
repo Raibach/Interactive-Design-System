@@ -1469,3 +1469,18 @@ the empty newest beside eight others added no introduction.
 both written by the repeated-greeting bug before the gate existed. The seat loads that conversation;
 it does not insert a third. Deleting the conversation is the clean route: the next press creates one
 and introduces her once.
+
+
+---
+
+## 2026-11-10 — the console adopts this seat's conversation card
+
+The main console's Chat conversation card now uses the Design seat's conversation furniture rather
+than a console-only list box: the design header structure (`design-chat-header.ts`), the design
+chat template's `data-slot="conversations"` / `?open` block, and the conversation-list / new-button
+styles from `design-chat.styles.ts`. The console part is a retagged copy; this seat's code is
+unchanged. The console changelog records the browser verification and the later flat-row,
+pointer/click/drag fixes.
+
+The Design plans and changelog were restored to this folder; no plan was deleted or moved in this
+change.

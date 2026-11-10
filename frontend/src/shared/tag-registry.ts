@@ -894,6 +894,13 @@ export const TAG_REGISTRY = {
       graceLiveContext: { type: 'boolean', optional: true },
       /** THE LIBRARY — every prompt package, bound to /cards. */
       consoleCards: { type: 'array', optional: true },
+      /** The tools the greeting may offer, bound to /console/tools. Each entry is
+       *  {token, label, description}; the seat draws one action button per entry. */
+      consoleTools: { type: 'array', optional: true },
+      /** Each tab's own conversation, bound to /console/tab_conversations. */
+      tabConversations: { type: 'object', optional: true },
+      /** The plan the column is showing, bound to /console/query. */
+      consoleQuery: { type: 'object', optional: true },
       /** The Console's conversations, bound to /console/conversations. */
       conversations: { type: 'array', optional: true },
       /** The Console's rail: chat, eval, tools, approvals, settings. */

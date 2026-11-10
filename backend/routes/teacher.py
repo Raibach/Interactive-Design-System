@@ -10,6 +10,7 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import AliasChoices, BaseModel, Field
 
 import services as state
+import test_harness
 from deps import (
     get_user_id_from_header,
 )
@@ -66,6 +67,11 @@ class TeacherQueryRequest(BaseModel):
     # So the fact travels with the call, and the write below honours it. Her REPLY is still
     # recorded — she did say that, and the thread is where a person reads it back.
     person_turn: bool = True
+    # THE SEAT HAS ALREADY WRITTEN THIS PERSON'S TURN. The console's tab search writes the
+    # user row first so the search set can be recorded inline with the message id; the
+    # teacher must answer without writing it a second time. The row is still the person's
+    # (person_turn stays true); only the write is skipped.
+    user_turn_written: bool = False
     # The prompt package's title, sent by the Run so its fresh conversation can be
     # named after it (see the run-conversation block below). Absent on chat turns.
     run_title: str | None = Field(None, validation_alias=AliasChoices("run_title", "runTitle"))
@@ -487,14 +493,20 @@ async def api_teacher_query(
         # written as something the person said — see the field's own note. Her reply is.
         persist_turn = request.mode == "chat"
         if state.conversation_api and conv_id and persist_turn and request.person_turn:
-            try:
-                state.conversation_api.add_message(conv_id, uid, "user", request.question)
-            except Exception as e:
-                persistence_error = f"Your message could not be written to this package's conversation: {e}"
-                print(f"❌ Failed to save user message: {e}")
-            else:
-                # THE ROW IS NAMED BY WHAT THE PERSON SAID, the same turn that was just written.
+            if request.user_turn_written:
+                # The console's search turn was written before the cards-only search so that
+                # search set could carry the real message id. Name the row; do not write it again.
                 _name_conversation_if_unnamed(state.conversation_api, conv_id, uid, request.question)
+            else:
+                try:
+                    test_harness.maybe_fail("user")
+                    state.conversation_api.add_message(conv_id, uid, "user", request.question)
+                except Exception as e:
+                    persistence_error = f"Your message could not be written to this package's conversation: {e}"
+                    print(f"❌ Failed to save user message: {e}")
+                else:
+                    # THE ROW IS NAMED BY WHAT THE PERSON SAID, the same turn that was just written.
+                    _name_conversation_if_unnamed(state.conversation_api, conv_id, uid, request.question)
         elif state.conversation_api and conv_id and persist_turn:
             print(
                 f"ℹ️  the app asked for this turn (person_turn=false): Grace is opening the "
@@ -798,6 +810,7 @@ async def api_teacher_query(
         clean_verdict = request.run_review and bool(re.search(r"<run_ok\s*/>", result or ""))
         if state.conversation_api and conv_id and request.mode == "chat" and not clean_verdict:
             try:
+                test_harness.maybe_fail("assistant")
                 state.conversation_api.add_message(conv_id, uid, "assistant", result)
             except Exception as e:
                 persistence_error = f"This reply could not be written to this package's conversation: {e}"

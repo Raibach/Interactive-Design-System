@@ -22,10 +22,14 @@ export function useConsoleRoomState() {
     ? (consoleTree.dataModel.cards as any[])
     : null;
 
+  /* WHAT THE SURFACE SAYS IT IS SHOWING — the plan, its count, and the recorded turn id. */
+  const assembledConsoleQuery = (consoleTree.dataModel as any)?.console?.query ?? null;
+
   return {
     consoleTree,
     setConsoleTree,
     consoleRendererRef,
     assembledConsoleCards,
+    assembledConsoleQuery,
   };
 }

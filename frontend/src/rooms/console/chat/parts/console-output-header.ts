@@ -1,0 +1,317 @@
+/**
+ * HEADER — its Default is the readout card's 55px, set below.
+ * console-output-header — THE READOUT BLOCK, ABOVE THE CONVERSATIONS BAR.
+ *
+ * Figma: `40001119-6308`, re-imported 2026-09-20 from the design.
+ *
+ * THE LAYERS, by the name the designer has on them TODAY:
+ *
+ *   40001119:6308  console-output-header               540×83   column  HUG/HUG  gap 5  pad 16/20/0/20
+ *                                                        #CBE6E3  primary CENTER
+ *   40001119:6309  chat-output-readout-area    500×55   row  HUG/FIXED  gap 10  pad 7/10
+ *                                                        rgba(117,142,135,0.35)  1px INSIDE
+ *                                                        rgba(117,142,135,0.5)  radius 8
+ *                                                        2 INNER_SHADOWs — inset 0 -2 5
+ *                                                        rgba(0,0,0,0.15), inset 0 2 4
+ *                                                        rgba(0,0,0,0.25)
+ *   40001123:6763  textarea                    450×40   row  FIXED/FIXED  gap 10  counter CENTER
+ *   40001123:6750  the text in it              450×43   Arial Rounded MT Bold 400 12px  lh 20px
+ *                                                        #3D515B  LEFT / CENTER
+ *   40001124:7096  model-readout-tokens-etc    20×20    FIXED/FIXED  — the mark
+ *   40001123:6773  gripper-prompt-input-chat-menu  500×7  row FILL/FIXED gap 10 pad 0/10 CENTER
+ *   40001123:6774  Meatballs                   480×4.05 row FILL/HUG gap 4 pad 1/2 CENTER
+ *   40001123:6775-6779  Ellipse 209/210/207/206/208  2.16×2.05  2px rgba(147,58,69,0.5)
+ *
+ * RENAMED SINCE THE LAST DRAW, same node ids: `output-header-area` → `console-output-header`, and
+ * `chat-output-header` → `chat-output-readout-area`. A rename is the same layer with a new
+ * label, so the ids held and only the names moved — which is why the names lead here.
+ *
+ * This element replaces the one deleted at the owner's instruction, and it is drawn ABOVE the
+ * conversations bar (`output-conversations-area`, 40001119:6317) — the drawing stacks the
+ * readout first, then conversations, then approvals, then the response card.
+ */
+import { LitElement, html, css } from 'lit';
+import modelMark from '@/assets/figma-readout-model-mark.svg';
+import { figureStyles, figures } from '@/shared/figures';
+
+export class OutputHeader extends LitElement {
+  /** The status line. Empty draws the drawing's own sample. */
+  declare line: string;
+  /** Whether the seat could attribute this conversation. False reads "unattributed". */
+  declare attributed: boolean;
+  declare tokens: string;
+  declare calls: string;
+  /**
+   * THE HOST HAS FILLED THE READOUT (owner, 2026-10-13 late — the trace seat's facts
+   * live in THIS bar: *"That header information doesn't go there. It goes here"*).
+   * When true the built-in line (and its drawing sample) steps aside and the slotted
+   * content draws in the line's place; the mark stays. False = every other room, which
+   * draws the line exactly as before.
+   */
+  declare readoutFilled: boolean;
+  /** The readout is opened by a press: the box grows to the full readout height. */
+  private _expanded = false;
+
+  static properties = {
+    line: { type: String },
+    attributed: { type: Boolean },
+    tokens: { type: String },
+    calls: { type: String },
+    readoutFilled: { type: Boolean, attribute: 'readout-filled' },
+  };
+
+  static styles = [figureStyles, css`
+    /* 40001119:6308 "console-output-header" — 540 wide, HUG/HUG, column, gap 5, pad 16/20/0/20,
+       #CBE6E3, primary CENTER (the blocks centre across the column). */
+    :host {
+      display: block;
+    }
+    .area {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      padding: 16px 20px 0 20px;
+      background-color: #CBE6E3;
+      box-sizing: border-box;
+    }
+
+    /* 40001119:6309 "chat-output-readout-area" — 500×55, row, HUG/FIXED, gap 10, pad 7/10,
+       rgba(117,142,135,0.35), 1px INSIDE rgba(117,142,135,0.5), radius 8, and the two
+       INNER_SHADOWs the drawing sets on this layer. */
+    .readout-area {
+      display: flex;
+      flex-direction: row;
+      /* THE TEXT SITS AT THE TOP (owner, 2026-10-31). One line at rest, taller once dragged —
+         centring put that line in the middle of an open box. */
+      align-items: flex-start;
+      gap: 10px;
+      align-self: stretch;
+      /* THE BOX IS THE DRAWN BOX: its minimum height is 55px, and the text is cut at two lines
+         with an ellipsis. The grip belongs to the chat slot below, not to this box; nothing here
+         resizes the readout. */
+      height: 55px;
+      min-height: 55px;
+      overflow: hidden;
+      padding: 7px 10px;
+      background-color: rgba(117, 142, 135, 0.35);
+      border: 1px solid rgba(117, 142, 135, 0.5);
+      border-radius: 8px;
+      box-shadow: inset 0px -2px 5px 0px rgba(0, 0, 0, 0.15), inset 0px 2px 4px 0px rgba(0, 0, 0, 0.25);
+      box-sizing: border-box;
+    }
+
+    /* 40001123:6763 "textarea" — 450×40, row, gap 10, counter CENTER. The box holds the
+       real readout; its height is the rows' own. */
+    .textarea {
+      display: flex;
+      flex-direction: row;
+      align-items: flex-start;
+      gap: 10px;
+      flex: 1 1 auto;
+      min-width: 0;
+      height: auto;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    /* THE HOST'S STRIP TAKES THE LINE'S PLACE (see readoutFilled). The slot itself
+       renders always — a slot that does not exist cannot receive — and the line hides
+       only when the seat says the strip is slotted. */
+    .readout-area.filled .textarea {
+      display: none;
+    }
+    /* AND THE BOX GROWS TO HOLD IT (owner, 2026-10-13 late: *"Maybe you should expand
+       that box and let all that information sit there visibly — we'll discuss truncation
+       later."*). The drawing's fixed 55px is the ONE-LINE bar's number; a host strip
+       that wraps to more rows pushes the box taller instead of spilling out of it.
+       The collapse/expand mechanics (the meatball grip under this bar) are future work,
+       on the owner's word. */
+    .readout-area.filled {
+      height: auto;
+      min-height: 55px;
+    }
+    /* THE HOST'S STRIP FILLS THE BAR AND STARTS AT ITS LEFT EDGE (owner, 2026-10-27: *"it's got a
+       margin on the left-hand side. It's not laying out properly in that header"*). The slotted
+       strip was shrink-wrapping and sitting in the middle of the bar, so a landing readout drew a
+       narrow column in the centre with empty space beside it. It now takes the whole area between
+       the bar's own padding and its trailing mark, and its text starts at the left. */
+    .readout-area ::slotted(*) {
+      flex: 1 1 auto;
+      min-width: 0;
+      text-align: left;
+    }
+    /* THE SLOT'S OWN PRESSES DO NOT REACH THE READOUT. */
+    .slot { display: contents; }
+    .readout-area {
+      justify-content: flex-start;
+    }
+
+    /* 40001123:6750 — the line: Arial Rounded MT Bold 400 at 12, 20px leading, #3D515B, in its
+       box. The text box is 450×43 against the 450×40 frame above it — the drawing's geometry.
+       Drawn in Nunito, per the owner's face ruling, 2026-10-07 (the drawing's Arial Rounded ->
+       Nunito); the line's figures render Inter via the figures helper. */
+    .line {
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
+      font-weight: 500;
+      font-size: 12px;
+      line-height: 20px;
+      color: #3D515B;
+      text-align: left;
+      margin: 0;
+      flex: 1 1 auto;
+      min-width: 0;
+      /* THE LINE'S OWN NEWLINES ARE REAL ROWS: the readout is several figures on several lines,
+         not one run-on sentence. */
+      white-space: pre-line;
+      /* TWO LINES, AND AN ELLIPSIS. The readout is a fixed two-line box; the grip below belongs
+         to the chat slot, not to this text. */
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    /* THE DRAG LIFTS THE TWO-LINE CUT. The frame writes the box's height on the first drag; from
+       that moment the line is no longer clamped, so the drag reveals the rest of the readout. */
+    .readout-area[style*="height"] .line {
+      display: block;
+      -webkit-line-clamp: unset;
+      overflow: visible;
+    }
+    /* THE PRESS OPENS THE BOX TO THE FULL READOUT HEIGHT. */
+    .readout-area.open {
+      height: auto;
+    }
+    .readout-area.open .line {
+      display: block;
+      -webkit-line-clamp: unset;
+      overflow: visible;
+    }
+
+    /* 40001124:7096 "model-readout-tokens-etc" — 20×20, FIXED/FIXED. */
+    .mark-box {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      flex: 0 0 auto;
+    }
+    .mark-icon { display: block; }
+
+    /* THE GRIPPER'S VISIBLE HANDLE — the five dots the person sees and takes hold of. The frame
+       wires the drag on this band; the dots are the affordance, not decoration. */
+    /* 40001123:6773 — the gripper: 500×7, row, FILL/FIXED, gap 10, pad 0/10, CENTER. */
+    .gripper {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      align-self: stretch;
+      height: 7px;
+      padding: 0 10px;
+      box-sizing: border-box;
+    }
+    /* 40001123:6774 "Meatballs" — 480×4.05, row, FILL/HUG, gap 4, pad 1/2, CENTER. */
+    .meatballs {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 1px 2px;
+      flex: 1 1 auto;
+      box-sizing: border-box;
+    }
+    /* 40001123:6775-6779 — five dots: 2.16×2.05, a 2px stroke at rgba(147,58,69,0.5). */
+    .dot {
+      display: block;
+      width: 2.16px;
+      height: 2.05px;
+      border: 2px solid rgba(147, 58, 69, 0.5);
+      border-radius: 50%;
+      box-sizing: border-box;
+    }
+  `,
+  ];
+
+  /** The drawing's own line (#40001123:6750), when the seat hands none. */
+  private static readonly SAMPLE =
+    'Analyzing: Session 222 | support Customer Session Duration: 28.495s Closed QA: 89.38% Sample text';
+
+  /** Data: the seat's status, and the usage figures it is handed. Failure: unattributed. */
+  private get _line(): string {
+    const parts = [this.line?.trim() || OutputHeader.SAMPLE];
+    if (this.tokens !== undefined) {
+      parts.push(`Tokens: ${this.attributed ? (this.tokens || '0') : 'unattributed'}`);
+      if (this.calls) parts.push(`Calls: ${this.attributed ? this.calls : 'unattributed'}`);
+    }
+    return parts.join('\n');
+  }
+
+  /**
+   * THE BOX OPENS ON A PRESS — the full readout height. A second press closes it. The frame also
+   * wires this face to reset the box; this press stops that one so the click and the drag are the
+   * two ways to the same result, and neither removes the other.
+   */
+  private _onReadoutClick = (e: Event): void => {
+    e.stopImmediatePropagation();
+    const area = this.renderRoot?.querySelector('.readout-area') as HTMLElement | null;
+    /* The drag writes an inline height; a press takes the box back to its own full height. */
+    if (area) {
+      area.style.height = '';
+      area.style.flex = '';
+    }
+    this._expanded = !this._expanded;
+    this.requestUpdate();
+  };
+
+  render() {
+    return html`
+      <div class="area" data-node-id="40001119:6308" data-layer-name="console-output-header">
+        <div
+          class="readout-area ${this.readoutFilled ? 'filled' : ''} ${this._expanded ? 'open' : ''}"
+          data-node-id="40001119:6309"
+          data-layer-name="chat-output-readout-area"
+          @click=${this._onReadoutClick}
+        >
+          <div class="textarea" data-node-id="40001123:6763" data-layer-name="textarea">
+            <p class="line" data-node-id="40001123:6750" data-layer-name="Analyzing: Session 222 | support Customer Session Duration: 28.495s Closed QA: 89.38% Sample text">${figures(this._line)}</p>
+          </div>
+          <!-- THE HOST'S DOOR INTO THE READOUT (owner, 2026-10-13 late — the trace facts
+               strip goes HERE, this bar; see readoutFilled). Empty in every room that
+               does not fill it — the slot then draws nothing and the line above stands. -->
+          <slot name="readout-content"></slot>
+          <div class="mark-box" data-node-id="40001124:7096" data-layer-name="model-readout-tokens-etc">
+            <img
+              class="mark-icon"
+              data-node-id="40001124:7442"
+              data-layer-name="model-icon"
+              src=${modelMark}
+              alt=""
+            />
+          </div>
+        </div>
+        <div class="gripper" data-node-id="40001123:6773" data-layer-name="gripper-prompt-input-chat-menu" aria-hidden="true">
+          <div class="meatballs" data-node-id="40001123:6774" data-layer-name="Meatballs">
+            <span class="dot" data-node-id="40001123:6775" data-layer-name="Ellipse 209"></span>
+            <span class="dot" data-node-id="40001123:6776" data-layer-name="Ellipse 210"></span>
+            <span class="dot" data-node-id="40001123:6777" data-layer-name="Ellipse 207"></span>
+            <span class="dot" data-node-id="40001123:6778" data-layer-name="Ellipse 206"></span>
+            <span class="dot" data-node-id="40001123:6779" data-layer-name="Ellipse 208"></span>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+}
+
+if (!customElements.get('console-output-header')) customElements.define('console-output-header', OutputHeader);
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'console-output-header': OutputHeader;
+  }
+}

@@ -39,6 +39,8 @@ interface ConsolePageProps {
   onCreateNew?: (title: string) => void;
   refreshKey?: number;
   aiAssembledCards?: any[] | null;
+  /** The surface's own statement of what it shows — its plan and the recorded turn id. */
+  consoleQuery?: Record<string, any> | null;
   isParentLoading?: boolean;
   errorMessage?: string | null;
   /** The classified failure, when the shell has one. Adds code / pointer / fix / detail. */
@@ -50,6 +52,7 @@ export default function ConsolePage({
   onOpenPrompt,
   onCreateNew,
   aiAssembledCards = null,
+  consoleQuery = null,
   isParentLoading = false,
   errorMessage = null,
   errorReport = null,
@@ -67,9 +70,9 @@ export default function ConsolePage({
   // inline handler on every render — and the one that matters reads the OPEN session.
   // A ref holds the current handler so the listener never calls the one from the first
   // render, which would have opened against stale state.
-  const liveHandlers = useRef({ onOpenPrompt });
+  const liveHandlers = useRef({ onOpenPrompt, consoleQuery });
   useEffect(() => {
-    liveHandlers.current = { onOpenPrompt };
+    liveHandlers.current = { onOpenPrompt, consoleQuery };
   });
 
   useEffect(() => {
@@ -79,6 +82,19 @@ export default function ConsolePage({
       const sessionId = (e as CustomEvent).detail?.sessionId;
       if (typeof sessionId === 'string' && UUID_RE.test(sessionId)) {
         console.log('[ConsolePage] card-open:', sessionId);
+        /* THE PRESS IS AN OUTCOME, RECORDED BESIDE THE READ (Phase 4). The card still opens if
+           the record fails; the failure is logged, and the set's own record is what QA checks. */
+        const turnId = String(liveHandlers.current.consoleQuery?.turn_id || '');
+        if (turnId) {
+          void fetch('/api/console/actions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-User-ID': getStoredUserId(),
+            },
+            body: JSON.stringify({ surface_turn_id: turnId, item_id: sessionId, action: 'open' }),
+          }).catch((error) => console.error('[console] the open was not recorded:', error));
+        }
         liveHandlers.current.onOpenPrompt?.(sessionId);
       }
     };

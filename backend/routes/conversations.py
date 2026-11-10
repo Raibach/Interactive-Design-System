@@ -25,6 +25,10 @@ class CreateConversationRequest(BaseModel):
     session_id: str
     title: str | None = None
     metadata: dict | None = None
+    # WHICH TAB'S THREAD THIS IS. The console's tabs are consoles, not views: chat, tools and
+    # approvals each keep their own row under the one console package (conversations.tab).
+    # A caller that names none keeps the schema's own default, "chat".
+    tab: str = "chat"
 
 
 class UpdateConversationRequest(BaseModel):
@@ -161,6 +165,7 @@ async def create_conversation(
             title=request.title,
             metadata=request.metadata,
             session_id=request.session_id,
+            tab=request.tab,
         )
         return {"id": conversation_id, "success": True}
     except HTTPException:

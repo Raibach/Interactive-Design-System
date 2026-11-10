@@ -1333,6 +1333,18 @@
           "type": "object",
           "description": "THE LIBRARY, a binding: {path: /cards}, to the same list ConsoleCardGrid draws. This is what she searches, filters, sorts and organises."
         },
+        "consoleTools": {
+          "type": "object",
+          "description": "THE TOOLS THE GREETING MAY OFFER, a binding: {path: /console/tools}. Each entry is {token, label, description}; the seat draws one [label](action:token) button per entry, so the options come from the inventory rather than from the model's sentence."
+        },
+        "tabConversations": {
+          "type": "object",
+          "description": "EACH TAB'S OWN THREAD, a binding: {path: /console/tab_conversations}. {chat, approvals, tools}; pressing a rail tab moves the seat to that tab's conversation, and the dropdown lists only that tab's rows."
+        },
+        "consoleQuery": {
+          "type": "object",
+          "description": "THE PLAN THE COLUMN IS SHOWING, a binding: {path: /console/query}. {text, sort, filters, count, missing, turn_id}; the seat draws the line above the thread."
+        },
         "conversations": {
           "type": "object",
           "description": "The Conversations dropdown's rows for the Console, bound to /console/conversations. Each row is {id, title, tab}."

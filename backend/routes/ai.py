@@ -2,6 +2,7 @@
 import asyncio
 import json
 import os
+import re
 import time
 from datetime import UTC, datetime
 from typing import Any
@@ -10,7 +11,9 @@ from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel
 
 import services as state
+from console_tools import CONSOLE_TOOLS, EXPECTED_TOOL_COUNT, tool_inventory
 from card_lifecycle import CardState, card_state_of, is_card_locked, locked_state_message
+from design_save import apply_design_save_metadata
 from deps import (
     A2UI_CATALOG_ID,
     DEFAULT_DESIGN_SYSTEM,
@@ -459,6 +462,17 @@ in it: what each one says, what is loose, what is missing, which to work on next
 
 You do not write into a prompt from this room. Work on a prompt happens in the Composer, one
 package at a time, and this room is how the person finds it.
+
+THE LEFT COLUMN IS ALREADY THE TAB'S SET. The CURRENT WORKSPACE section lists the cards on the
+left, in the order they are drawn. When the person asks what is showing, which card is which, or
+what to do next, answer from that list in words. Do not emit `<reassemble-console .../>` to answer
+a question: the filter is already applied, and re-assembling would replace the very set they are
+asking about. Use that control only when they explicitly ask you to change the filter or order.
+
+WHEN A QUESTION IS ABOUT A TOOL'S WORK — Figma ingest today — answer briefly and offer the Tools
+tab as a clickable action, exactly `[Tools](action:tools)`. The Tools tab is where the tool work
+and its cards live; the link moves the person there and filters the cards. Do not use
+`[figma-ingest]` as a navigation button; it names the one tool inside Tools, not the door.
 """
 
 # THE PRODUCT ROOM'S OWN SCRIPT — the ideation workspace. The assistant of a person building
@@ -980,6 +994,89 @@ def _drain_warnings() -> list[str]:
     return out
 
 
+def _snapshot_card_conversation(
+    api: Any, source_id: str, user_id: str, session_id: str, title: str
+) -> str | None:
+    """Copy the visit's conversation into the card's OWN thread, at the moment of the save.
+
+    THE CARD'S LOG IS THE RUN, NOT THE TAB'S AFTERLIFE. The save relabels the working row and
+    kept its conversation as the card's, so everything the tab did afterwards — catalogue rows
+    opened, remove questions, later visits' turns — landed in the card's log (owner, 2026-11-09:
+    the remove question "popping up" on every console card open). This copies the thread as it
+    stands at the save into a conversation owned by the card; the tab keeps its own thread and
+    later messages cannot reach the card's copy. Messages are copied whole (role, content,
+    metadata, timestamps), so nothing the run said is lost.
+
+    Returns the new conversation id, or None when the copy could not be made — the caller then
+    leaves the visit's conversation as the card's, which is the old behaviour and is warned.
+    """
+    try:
+        with api.get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SET app.current_user_id = %s", (user_id,))
+            cursor.execute(
+                """
+                SELECT title, metadata, tab, surface_state_json, project_id
+                  FROM conversations
+                 WHERE id = %s AND user_id = %s
+                """,
+                (source_id, user_id),
+            )
+            source = cursor.fetchone()
+            if not source:
+                return None
+            source_title, source_meta, source_tab, surface_state, project_id = source
+            meta = dict(source_meta or {}) if isinstance(source_meta, dict) else {}
+            meta["prompt_session_id"] = session_id
+            cursor.execute(
+                """
+                INSERT INTO conversations
+                    (session_id, user_id, created_by, title, message_count, metadata, tab,
+                     surface_state_json, project_id)
+                VALUES (%s, %s, %s, %s, 0, %s::jsonb, %s, %s, %s)
+                RETURNING id
+                """,
+                (
+                    session_id, user_id, user_id,
+                    title or source_title or "Design — Tools",
+                    json.dumps(meta), source_tab or "tools", surface_state, project_id,
+                ),
+            )
+            snapshot_id = str(cursor.fetchone()[0])
+            cursor.execute(
+                """
+                INSERT INTO conversation_messages
+                    (conversation_id, created_by, role, content, metadata, created_at, user_id)
+                SELECT %s, created_by, role, content, metadata, created_at, user_id
+                  FROM conversation_messages
+                 WHERE conversation_id = %s
+                 ORDER BY created_at
+                """,
+                (snapshot_id, source_id),
+            )
+            cursor.execute(
+                """
+                UPDATE conversations
+                   SET message_count = (SELECT count(*) FROM conversation_messages WHERE conversation_id = %s),
+                       updated_at = NOW()
+                 WHERE id = %s
+                """,
+                (snapshot_id, snapshot_id),
+            )
+            cursor.execute(
+                "UPDATE prompt_sessions SET conversation_id = %s, updated_at = NOW() WHERE id = %s AND user_id = %s",
+                (snapshot_id, session_id, user_id),
+            )
+            conn.commit()
+            return snapshot_id
+    except Exception as e:  # noqa: BLE001 — the save continues; the failure is warned
+        _warn(
+            "the card's own conversation could not be snapshotted; the visit's thread stays the "
+            f"card's: {e}"
+        )
+        return None
+
+
 def _compose_sections(sections: list[dict[str, Any]]) -> str:
     """Join a prompt's sections into one piece of text, in order, as written.
 
@@ -1060,6 +1157,18 @@ class AISurfaceContext(BaseModel):
     # currently points at for the middle. A field the model does not declare is dropped
     # in silence, which is why this is written here and not only sent by the shell.
     run: dict | None = None
+    # WHICH CONSOLE TAB ASKED FOR THIS SURFACE. A tab is a filter over the one library, not a
+    # different page: Chat is the index, Tools is the tool work, Approvals is the queue. The
+    # room sends it on the rail's press so the assembly can apply the tab's plan without a
+    # model call. Absent = the chat tab.
+    console_tab: str | None = None
+    # THE TAB PRESS ASSEMBLES THE CARDS, NOT THE CHAT. When true the route returns only the
+    # filtered card list and its plan; the room writes /cards and /console/query into the tree
+    # and leaves the chat element, its conversation and its thread exactly as they are.
+    cards_only: bool = False
+    # A TAB-SCOPED SEARCH FROM THE CHAT — {"text": "...", "sort": "..."}. The cards-only path
+    # applies it INSIDE the tab's base set, so a search in Tools never leaves Tools.
+    console_search: dict | None = None
 
 
 class AISurfaceRequest(BaseModel):
@@ -1080,6 +1189,55 @@ class AISurfaceRequest(BaseModel):
     intent: str
     session_id: str | None = None  # For render-session intent
     context: AISurfaceContext | None = None  # Document state for AI decisions
+
+
+def _semantic_enabled() -> bool:
+    """The vector store is opt-in until it is stable in this environment (see console_lanes)."""
+    from console_lanes import SEMANTIC_SEARCH_ENABLED
+    return SEMANTIC_SEARCH_ENABLED
+
+
+# THE TOOLS THE CHAT CAN OFFER AS BUTTONS. Each is a plan, not a prompt: choosing one is a
+# query the surface can run without asking the model what the person meant.
+#
+# THE INVENTORY IS THE SOURCE OF THE BUTTONS (2026-11-10). The greeting no longer asks the
+# model to emit a link and hope; the console's assembly hands this list to the seat, which
+# draws one [label](action:token) per entry under the greeting. Adding a tool here adds a
+# button with no other edit on the page.
+_CONSOLE_TOOLS = CONSOLE_TOOLS
+
+
+
+# THE TABS' OWN PLANS — the tab is the filter, and its plan IS its intent. Today the Tools tab
+# is the one tool we have built (Figma ingest); when there are more, this map grows and the tab
+# becomes the advanced search across them. Chat has no plan: it is the whole library.
+_CONSOLE_TAB_PLANS = {
+    "tools": {
+        **_CONSOLE_TOOLS["figma-ingest"]["plan"],
+        "explain": "Tools · Figma ingest · recent activity",
+    },
+}
+
+
+def _console_tool_inventory() -> list[dict[str, str]]:
+    """The tools as DATA for the seat, from the console-owned registry."""
+    return tool_inventory()
+
+
+
+def _console_last_user_turn(conversation_id: str, uid: str) -> tuple[str, str]:
+    """The last person turn: its id and its words. The id is how a recorded set is rejoined."""
+    if not conversation_id or not state.conversation_api:
+        return "", ""
+    try:
+        messages = state.conversation_api.get_messages(conversation_id, uid, limit=20)
+    except Exception as exc:  # noqa: BLE001 — an unreadable thread is said by the caller
+        print(f"[console] the directive could not be read: {exc}")
+        return "", ""
+    for message in reversed(messages or []):
+        if str(message.get("role")) == "user":
+            return str(message.get("id") or ""), str(message.get("content") or "").strip()[:2000]
+    return "", ""
 
 
 @router.post("/api/ai/assemble-surface")
@@ -1206,19 +1364,28 @@ def ai_assemble_surface(
         # The count was in the database: 23 chat rows under the console session, 18 of them with
         # ZERO messages — one per visit, each one a place his history was not.
         #
-        # SO A LANDING CREATES NOTHING AT ALL. It binds the conversation the console already owns
-        # (the session row's own pointer — the one the chat writes into), or NOTHING, and nothing is
-        # a true state: the seat's greeting is never written down (a turn the app asks for never
-        # creates a conversation — see `person_turn` in routes/teacher.py), and the first thing the
-        # PERSON says is what creates one. That is why this branch no longer refuses to bind an
-        # empty id: with no conversation there is nothing to read, which is exactly what an
-        # untouched console is.
+        # THE CONSOLE ALWAYS HAS SOMEWHERE TO TALK (Phase 5, first item). A landing ENSURES the
+        # default conversation exists and is bound BEFORE the seat draws, so the existing
+        # greeting has a thread to speak into — and a default the person deleted comes back on
+        # the next arrival. This reverses the older "a landing creates nothing" rule for this one
+        # seat; the surface needed no change, only the creation-and-binding path.
         console_conversation_id = str(console_session.get("conversation_id") or "")
-        if not console_conversation_id:
-            print(
-                f"[A2UI Console] {console_session_id[:8]}… has no conversation yet — the surface "
-                f"binds none. One is created when the person speaks, not by looking."
+        try:
+            _ensured = str(
+                state.prompt_sessions_api.get_or_create_console_tab_conversation(uid, "chat") or ""
             )
+            if _ensured and _ensured != console_conversation_id:
+                console_conversation_id = _ensured
+                with state.prompt_sessions_api.get_db() as _bind:
+                    _bind_cursor = _bind.cursor()
+                    _bind_cursor.execute("SET app.current_user_id = %s", (uid,))
+                    _bind_cursor.execute(
+                        "UPDATE prompt_sessions SET conversation_id = %s WHERE id = %s AND user_id = %s",
+                        (console_conversation_id, console_session_id, uid),
+                    )
+                    _bind.commit()
+        except Exception as _default_error:  # noqa: BLE001 — the seat still draws; the gap is said
+            _warn(f"the console's default conversation could not be ensured: {_default_error}")
 
         # ── THE TABS' OWN CONVERSATIONS — one per process, under the same session ──
         #
@@ -1235,6 +1402,19 @@ def ai_assemble_surface(
         except Exception as e:
             _warn(f"the approvals conversation could not be opened, so that tab has no seat of its own yet: {e}")
 
+        # ── THE TOOLS TAB'S OWN THREAD — the same per-tab rule ─────────────────────────────
+        #
+        # Tools is a console of its own (tab-consoles.md), so it keeps its conversations under
+        # conversations.tab = 'tools', not in the chat's list. The row exists before the seat
+        # draws, so switching to Tools lands on a real conversation and its list is its own.
+        tools_conversation_id = ""
+        try:
+            tools_conversation_id = state.prompt_sessions_api.get_or_create_console_tab_conversation(
+                uid, "tools"
+            ) or ""
+        except Exception as e:
+            _warn(f"the tools conversation could not be opened, so that tab has no seat of its own yet: {e}")
+
         # ── THE CONSOLE'S CONVERSATIONS — the Conversations dropdown's rows here ──
         #
         # Same ownership read the composer's seat uses (`conversations.session_id`),
@@ -1250,6 +1430,20 @@ def ai_assemble_surface(
                 )
             except Exception as e:
                 _warn(f"the console's conversation list could not be read, so the console seat has none to offer: {e}")
+
+        # ── WHICH TAB ASKED FOR THIS ASSEMBLY ───────────────────────────────────────────
+        #
+        # A tab is a filter over the one library, not a different page. The room sends the tab
+        # it pressed; the assembly reads that tab's own conversation (for a directive or a
+        # replay) and applies the tab's plan to the cards. Chat is the whole index, Tools is the
+        # tool work, Approvals is the supervisor queue. No model call: the plan is structured.
+        requested_tab = str((context.console_tab if context else "") or "chat").strip().lower() or "chat"
+        tab_conversations = {
+            "chat": console_conversation_id,
+            "approvals": approvals_conversation_id or console_conversation_id,
+            "tools": tools_conversation_id or console_conversation_id,
+        }
+        active_conversation_id = tab_conversations.get(requested_tab) or console_conversation_id
 
         # ── PERFORMANCE TRACE: Milestone A (Database) ──
         t_a_start = time.perf_counter()
@@ -1268,16 +1462,98 @@ def ai_assemble_surface(
         except Exception as bridge_error:  # noqa: BLE001 — a skipped sync is a normal event
             _warn(f"the builder's cards could not be synced, so the console shows what it last knew: {bridge_error}")
 
-        # Fetch the FULL prompt package (not lightweight) so each console card is
-        # a true index of its entire prompt — sections, output, versions, chat.
-        sessions = state.prompt_sessions_api.get_sessions(
-            user_id=uid,
-            include_archived=False,
-            limit=limit,
-            offset=0,
-            lightweight=False,
-            exclude_drafts=True,  # unsigned composer drafts never litter the console
-        )
+        # ── THE DIRECTIVE DECIDES HOW THE CARDS ARE FOUND ──────────────────────────────
+        # The model never writes SQL and never scans. It returns a plan; Milvus locates the
+        # cards when the directive names content; Postgres is asked for those rows by id.
+        # Only a directive with no content (a room, a state, a date, an order) still reads the
+        # console's list — and that read is the next thing to push down.
+        console_query = None
+        _plan = None
+        _turn_id, _directive = "", ""
+        _active = None
+        # A TAB PRESS IS A FILTER, NOT A CONVERSATION TURN. The cards-only assembly applies the
+        # tab's plan and reads no directive: the last thing said in the tab's thread may be a
+        # question ("what cards are showing?"), and planning it would replace the tab's set with
+        # "all cards" — the filter would disappear the moment they asked about what it showed.
+        # The full assembly (a landing) still reads the directive as before.
+        _cards_only = bool(context and context.cards_only)
+        # THE LANDING IS THE WHOLE LIBRARY. A reload must not turn the last thing said in the
+        # chat into a standing filter: "what is happening with Figma?" planned as a content
+        # search, matched no card, and the default screen said "No cards for this tab." The
+        # last turn is a conversation, not a saved query. The tab press and the chat's own
+        # search are the filters; the landing is all cards, last modified first.
+        # THE TAB'S OWN PLAN, when the person has not typed a directive in this tab. This is the
+        # immediate filter the rail's press asks for: the cards are the tab's intent, and the
+        # plan line says what was applied. It is structured, so it never waits on a model.
+        if not _plan and not _directive:
+            _tab_plan = _CONSOLE_TAB_PLANS.get(requested_tab)
+            if _tab_plan:
+                _plan = dict(_tab_plan)
+
+        # REOPEN IS A REPLAY, NOT A RE-PLAN. The turn already recorded its set: no model call,
+        # no re-ranking, the same cards in the same order, and the missing ones said.
+        _reopen = bool(_active and _turn_id and str(_active.get("message_id") or "") == str(_turn_id))
+        if _reopen:
+            try:
+                from surface_turns import replay
+
+                _replayed = replay(
+                    active_conversation_id,
+                    uid,
+                    "console" if requested_tab == "chat" else requested_tab,
+                )
+                _stored_plan = _active.get("plan") or {}
+                sessions = _replayed["cards"]
+                _plan = None
+                console_query = {
+                    "text": _stored_plan.get("explain") or "the recorded view",
+                    "sort": _stored_plan.get("sort"),
+                    "filters": _stored_plan.get("filter") or [],
+                    "count": len(sessions),
+                    "replayed": True,
+                    "missing": _replayed["missing"],
+                    "drift": _replayed["eligibility_drift"],
+                    "turn_id": _replayed["active_turn_id"],
+                }
+            except Exception as _replay_error:  # noqa: BLE001 — the failure is said, not hidden
+                _warn(f"the recorded view could not be replayed: {_replay_error}")
+                _reopen = False
+
+        if _reopen:
+            pass
+        elif _plan and str(_plan.get("text") or "").strip() and _semantic_enabled():
+            # THE MEMORY FINDS, THE ROW IS READ BY ID. The corpus is never loaded.
+            from console_lanes import apply_plan, fetch_cards_by_ids
+            from console_memory import search_cards
+
+            _ids = [hit["card_id"] for hit in search_cards(str(_plan["text"]), uid, limit=50)]
+            sessions, console_query = apply_plan(fetch_cards_by_ids(_ids, uid), _plan, uid)
+        elif _plan:
+            # A STRUCTURED DIRECTIVE IS A QUERY, NOT A READ OF THE LIST. Filters pushed down,
+            # one page back. The console's corpus is never loaded.
+            from console_lanes import apply_plan, fetch_cards_by_plan
+
+            sessions = fetch_cards_by_plan(_plan, uid, limit=50)
+            # The plan's words still rank the page (exact text match while the index is offline);
+            # the note says which method was used.
+            sessions, console_query = apply_plan(sessions, _plan, uid)
+        else:
+            sessions = state.prompt_sessions_api.get_sessions(
+                user_id=uid,
+                include_archived=False,
+                limit=limit,
+                offset=0,
+                lightweight=False,
+                exclude_drafts=True,  # unsigned composer drafts never litter the console
+            )
+            # LAST MODIFIED FIRST, the owner's order for the default library. The shared read
+            # orders by last accessed; on this screen the card that was changed last is the
+            # one the person is working on.
+            sessions = sorted(
+                sessions,
+                key=lambda session: str(session.get("updated_at") or ""),
+                reverse=True,
+            )
         # ── THE DESIGN ROOM'S OWN ROWS ARE NOT CONSOLE CARDS ──────────────────────────────────
         # `get_sessions` returns every package row. The room's container and its
         # `design_master`/`design_child` element rows are internals. The TOOLS session is a card:
@@ -1311,6 +1587,36 @@ def ai_assemble_surface(
         # the database, and a row with no description could not be told apart from
         # one whose description the assembler had made up. Removed — an empty
         # description now renders as empty.
+        # ONE CARD, ONE LOOK. The Design console's card carries the "Design System" category and
+        # its colours; this console reads the same row, so a design card cannot wear a different
+        # category or palette on this surface. The categories row is the same one the Design
+        # console reads for its own cards.
+        _design_category = {"color": "", "title_color": "", "text_color": ""}
+        try:
+            with state.prompt_sessions_api.get_db() as _conn:
+                _cur = _conn.cursor()
+                # The categories table is row-scoped, the same way every other read is.
+                _cur.execute("SET app.current_user_id = %s", (uid,))
+                _cur.execute(
+                    "SELECT color, title_color, text_color FROM categories WHERE name = %s",
+                    ("Design System",),
+                )
+                _row = _cur.fetchone()
+                if _row:
+                    # The pool hands out RealDictCursor rows: read them by name, never by index.
+                    _design_category = {
+                        "color": _row.get("color") or "",
+                        "title_color": _row.get("title_color") or "",
+                        "text_color": _row.get("text_color") or "",
+                    }
+        except Exception as _cat_error:  # noqa: BLE001 — a missing palette keeps the card's own
+            _warn(f"the Design System category colours could not be read: {_cat_error}")
+
+        # ── THE MODEL CONTROLS THE CARD LIST (console only) ───────────────────────────────
+        # The last thing the person typed is a directive, not a chat turn: the model answers
+        # with a validated plan (filter + sort), and this surface shows what the plan selects.
+        # A lane that cannot answer says why in `console_query`; the cards are never silently
+        # replaced by an unranked list.
         cards = []
         for session in sessions:
             title = (session.get("title") or "").strip()
@@ -1339,6 +1645,16 @@ def ai_assemble_surface(
                 else "console" if session_type == "console"
                 else "composer"
             )
+            # WHICH CONSOLE TABS THIS CARD BELONGS TO. A tab is a filter over the same library,
+            # not a different page: Chat is the whole index; Tools is the design tool's work;
+            # Approvals is the supervisor queue (the two locked states). The grid reads these
+            # tags, so a tab's set is the record's own fact rather than a second predicate
+            # invented in the UI. A tab that has no tag yet draws no cards and says so.
+            _console_tabs = ["chat"]
+            if room_domain == "design" or session_type.startswith("design"):
+                _console_tabs.append("tools")
+            if _design_state in (CardState.PENDING_APPROVAL, CardState.QUEUED_FOR_SHARE):
+                _console_tabs.append("approvals")
 
             cards.append({
                 "id": str(session.get("id")),
@@ -1374,25 +1690,223 @@ def ai_assemble_surface(
                     if builder_project_id
                     else None
                 ),
-                "category": session.get("category") or "",
+                # THE DESIGN CARD'S CATEGORY AND ITS LABEL. The Design console renders every
+                # design card as "Design System" with the seat's own palette; the console reads
+                # the same record, so it wears the same category, the same label and the same
+                # colours here. "Design Tools" / "Figma" is the label every surface shows.
+                "category": "Design System" if session_type.startswith("design") else (session.get("category") or ""),
+                "headerLabel": "Design Tools" if session_type.startswith("design") else "",
+                "subcategory": "Figma" if session_type.startswith("design") else "",
                 "status": (session.get("status") or "Active").lower(),
                 # THE LIFECYCLE AND THE LOCK, in the state machine's own words. A card outside
                 # the design sessions (a design system) carries no lifecycle state.
                 "state": _design_state.value if _design_state else "",
                 "locked": is_card_locked(session),
+                # THE TABS THIS CARD ANSWERS TO — see the note above the append.
+                "console_tabs": _console_tabs,
                 "version": session.get("current_version") or 1,
                 "likes": session.get("likes") or 0,
                 "model_name": session.get("model_name") or "",
                 "team_name": session.get("team_name") or "",
                 "avatar_url": session.get("avatar_url") or "",
-                "category_color": session.get("category_color") or "",
-                "category_title_color": session.get("category_title_color") or "",
-                "category_text_color": session.get("category_text_color") or "",
+                "category_color": _design_category["color"] if session_type.startswith("design") else (session.get("category_color") or ""),
+                "category_title_color": _design_category["title_color"] if session_type.startswith("design") else (session.get("category_title_color") or ""),
+                "category_text_color": _design_category["text_color"] if session_type.startswith("design") else (session.get("category_text_color") or ""),
                 "username": session.get("author_name") or session.get("author_email") or "",
                 "createdAt": session.get("created_at").isoformat() if session.get("created_at") else "",
                 "lastUsed": session.get("last_accessed_at").isoformat() if session.get("last_accessed_at") else "",
                 "message_count": session.get("version_count") or 0,
             })
+
+        # ── THE TABS WITHOUT A SQL PLAN ARE FILTERED IN THE RECORD THEY CARRY ──────────
+        #
+        # Approvals is the supervisor queue: the cards whose own lifecycle is Pending_Approval
+        # or Queued_For_Share. Eval and Settings have no card set yet, and saying they have
+        # none is the truthful answer — the grid draws its "no cards for this tab" line. The
+        # Chat tab is the whole library and needs no filter.
+        if requested_tab == "approvals" and not _directive:
+            cards = [
+                card for card in cards
+                if str(card.get("state") or "") in ("Pending_Approval", "Queued_For_Share")
+            ]
+            _plan = None
+            _turn_id = ""
+            console_query = {
+                "text": "Approvals · waiting on you",
+                "count": len(cards),
+                "sort": None,
+                "filters": [],
+            }
+        elif requested_tab in ("eval", "settings"):
+            cards = []
+            _plan = None
+            _turn_id = ""
+            console_query = {
+                "text": "Evals · no card set yet" if requested_tab == "eval" else "Settings · no cards",
+                "count": 0,
+                "sort": None,
+                "filters": [],
+            }
+
+        # ── A TAB PRESS ASSEMBLES ONLY THE CARDS ───────────────────────────────────────
+        #
+        # The chat is already on screen and has its conversation. Re-running the whole surface
+        # to change the left column would replace the chat element and reload the thread — the
+        # thing this path exists to avoid. The room writes these two values into the tree it
+        # already holds; no updateComponents, no chat reload.
+        if context and context.cards_only:
+            # THE CHAT IS THE SEARCH BOX. A tab-scoped text search narrows the cards that are
+            # already on this tab; the ids come from Milvus, the rows are the tab's own cards,
+            # and a miss is an explicit empty set with the reason, never the unfiltered tab.
+            _search = context.console_search if isinstance(context.console_search, dict) else None
+            _search_text = str((_search or {}).get("text") or "").strip()[:500]
+            _base_cards = list(cards)
+            _search_failed = False
+            if _search_text:
+                try:
+                    from console_memory import search_cards
+
+                    tab_ids = [str(card.get("id")) for card in cards if card.get("id")]
+                    hits = search_cards(_search_text, uid, limit=50, card_ids=tab_ids)
+                    order = [str(hit.get("card_id")) for hit in hits]
+                    by_id = {str(card.get("id")): card for card in cards}
+                    matched = [by_id[card_id] for card_id in order if card_id in by_id]
+                    # THE TAB'S OWN WORDS ARE THE SECOND READ. A card whose title or description
+                    # contains the phrase must not be lost because its vector neighbour lives in
+                    # another tab or the row was not embedded yet.
+                    tokens = [token for token in re.split(r"\W+", _search_text.lower()) if len(token) >= 2]
+                    seen = {str(card.get("id")) for card in matched}
+                    if tokens:
+                        for card in cards:
+                            if str(card.get("id")) in seen:
+                                continue
+                            haystack = " ".join(
+                                str(card.get(key) or "")
+                                for key in ("title", "description", "tool", "username", "state", "category")
+                            ).lower()
+                            if all(token in haystack for token in tokens):
+                                matched.append(card)
+                                seen.add(str(card.get("id")))
+                    cards = matched
+                    console_query = {
+                        "text": f"{_search_text} · {len(cards)} cards",
+                        "count": len(cards),
+                        "searched": True,
+                        "sort": (_search or {}).get("sort"),
+                    }
+                except Exception as _search_error:  # noqa: BLE001 — the failure is the answer
+                    _search_failed = True
+                    cards = []
+                    console_query = {
+                        "error": f"the search could not be run: {type(_search_error).__name__}: {_search_error}",
+                        "count": 0,
+                        "searched": True,
+                    }
+            # A SEARCH SET IS A TURN SET, RECORDED WHERE THE TURN LIVES. The seat wrote the
+            # user turn before this request so the message id exists; the record asserts every
+            # shown id against the console predicate and writes the tab's namespace. A missing
+            # id or a refused row is said on the plan line; the cards still draw.
+            if _search_text and not _search_failed:
+                _search_turn_id = str((_search or {}).get("turnId") or "").strip()
+                _namespace = "console" if requested_tab == "chat" else requested_tab
+                _record_plan = {
+                    "text": _search_text,
+                    "sort": (_search or {}).get("sort") or "",
+                    "explain": f"{_search_text} · {len(cards)} cards",
+                    "tab": requested_tab,
+                    "base_ids": [str(card.get("id")) for card in _base_cards if card.get("id")],
+                }
+
+                def _fall_back_to_recorded(reason: str) -> None:
+                    """A FAILED WRITE MUST NOT LEAVE AN UNRECORDED SET ON THE SURFACE.
+
+                    What is drawn has to equal what is recorded. If this search's record is
+                    refused or cannot be written, the cards go back to the tab's last recorded
+                    set (or to no cards); the plan line says the search was not recorded. The
+                    unrecorded search cards are never returned.
+                    """
+                    nonlocal cards, console_query
+                    from console_lanes import fetch_cards_by_ids
+                    from surface_turns import active_set
+
+                    active = active_set(active_conversation_id, _namespace)
+                    if active:
+                        cards = fetch_cards_by_ids(
+                            [str(i) for i in (active.get("shown_ids") or [])], uid,
+                        )
+                        console_query = {
+                            "error": f"{reason} The last recorded set is still showing.",
+                            "count": len(cards),
+                            "turn_id": str(active["id"]),
+                            "namespace": _namespace,
+                            "shown_ids": [str(i) for i in (active.get("shown_ids") or [])],
+                            "refreshable": False,
+                            "record_error": reason,
+                        }
+                    else:
+                        cards = []
+                        console_query = {
+                            "error": f"{reason} There is no recorded set on this tab to fall back to.",
+                            "count": 0,
+                            "record_error": reason,
+                        }
+                if _search_turn_id:
+                    try:
+                        from config import EMBEDDING_MODEL_VERSION
+                        from surface_turns import record
+
+                        _recorded = record(
+                            conversation_id=active_conversation_id,
+                            user_id=uid,
+                            message_id=_search_turn_id,
+                            plan=_record_plan,
+                            shown_ids=[str(card.get("id")) for card in cards],
+                            model_version=EMBEDDING_MODEL_VERSION,
+                            namespace=_namespace,
+                        )
+                        console_query = {
+                            **(console_query or {}),
+                            "turn_id": str(_recorded["id"]),
+                            "namespace": _namespace,
+                            "shown_ids": [str(card.get("id")) for card in cards],
+                            # Refresh re-runs the recorded plan inside base_ids (row 5).
+                            "refreshable": True,
+                        }
+                    except Exception as _record_error:  # noqa: BLE001 — the surface is drawn; the gap is said
+                        _fall_back_to_recorded(
+                            f"the search set was not recorded: {type(_record_error).__name__}: {_record_error}",
+                        )
+                else:
+                    _fall_back_to_recorded(
+                        str((_search or {}).get("recordError") or "")
+                        or "the search set was not recorded because its turn was not written",
+                    )
+            return {"cards": cards, "query": console_query, "tab": requested_tab}
+
+        # ── THE TURN REMEMBERS WHAT IT SHOWED ──────────────────────────────────────────
+        # Only a directive-produced view is recorded; the default list is not a turn's answer.
+        # The write asserts every id is eligible under the version it records, so a later
+        # "no longer eligible" on replay can only mean the predicate moved.
+        if _plan and _turn_id and cards and not _reopen:
+            try:
+                from config import EMBEDDING_MODEL_VERSION
+                from surface_turns import record
+
+                _recorded = record(
+                    conversation_id=active_conversation_id,
+                    user_id=uid,
+                    message_id=_turn_id,
+                    plan=_plan,
+                    shown_ids=[str(card.get("id")) for card in cards],
+                    model_version=EMBEDDING_MODEL_VERSION,
+                )
+                console_query = {**(console_query or {}), "turn_id": str(_recorded["id"])}
+            except Exception as _record_error:  # noqa: BLE001 — the surface is drawn; the gap is said
+                _warn(f"the console turn was not recorded for replay: {_record_error}")
+                console_query = {
+                    **(console_query or {}),
+                    "record_error": f"{type(_record_error).__name__}: {_record_error}",
+                }
 
         # ── TRUE A2UI: Model is the architect for the console surface ──
         # ── THE CONSOLE'S TREE IS WRITTEN HERE, NOT ASKED FOR (owner, 2026-10-27) ──────────
@@ -1411,16 +1925,31 @@ def ai_assemble_surface(
                 "isThirdOpen": False,
                 "children": {"left": "card-grid", "right": "console-chat"},
             },
-            {"id": "card-grid", "component": "ConsoleCardGrid", "items": {"path": "/cards"}},
+            {
+                "id": "card-grid",
+                "component": "ConsoleCardGrid",
+                # THE TAB'S ASSEMBLY HAS ALREADY FILTERED /cards. The grid draws the list it is
+                # given; it does not re-filter it, so the tab's query is the one authority.
+                "items": {"path": "/cards"},
+            },
             {
                 "id": "console-chat",
                 "component": "console-chat-panel",
                 "tracePrompt": False,
+                # THE PLAN THE SURFACE IS SHOWING — bound so the chat draws what the model
+                # applied, instead of leaving the person to infer it from the cards.
+                "consoleQuery": {"path": "/console/query"},
                 "allowedTabs": "chat,eval,tools,approvals,settings",
                 "conversationId": {"path": "/console/conversation_id"},
                 "conversations": {"path": "/console/conversations"},
+                # WHICH TAB'S THREAD — the seat switches to the tab's own conversation on a
+                # press; the map is the assembly's (chat, approvals, tools), not a guess.
+                "tabConversations": {"path": "/console/tab_conversations"},
                 "sessionId": {"path": "/console/session_id"},
                 "consoleCards": {"path": "/cards"},
+                # THE TOOLS THE GREETING MAY OFFER — the inventory as data, so the options are
+                # drawn from what exists rather than from a line the model was asked to repeat.
+                "consoleTools": {"path": "/console/tools"},
                 "children": {"view": "repair-view"},
             },
             {
@@ -1435,7 +1964,12 @@ def ai_assemble_surface(
         # AND HER WORDS, WHICH ARE THIS ROOM'S. The console is where she advises on the
         # packages in the index — see `CONSOLE_GRACE_INSTRUCTIONS`.
         _seat_grace(components, "/console", True)
-        ai_message = f"{len(cards)} packages ready."
+        if console_query and console_query.get("text"):
+            ai_message = f"{len(cards)} cards — {console_query['text']}"
+        elif console_query and console_query.get("error"):
+            ai_message = f"{len(cards)} packages ready; the directive could not be applied."
+        else:
+            ai_message = f"{len(cards)} packages ready."
         ms_b = 0.0
         ms_c = 0.0
 
@@ -1479,7 +2013,10 @@ def ai_assemble_surface(
                         # user, one conversation under it.
                         "console": {
                             "session_id": console_session_id,
-                            "conversation_id": console_conversation_id,
+                            "conversation_id": active_conversation_id,
+                            # WHAT THE SURFACE IS SHOWING AND WHY — the plan the last
+                            # directive produced, or the reason it could not be applied.
+                            "query": console_query,
                             # ── WHO SHE IS HERE, WHICH IS THIS ROOM'S OWN SENTENCE ───────────────
                             #
                             # The seat binds this path (see `_seat_grace`), so the console's Grace is
@@ -1490,10 +2027,11 @@ def ai_assemble_surface(
                             "grace_instructions": CONSOLE_GRACE_INSTRUCTIONS,
                             # EACH TAB HAS ITS OWN CONVERSATION — the panel switches between
                             # them by the tab column the dropdown rows carry; no new binding.
-                            "tab_conversations": {
-                                "chat": console_conversation_id,
-                                "approvals": approvals_conversation_id or console_conversation_id,
-                            },
+                            "tab_conversations": tab_conversations,
+                            # WHICH TAB THIS ASSEMBLY ANSWERED. The seat already holds the
+                            # pressed tab; the value is recorded here so the response states
+                            # the view it drew.
+                            "tab": requested_tab,
                             # The dropdown's rows — same shape as the composer's seat, plus the
                             # tab each conversation belongs to (the label the dropdown shows).
                             "conversations": [
@@ -1504,6 +2042,10 @@ def ai_assemble_surface(
                                 }
                                 for c in console_conversations
                             ],
+                            # THE CONSOLE'S TOOLS, for the greeting's inline buttons. The seat
+                            # draws one [label](action:token) per entry; the token is resolved
+                            # below without a model call. Adding a tool adds a button.
+                            "tools": _console_tool_inventory(),
                         },
                         "assembly_time_ms": elapsed_ms,
                         # FALSE: this surface's tree is written in code (2026-10-27). The flag
@@ -5391,28 +5933,7 @@ Output ONLY valid JSON:
             "draft": None,
         }
         if is_design_session_save:
-            save_metadata["session_type"] = "design_session"
-            save_metadata["kept_at"] = datetime.now().isoformat()
-            save_metadata["kept_by"] = uid
-            # THE RUN IS PART OF THE SESSION. The preview carries the compiled drawing, the facts,
-            # the values, the steps and the measured tree; storing it is what lets the card open
-            # on the work instead of an empty third column. A caller that does not send the field
-            # keeps the preview already stored; a caller that sends null (the person discarded the
-            # drawing) clears it, because then the session really has no drawing.
-            _sent_fields = getattr(request, "model_fields_set", None)
-            if _sent_fields is None:
-                _sent_fields = getattr(request, "__fields_set__", set())
-            if "preview" in _sent_fields:
-                save_metadata["preview"] = (
-                    request.preview
-                    if isinstance(request.preview, dict) and request.preview
-                    else None
-                )
-            # THE APPROVAL QUEUE IS PAUSED FOR THE CURRENT DESIGN TESTING (owner, 2026-11-08:
-            # *"we don't need to focus on these approval cues at the moment"*). A save keeps the
-            # card Closed and editable; it no longer sends every saved card into review. The queue
-            # is still built: `POST /api/design/sessions/{id}/queue` is the explicit act that
-            # sends a card to the supervisor when the approval work resumes.
+            apply_design_save_metadata(save_metadata, request, uid)
         if ai_description:
             save_metadata["ai_description"] = ai_description
 
@@ -5459,6 +5980,28 @@ Output ONLY valid JSON:
             action = "created"
 
         session_id = session.get("id") if session else request.session_id
+
+        # ── THE CARD SAVES ITS OWN LOG, NOT THE TAB'S ───────────────────────────────────────────
+        # A visit being kept was relabeled design_session and kept the working conversation, so
+        # later tab actions (a catalogue row opened, a remove question) were written into the
+        # card. The copy below freezes the card's thread at the save; the tab's own conversation
+        # continues separately. Only a design_tab becoming a card is snapshotted — a re-save of an
+        # existing card keeps the thread it already owns.
+        if (
+            is_design_session_save
+            and _design_kind == "design_tab"
+            and conversation_id
+            and session_id
+        ):
+            snapshot_id = _snapshot_card_conversation(
+                state.prompt_sessions_api,
+                str(conversation_id),
+                uid,
+                str(session_id),
+                str(request.title or "Design — Tools"),
+            )
+            if snapshot_id:
+                conversation_id = snapshot_id
 
         # ── THE SAVE IS A STATE CHANGE, AND IT IS A TURN IN THE SESSION'S CONVERSATION ─────
         # The row carries the state; the conversation carries the readable log. A failed line

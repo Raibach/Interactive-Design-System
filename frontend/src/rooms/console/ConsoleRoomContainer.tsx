@@ -10,7 +10,7 @@
  * own. The room's long-lived writers (the shell's rename and delete paths) reach its tree through
  * `consoleTreeWriterRef`, the same ref-through-the-boundary pattern the Product room uses.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import '@/rooms/console/console-chat-panel';
 import ConsolePage from '@/rooms/console/ConsolePage';
 import { useConsoleRoomState } from '@/rooms/console/useConsoleRoomState';
@@ -20,6 +20,7 @@ import { markArrival } from '@/shared/arrival';
 import { AI_STANDBY_MESSAGE, ASSEMBLY_TIMEOUT_MS } from '@/shared/assembly';
 import type { FailureReport } from '@/shared/error-registry';
 import { useRepairStages } from '@/shared/repairStages';
+import { getStoredUserId } from '@/services/authService';
 import { subscribeTrace, traceSnapshot } from '@/lib/trace-source';
 
 export interface ConsoleRoomContainerProps {
@@ -41,7 +42,7 @@ export function ConsoleRoomContainer({
   consoleCardsRef,
   assembleOnEntry = true,
 }: ConsoleRoomContainerProps) {
-  const { consoleTree, setConsoleTree, consoleRendererRef, assembledConsoleCards } = useConsoleRoomState();
+  const { consoleTree, setConsoleTree, consoleRendererRef, assembledConsoleCards, assembledConsoleQuery } = useConsoleRoomState();
   const [repairStages] = useRepairStages();
   /* THE CONSOLE'S OWN CARD DOORS (2026-10-24): open, create and delete are the Console's.
      The shell is handed the request, never another room's handler. */
@@ -185,6 +186,223 @@ export function ConsoleRoomContainer({
     return () => window.removeEventListener('conversation-change', onConversationChange);
   }, [consoleRendererRef, setConsoleTree]);
 
+  /* THE RAIL'S TAB ASSEMBLES THE CARDS, NOT THE CHAT.
+   *
+   * A tab is a filter over the one library: Chat is the whole index, Tools is the tool work,
+   * Approvals is the supervisor queue. Pressing one asks the assembly for THAT tab's card set
+   * with `cards_only`, and this room writes the returned list and plan into the tree it already
+   * holds. No `updateComponents` comes back, so the chat element, its conversation and its
+   * thread are not replaced or reloaded — only the left column changes. Each tab's own
+   * conversation is the seat's move, made in the same press.
+   *
+   * The request sequence is latched: a slow answer from the tab the person just left cannot
+   * overwrite the tab they are on now. */
+  const tabRequestRef = useRef(0);
+  /*
+   * ONE LOADER FOR BOTH KINDS OF LEFT-COLUMN CHANGE: a tab press (the tab's base set) and a
+   * search the chat just ran (the same tab, narrowed). Both are cards-only assemblies; neither
+   * touches the chat element. The sequence latch means a slow answer for the tab/search the
+   * person just left cannot overwrite the one they are on now.
+   */
+  const loadConsoleCards = useCallback(async (
+    tab: string,
+    search?: { text?: string; sort?: string; turnId?: string; recordError?: string },
+  ) => {
+    const request = ++tabRequestRef.current;
+    try {
+      const response = await fetch('/api/ai/assemble-surface?limit=500', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-User-ID': getStoredUserId() },
+        body: JSON.stringify({
+          intent: 'render-console',
+          context: {
+            current_surface: 'console',
+            console_tab: tab,
+            cards_only: true,
+            ...(String(search?.text || '').trim()
+              ? {
+                console_search: {
+                  text: String(search?.text).trim(),
+                  sort: search?.sort,
+                  turnId: search?.turnId || '',
+                  recordError: search?.recordError || '',
+                },
+              }
+              : {}),
+          },
+        }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const body = (await response.json()) as {
+        cards?: unknown[]; query?: unknown; tab?: string;
+      };
+      if (!Array.isArray(body?.cards)) {
+        throw new Error('the tab assembly returned no card list');
+      }
+      if (request !== tabRequestRef.current) return;
+      setConsoleTree((prev) => ({
+        ...prev,
+        dataModel: {
+          ...prev.dataModel,
+          cards: body.cards,
+          console: { ...prev.dataModel.console, query: body.query ?? null, tab: body.tab ?? tab },
+        },
+      }));
+    } catch (err) {
+      if (request !== tabRequestRef.current) return;
+      const why = err instanceof Error ? err.message : String(err);
+      const label = String(search?.text || '').trim() ? 'The search could not be run' : `The ${tab} cards could not be loaded`;
+      setConsoleTree((prev) => ({
+        ...prev,
+        dataModel: {
+          ...prev.dataModel,
+          cards: [],
+          console: {
+            ...prev.dataModel.console,
+            query: { error: `${label} — ${why}`, count: 0 },
+            tab,
+          },
+        },
+      }));
+    }
+  }, [setConsoleTree]);
+
+  /* THE RAIL'S TAB ASSEMBLES THE CARDS, NOT THE CHAT.
+   *
+   * A tab is a filter over the one library: Chat is the whole index, Tools is the tool work,
+   * Approvals is the supervisor queue. Pressing one asks the assembly for THAT tab's card set
+   * with `cards_only`, and this room writes the returned list and plan into the tree it already
+   * holds. No `updateComponents` comes back, so the chat element, its conversation and its
+   * thread are not replaced or reloaded — only the left column changes. Each tab's own
+   * conversation is the seat's move, made in the same press. */
+  useEffect(() => {
+    const onTabChange = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        tab?: string; conversationId?: string; namespace?: string;
+      }>).detail || {};
+      const tab = String(detail.tab || '');
+      if (!tab) return;
+      /* THE RAIL'S RAW EVENT AND THE SEAT'S ENRICHED ONE BOTH REACH WINDOW. Only the seat's
+         carries the conversation and namespace; acting on the raw one started a base load
+         after the replay had already drawn, putting the base 8 back over the recorded set. */
+      if (!Object.prototype.hasOwnProperty.call(detail, 'conversationId')) return;
+      const path = (event as CustomEvent).composedPath?.() ?? [];
+      if (path.length && !path.includes(consoleRendererRef.current)) return;
+      const conversationId = String(detail.conversationId || '');
+      const namespace = String(detail.namespace || (tab === 'chat' ? 'console' : tab));
+      void (async () => {
+        const request = ++tabRequestRef.current;
+        /* THE CHAT TAB IS THE WHOLE LIBRARY, NOT A SAVED SEARCH. A Chat search records a set
+           under `console` for the ordinal/audit, but pressing Chat must never replay that search
+           in place of the library: the owner, 2026-11-10, "the chat tab ... represents every
+           card every activity in the system." Tools and Approvals replay their recorded sets;
+           Chat always asks for the base library. */
+        if (tab === 'chat') {
+          await loadConsoleCards('chat');
+          return;
+        }
+        let replayError = '';
+        if (conversationId && namespace) {
+          try {
+            const replay = await fetch('/api/console/replay', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-User-ID': getStoredUserId() },
+              body: JSON.stringify({ conversation_id: conversationId, namespace }),
+            });
+            if (request !== tabRequestRef.current) return;
+            if (replay.ok) {
+              const body = (await replay.json()) as {
+                unrecorded?: boolean; cards?: unknown[]; query?: unknown;
+              };
+              if (!body.unrecorded && Array.isArray(body.cards)) {
+                setConsoleTree((prev) => ({
+                  ...prev,
+                  dataModel: {
+                    ...prev.dataModel,
+                    cards: body.cards,
+                    console: { ...prev.dataModel.console, query: body.query ?? null, tab },
+                  },
+                }));
+                return;
+              }
+            } else {
+              replayError = `HTTP ${replay.status}`;
+            }
+          } catch (err) {
+            replayError = err instanceof Error ? err.message : String(err);
+          }
+        }
+        if (request !== tabRequestRef.current) return;
+        await loadConsoleCards(tab);
+        if (replayError) {
+          setConsoleTree((prev) => ({
+            ...prev,
+            dataModel: {
+              ...prev.dataModel,
+              console: {
+                ...prev.dataModel.console,
+                query: {
+                  error: `The recorded ${tab} set could not be restored — ${replayError}`,
+                  count: 0,
+                },
+                tab,
+              },
+            },
+          }));
+        }
+      })();
+    };
+    window.addEventListener('tab-change', onTabChange);
+    return () => window.removeEventListener('tab-change', onTabChange);
+  }, [consoleRendererRef, loadConsoleCards, setConsoleTree]);
+
+  /* THE CHAT'S SEARCH IS THE SAME DOOR, NARROWED. The seat sends the words and the active tab;
+     the assembly applies them INSIDE that tab's base set. The thread and the conversation are
+     untouched — this writes only the cards and the plan line. */
+  useEffect(() => {
+    const onConsoleSearch = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        tab?: string; text?: string; sort?: string; turnId?: string; recordError?: string;
+      }>).detail || {};
+      const tab = String(detail.tab || 'chat');
+      const text = String(detail.text || '').trim();
+      if (!text) return;
+      /* THE SEAT SENDS THIS ON WINDOW — its path is [window], not the renderer, so the tab
+         listener's path check would reject it. The event name is this room's own channel;
+         the tab in the detail is the scope, and the turn id is what the record is written
+         against. */
+      void loadConsoleCards(tab, {
+        text,
+        sort: detail.sort,
+        turnId: detail.turnId,
+        recordError: detail.recordError,
+      });
+    };
+    window.addEventListener('a2ui:console-search', onConsoleSearch);
+    return () => window.removeEventListener('a2ui:console-search', onConsoleSearch);
+  }, [consoleRendererRef, loadConsoleCards]);
+
+  /* THE REFRESH RESPONSE IS A CARD WRITE, NOT A SURFACE ASSEMBLY. The API re-ran the
+     recorded plan inside the tab's base; this room draws the returned cards and plan and leaves
+     the chat element and its conversation exactly as they are. */
+  useEffect(() => {
+    const onConsoleRefresh = (event: Event) => {
+      const detail = (event as CustomEvent<{ tab?: string; cards?: unknown[]; query?: unknown }>).detail || {};
+      if (!Array.isArray(detail.cards)) return;
+      const tab = String(detail.tab || 'chat');
+      setConsoleTree((prev) => ({
+        ...prev,
+        dataModel: {
+          ...prev.dataModel,
+          cards: detail.cards,
+          console: { ...prev.dataModel.console, query: detail.query ?? null, tab },
+        },
+      }));
+    };
+    window.addEventListener('a2ui:console-refresh', onConsoleRefresh);
+    return () => window.removeEventListener('a2ui:console-refresh', onConsoleRefresh);
+  }, [setConsoleTree]);
+
   /* THE ROOM'S RE-ASSEMBLY REQUEST — the same door the page's own retry button used. */
   useEffect(() => {
     const onConsoleCommand = () => {
@@ -272,6 +490,7 @@ export function ConsoleRoomContainer({
           onOpenPrompt={openCard}
           onCreateNew={() => createPrompt()}
           aiAssembledCards={assembledConsoleCards}
+          consoleQuery={assembledConsoleQuery}
           isParentLoading={isAIAssembling}
           errorMessage={errorMessage}
           errorReport={errorReport}

@@ -1,10 +1,10 @@
 /**
  * <console-chat-panel> — THE CONSOLE'S OWN SEAT.
  *
- * A tab's seat is its own file (owner, 2026-10-18: "a tab's seat is its own file; the only things
- * shared are the lit components and the styling"). This is that file for the Console. The shared
- * <chat-panel> still serves the Composer and the Governance room; nothing in this file is reached
- * from either of them, and nothing they change reaches this seat.
+ * A tab's seat is its own file, and the console's is sovereign: the column, every part it draws,
+ * and their styles live under `rooms/console/chat/` and belong to this room alone. Nothing here is
+ * a shared chat element, and no global chat stylesheet reaches it. The shared <chat-panel> still
+ * serves the Composer and the Governance room; nothing in this file is reached from either of them.
  *
  * WHAT THE CONSOLE IS, AND WHAT THIS SEAT DOES IN IT (owner, 2026-10-23): the Console is the index
  * of every prompt package the person has built, and this chat is how the person searches that
@@ -34,27 +34,31 @@
  * removed.
  */
 import { LitElement, html, css, nothing } from 'lit';
-// The right column's pieces. They stay SHARED — they are the drawing and the styling the catalog
-// governs — and each import here is a side effect that defines the tag before this element draws. 
-import '@/components/lit/chat-fold';
-import '@/components/lit/chat-header';
-import '@/components/lit/chat-messages';
-import '@/components/lit/small-dropdown';
-import '@/components/lit/chat-input';
-import '@/components/lit/chat-action-bar';
+// THE CONSOLE'S OWN PARTS, NOT THE SHARED ONES. They were copied into `chat/parts/` with the
+// console's tags, so this column owns its drawing and its CSS: a change to the Composer's or the
+// design seat's chat cannot clip, move or recolor anything here.
+import './chat/parts/console-chat-fold';
+import './chat/parts/console-chat-header';
+import './chat/parts/console-output-header';
+import './chat/parts/console-chat-messages';
+import './chat/parts/console-small-dropdown';
+import './chat/parts/console-chat-input';
+import './chat/parts/console-chat-action-bar';
 import historyIcon from '@/assets/figma-chat-history-icon.svg';
 // THE READOUT'S MODEL MARK, handed in by the instance that draws it: the file's own node is
 // #40001124:7096 and its size moved to 20 in the drawing (2026-09-20).
 import readoutModelMark from '@/assets/figma-readout-model-mark.svg';
-import '@/components/lit/chat-plugin-tray';
-import '@/components/lit/error-banner';
-import '@/components/lit/chat-navigation-bar';
-import '@/components/lit/prompt-input/prompt-textarea';
+import './chat/parts/console-chat-plugin-tray';
+import './chat/parts/console-error-banner';
+import './chat/parts/console-chat-navigation-bar';
+import './chat/parts/console-prompt-textarea';
 import logoAsset from '@/components/lit/assets/chat-logo-gemini.png';
 // The app's own logger. A turn warning from the server is written here as well as drawn in
 // the thread: the Trace tab reads this logger (lib/trace-source subscribes to it), and the
 // owner asked for exactly that — "we need to report it in the console trace" (2026-09-18).
 import { logger } from '@/lib/logger';
+import { applyPersistenceFailure } from './chat/persistence';
+import { formatToolInventory } from './chat/tool-inventory';
 // Grace's surface commands. A reply that carries XML tags drives the surface — through window
 // CustomEvents and the event bus, the same doors the React seat used.
 import { eventBus } from '@/shared/event-bus';
@@ -69,13 +73,13 @@ interface SeatMessage {
   role?: string;
   content?: string;
   /** Which canvas node the turn is about, when it is about one — passed through, never
-   *  invented here. See <chat-messages>. */
+   *  invented here. See <console-chat-messages>. */
   nodeId?: string;
   /** The turn's small note (what part of the flow it is). */
   label?: string;
-  /** An alert rather than a remark — a held Run that will not go. See <chat-messages>. */
+  /** An alert rather than a remark — a held Run that will not go. See <console-chat-messages>. */
   alert?: boolean;
-  /** A run's result, drawn as output (rich text, 14px). See <chat-messages>. */
+  /** A run's result, drawn as output (rich text, 14px). See <console-chat-messages>. */
   result?: boolean;
   /**
    * THE ENGINE'S OWN MESSAGE VOCABULARY (2026-10-06) — the Product room's port of the
@@ -127,6 +131,42 @@ const NEW_PROMPT_HELLO =
   + 'Do not guess what they are building, do not list what you can do, and offer '
   + 'no suggestions and no buttons — there is nothing yet to have an opinion about.';
 
+/**
+ * THE TOOLS TAB'S OWN HELLO. The inventory is the source of what is named; this base asks the
+ * model to speak from it, not from a Figma-only sentence frozen in code. Today the registry has
+ * Figma ingest available and the unbuilt remainder counted, not invented.
+ */
+const TOOLS_GREETING_BASE =
+  'A person has just opened the Tools tab of the console — the seat for finding out what tool '
+  + 'they are working with and taking them to that work. THE INVENTORY: ';
+const TOOLS_GREETING_TAIL =
+  '. Introduce yourself in a sentence or two, say this is the tools seat, name the tools that '
+  + 'are available and say which listed tools are not built yet, and ask what they are working '
+  + 'on. Do not invent a tool that is not in the inventory, do not list capabilities, and do not '
+  + 'describe or quote any particular card.';
+
+/** THE CHAT TAB'S HELLO — the index's own words, exactly as they were before this split. */
+const CONSOLE_GREETING =
+  'A person has just landed on the console — the index of every package they have built. '
+  + 'This screen is an index and nothing more: a card per package, with its name and its one '
+  + 'line, and nothing open. YOUR WORK HERE IS ORGANISATION — finding, filtering and sorting '
+  + 'their prompts — and NOT writing into one. The seats, the tools and the writes all belong '
+  + 'to a package, in that package\'s own chat; there is no prompt open here to write into. '
+  + 'Introduce yourself in a sentence or two, say what this screen is and that you can help '
+  + 'them find, filter or sort what is in it, and ask what they are looking for. Do NOT '
+  + 'describe, quote or comment on any particular package — naming one is reading over their '
+  + 'shoulder. Do NOT offer tools, buttons or links in your reply: the seat draws the tools '
+  + 'that exist beneath your greeting from its own inventory.';
+
+/** THE APPROVALS TAB'S HELLO — the queue's own question, not the index's. */
+const APPROVALS_GREETING =
+  'A person has just opened the Approvals tab of the console. This is the supervisor queue: '
+  + 'the cards waiting for approval or sharing. The cards on the left, if any, are that queue; '
+  + 'the inspections already filed are in this tab. Introduce yourself in a sentence or two, say '
+  + 'what this tab is, say plainly whether anything is waiting (when the list is empty, say there '
+  + 'is nothing waiting), and ask what they would like to review. Do not invent a card, a person '
+  + 'or a count.';
+
 export class ConsoleChatPanel extends LitElement {
   static properties = {
     conversationId: { type: String, attribute: 'conversation-id' },
@@ -144,7 +184,7 @@ export class ConsoleChatPanel extends LitElement {
     /**
     /** The "Analyzing: Session 222 | …" status line, host-fed. Empty hides the bar. */
     statusText: { type: String, attribute: 'status-text' },
-    /** The header's four status slots, relayed to <chat-header>. */
+    /** The header's four status slots, relayed to <console-chat-header>. */
     status: { type: String, attribute: 'status' },
     sessionLabel: { type: String, attribute: 'session-label' },
     sessionName: { type: String, attribute: 'session-name' },
@@ -154,6 +194,14 @@ export class ConsoleChatPanel extends LitElement {
     usage: { type: Object },
     /** The console's prompt packages, for Grace's workspace context. */
     consoleCards: { type: Array },
+    /** THE TOOLS THE GREETING MAY OFFER — the inventory, bound from /console/tools. Each
+     *  entry is {token, label, description}; the seat draws one action button per entry. */
+    consoleTools: { type: Array },
+    /** EACH TAB'S OWN THREAD — chat, approvals, tools. Bound from /console/tab_conversations. */
+    tabConversations: { type: Object },
+    /** WHAT THE SURFACE IS SHOWING — the plan the last directive produced. Draws above the
+     *  thread so the person sees the model's reading of their instruction, not just cards. */
+    consoleQuery: { type: Object },
     /** Open catalog findings, for Grace's workspace context. */
     catalogFindings: { type: Array },
     /** Component ids carrying an open annotation finding — draws the red banner. */
@@ -163,7 +211,7 @@ export class ConsoleChatPanel extends LitElement {
     /** The Console's conversations, fed by the surface — the selector's list. */
     conversations: { type: Array },
     /** The input area's dragged height, px. 0 = auto. Reactive — the gripper's
-        drag writes this and the template re-renders chat-input with it. */
+        drag writes this and the template re-renders console-chat-input with it. */
     inputHeight: { type: Number },
     /** The rail's active view. Driven by the rail's `tab-change`, not by the host. */
     activeTab: { type: String, attribute: 'active-tab' },
@@ -186,13 +234,13 @@ export class ConsoleChatPanel extends LitElement {
     allowedTabs: { type: String, attribute: 'allowed-tabs' },
     /**
      * The room's own words for the rail's buttons, passed through untouched to
-     * `<chat-navigation-bar>`'s `tab-labels` (a JSON map id→{label,tooltip}; see the
+     * `<console-chat-navigation-bar>`'s `tab-labels` (a JSON map id→{label,tooltip}; see the
      * rail for the shape). Ids are the stable key, labels are presentation — a room
      * that means something else by a shared id says so here instead of renaming a
      * button every other room is using. The seat itself never parses it.
      */
     tabLabels: { type: String, attribute: 'tab-labels' },
-    /** The room's rail list of deactivated tabs — relayed to <chat-navigation-bar>. See there. */
+    /** The room's rail list of deactivated tabs — relayed to <console-chat-navigation-bar>. See there. */
     disabledTabs: { type: String, attribute: 'disabled-tabs' },
     /**
      * Whether the rail's Trace tab SENDS its prompt when clicked.
@@ -306,7 +354,7 @@ export class ConsoleChatPanel extends LitElement {
    * with archived rows included. Until it is read (or if it cannot be), the bar falls back
    * to the surface's list length, which is real data too, just staler.
    */
-  private _conversationRows: Array<{ id: string; title: string; tab: string; archived: boolean; savedAt: string }> | null = null;
+  private _conversationRows: Array<{ id: string; title: string; tab: string; archived: boolean; savedAt: string; messageCount: number }> | null = null;
   /**
    * HAS THIS SEAT'S CONVERSATION LIST BEEN READ YET?
    *
@@ -331,6 +379,10 @@ export class ConsoleChatPanel extends LitElement {
   private _adoptedByHost = '';
   /** A conversation is being created for the console right now — see _startNewConversation. */
   private _creatingConversation = false;
+  /** The design seat's default-open latch: the read/create that opens a tab's thread. */
+  private _openingDefault = false;
+  private _wantsDefaultConversation = false;
+  /** The seat has already made itself a conversation for this arrival — see _greetIfArriving. */
   /** Whether the leading bar's conversation list is open. */
   private _conversationsOpen = false;
   /** The row whose trash is armed (first click); a second click removes it. */
@@ -405,6 +457,12 @@ export class ConsoleChatPanel extends LitElement {
   private _listNote = '';
   /** Watches the scroller's children so a growing thread moves the thumb without a render. */
   private _outputRO: ResizeObserver | null = null;
+  /** The footer band has been given its drag — see `_wireFooterGrip`. */
+  private _footerGripWired = new WeakSet<Element>();
+  private _footerGripAttempts = 0;
+  /** The readout and conversation bands — see `_wireSlotBands`. */
+  private _slotBandsWired = new WeakSet<Element>();
+  private _slotBandAttempts = 0;
   /** The Console's session. Bound by the surface from /console/session_id. */
   declare sessionId?: string;
   /** The "Analyzing: Session 222 | …" line. Empty hides the status bar. */
@@ -419,6 +477,11 @@ export class ConsoleChatPanel extends LitElement {
   declare usage: Record<string, number | string | undefined>;
   /** The console's prompt packages. */
   declare consoleCards: Array<Record<string, unknown>>;
+  /** The tools the greeting may offer, from the assembly's inventory. */
+  declare consoleTools: Array<Record<string, unknown>>;
+  /** EACH TAB'S OWN THREAD — chat, approvals, tools. Bound from /console/tab_conversations. */
+  declare tabConversations: Record<string, string>;
+  declare consoleQuery: Record<string, unknown> | null;
   /** Open catalog findings. */
   declare catalogFindings: Array<Record<string, unknown>>;
   /** Component ids with an open annotation finding. */
@@ -471,6 +534,9 @@ export class ConsoleChatPanel extends LitElement {
     this.qaScore = '';
     this.usage = {};
     this.consoleCards = [];
+    this.consoleTools = [];
+    this.tabConversations = {};
+    this.consoleQuery = null;
     this.catalogFindings = [];
     this.unannotatedInUse = [];
     this.modelLabel = 'Models';
@@ -490,7 +556,7 @@ export class ConsoleChatPanel extends LitElement {
    * interface because that's their main experience is the chat room"*). `_workActive` spans the
    * WHOLE turn — her reply AND, in a room whose host builds, the page-build that follows it —
    * and `_workStage` names what is happening ('thinking' until the host says 'building' via
-   * `a2ui:grace-status`). The card itself (shimmer, elapsed time, collapse) is <chat-messages>'
+   * `a2ui:grace-status`). The card itself (shimmer, elapsed time, collapse) is <console-chat-messages>'
    * own, ported from AI Elements' <Reasoning> (MIT; see frontend/ai-elements/README.md); these
    * two fields plus the timer are the seat's facts.
    */
@@ -551,7 +617,7 @@ export class ConsoleChatPanel extends LitElement {
    *
    * `_draft` is a PLAIN field on purpose: making it reactive would re-render this element
    * — and therefore the whole thread — on every keystroke. But the bar's disabled state
-   * depends on the draft (`chat-action-bar:175`, `?disabled=${!busy && !hasText}`), and
+   * depends on the draft (`console-chat-action-bar:175`, `?disabled=${!busy && !hasText}`), and
    * nothing ever carried it across. So typing worked, the draft was right, and the send
    * control stayed DISABLED forever: measured 2026-09-17 on a package — the draft held
    * "xXX" from real typing while the bar reported hasText false, and the chat could not
@@ -561,7 +627,7 @@ export class ConsoleChatPanel extends LitElement {
    * writing its property is composition, not a value pushed into the surface's tree.
    */
   private _syncBarText() {
-    const bar = this.renderRoot?.querySelector('chat-action-bar') as
+    const bar = this.renderRoot?.querySelector('console-chat-action-bar') as
       (HTMLElement & { hasText: boolean }) | null;
     if (bar) bar.hasText = this._draft.trim().length > 0;
   }
@@ -598,7 +664,7 @@ export class ConsoleChatPanel extends LitElement {
         label: detail.label,
         alert: detail.alert === true,
         // A host that says "this is a run's result" is believed: the drawing of it is
-        // chat-messages' business (rich text, 14px), the fact is the host's.
+        // console-chat-messages' business (rich text, 14px), the fact is the host's.
         result: detail.result === true,
         // THE ENGINE'S TYPE, when the host states it (the Product room's live run lines
         // ride in with their own `starting` / `building` / `finished` / `error` stamps —
@@ -642,7 +708,7 @@ export class ConsoleChatPanel extends LitElement {
     if (arrived) this._takeArrival(arrived.kind);
     window.addEventListener('a2ui:system-message', this._onHostSay);
     window.addEventListener('a2ui:composer-opened', this._onComposerOpened as EventListener);
-    // A chat button's answer arrives here from <chat-messages> and goes down the one send
+    // A chat button's answer arrives here from <console-chat-messages> and goes down the one send
     // path this seat has — the same one the input uses.
     this.addEventListener('chat-action-send', this._onActionSend);
     // The thumb's length depends on the region's height, so a window resize re-measures it.
@@ -796,6 +862,32 @@ export class ConsoleChatPanel extends LitElement {
     this._spent.add(action);
     this.requestUpdate();
     /*
+     * A TOOL FROM THE INVENTORY IS SOMETHING THIS ROOM DOES DO.
+     *
+     * The Console's inventory (the assembly's /console/tools) is the set of choices the greeting
+     * offers, and each is a QUERY the surface runs — not a sentence for the model to interpret.
+     * The press is written as a real turn and the room re-assembles; the assembly reads that turn
+     * and resolves the token without a model call (routes/ai.py, render-console). So it is sent
+     * here, before the refusal below, which is for commands this room cannot perform.
+     */
+    /*
+     * THE TOOLS BUTTON IS A TAB, NOT A TOOL. A press moves the chat to Tools, which switches to
+     * the Tools conversation and asks the room for that tab's cards; the name inside Tools today
+     * is Figma ingest, but the button is not named after it. A tool token in the Chat tab is
+     * treated as the same door (old stored greetings and a model that names the tool instead of
+     * the tab both land in Tools); only inside Tools is a tool token an action.
+     */
+    if (action === 'tools'
+      || (this.activeTab === 'chat'
+        && (this.consoleTools ?? []).some((tool) => String(tool?.token ?? '') === action))) {
+      this._onTabChange(new CustomEvent('tab-change', { detail: { tab: 'tools' } }));
+      return;
+    }
+    if ((this.consoleTools ?? []).some((tool) => String(tool?.token ?? '') === action)) {
+      void this._applyConsoleTool(action);
+      return;
+    }
+    /*
      * A COMMAND THIS ROOM DOES NOT PERFORM IS SAID SO, NOT SENT.
      *
      * The Console's one control of its own is `<reassemble-console …/>`, a tag in her reply
@@ -824,15 +916,284 @@ export class ConsoleChatPanel extends LitElement {
     void this._send(text);
   };
 
+  /**
+   * A TOOL CHOSEN FROM THE GREETING IS A REAL TURN, AND THE SURFACE ANSWERS IT.
+   *
+   * The press is written to the conversation the seat is in, so the choice is part of the
+   * audit trail and "number two" later resolves against the set it produced. Then the room is
+   * asked to re-assemble: `render-console` reads the last person turn, sees `[token]`, and
+   * resolves it to the tool's plan WITHOUT a model call (routes/ai.py). The cards change and
+   * the plan line says what was applied.
+   *
+   * NOTHING IS DRAWN AS IF IT WORKED BEFORE THE WRITE DID. A failed write is said in the
+   * thread, and the reassembly is not asked for — a press that never reached the conversation
+   * would otherwise change the grid while leaving no record of why.
+   */
+  private async _applyConsoleTool(token: string): Promise<void> {
+    const tool = (this.consoleTools ?? []).find(
+      (entry) => String(entry?.token ?? '') === String(token),
+    );
+    if (!tool) {
+      this._local = [...this._local, {
+        role: 'assistant',
+        alert: true,
+        content: 'That tool is not in the inventory, so nothing was selected.',
+      }];
+      this.requestUpdate();
+      return;
+    }
+    const status = String(tool?.status ?? 'not built');
+    if (status !== 'available') {
+      this._local = [...this._local, {
+        role: 'assistant',
+        alert: true,
+        content: `${String(tool?.label || token)} is ${status}; it is not built yet. Nothing was selected.`,
+      }];
+      this.requestUpdate();
+      return;
+    }
+    const conversationId = String(this.conversationId || '');
+    const text = `[${token}]`;
+    if (!conversationId) {
+      this._local = [
+        ...this._local,
+        {
+          role: 'assistant',
+          content:
+            '⚠️ That tool could not be applied: this seat has no conversation to record the ' +
+            'choice in. Nothing was changed.',
+          alert: true,
+        },
+      ];
+      this.requestUpdate();
+      return;
+    }
+    this._local = [...this._local, { role: 'user', content: text }];
+    this.requestUpdate();
+    try {
+      const response = await fetch(
+        `/api/conversations/${encodeURIComponent(conversationId)}/messages`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-User-ID': this._userId() },
+          body: JSON.stringify({ role: 'user', content: text }),
+        },
+      );
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      // The turn is the last person turn now; the surface may read it. The list is re-read
+      // beside it because the row's time (and its place) just moved.
+      void this._readConversations(this._userId());
+      window.dispatchEvent(
+        new CustomEvent('a2ui:console-command', {
+          detail: { reason: 'tool', action: token },
+        }),
+      );
+    } catch (err) {
+      const why = err instanceof Error ? err.message : String(err);
+      this._local = [
+        ...this._local,
+        {
+          role: 'assistant',
+          content: `⚠️ That tool could not be applied — ${why}. The cards were not changed.`,
+          alert: true,
+        },
+      ];
+      this.requestUpdate();
+    }
+  }
+
   private _onSendCommand() {
     const text = this._draft.trim();
     if (!text || this._sending) return;
-    const textarea = this.renderRoot?.querySelector('prompt-textarea') as
+    const textarea = this.renderRoot?.querySelector('console-prompt-textarea') as
       (HTMLElement & { value: string }) | null;
     if (textarea) textarea.value = '';
     this._draft = '';
     this._syncBarText();
+    /*
+     * AN ORDINAL IS AN OPERATOR COMMAND, NOT A CHAT TURN TO THE MODEL. "Number two" is the
+     * person pointing at the second card on the left; the cards are on screen, so the seat
+     * resolves it there and opens it through the same `card-open` door a click uses. No model
+     * call, no invented id, and a number the set does not have is said in the thread.
+     */
+    if (this._openByOrdinal(text)) return;
     void this._send(text);
+  }
+
+  /**
+   * THE ORDINAL, IN THE WORDS PEOPLE USE. Only a whole turn that is a choice is resolved:
+   * "number two", "2", "the second one", "open the second card". A sentence that merely
+   * mentions a number is a question and goes to her as one.
+   */
+  private _ordinalOf(text: string): number | null {
+    const words: Record<string, number> = {
+      one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8,
+      nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14,
+      fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20,
+    };
+    let t = String(text ?? '').toLowerCase().trim().replace(/[.!?,;:]+$/g, '').trim();
+    t = t.replace(/\s+please$/g, '').trim();
+    const token = '(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|\\d{1,2})';
+    const patterns = [
+      new RegExp(`^(?:open|show|go to)\\s+(?:the\\s+)?(?:card\\s+)?(?:number\\s+|#)?${token}(?:\\s+(?:card|one))?$`),
+      new RegExp(`^(?:number\\s+|#)${token}$`),
+      new RegExp(`^the\\s+${token}(?:\\s+(?:card|one))?$`),
+      new RegExp(`^${token}$`),
+    ];
+    const match = patterns.map((re) => t.match(re)).find(Boolean);
+    if (!match) return null;
+    const raw = String(match[1] || '');
+    const n = /^\d+$/.test(raw) ? Number(raw) : words[raw];
+    return Number.isInteger(n) && n >= 1 && n <= 20 ? n : null;
+  }
+
+  /** Resolve the choice against THIS TAB'S recorded set. True when it was an ordinal. */
+  private _openByOrdinal(text: string): boolean {
+    const n = this._ordinalOf(text);
+    if (n === null) return false;
+    void this._resolveOrdinalFromRecord(n, text);
+    return true;
+  }
+
+  private async _resolveOrdinalFromRecord(n: number, text: string): Promise<void> {
+    /* THE ORDINAL BINDS TO THE VIEW'S RECORD, NOT TO A RECORD THE VIEW LEFT. The Chat tab is
+       the whole library and may show 19 cards with no recorded set after a tab press; the last
+       Chat search set is not the visible view. Refuse rather than open a card from that hidden
+       set. Tools/Approvals replayed sets carry `turn_id` + `shown_ids`, so they resolve. */
+    const viewTurnId = String((this.consoleQuery as { turn_id?: unknown } | null)?.turn_id || '');
+    const viewIds = (this.consoleQuery as { shown_ids?: unknown } | null)?.shown_ids;
+    if (!viewTurnId || !Array.isArray(viewIds)) {
+      this._local = [...this._local, {
+        role: 'assistant',
+        alert: true,
+        content:
+          'There is no recorded set for this view yet. Ask for a set first — for example, '
+          + '"show me the input ones" — then name a number.',
+      }];
+      this.requestUpdate();
+      return;
+    }
+    const conversationId = String(this.conversationId || '');
+    const namespace = this.activeTab === 'chat' ? 'console' : (this.activeTab || 'console');
+    if (!conversationId) {
+      this._local = [...this._local, {
+        role: 'assistant',
+        alert: true,
+        content: 'There is no recorded set for this tab yet. Ask for a set first, then name a number.',
+      }];
+      this.requestUpdate();
+      return;
+    }
+    try {
+      const response = await fetch('/api/console/ordinal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-User-ID': this._userId() },
+        body: JSON.stringify({ conversation_id: conversationId, namespace, ordinal: n }),
+      });
+      const body = (await response.json().catch(() => ({}))) as {
+        detail?: string; card?: Record<string, unknown>; active_turn_id?: string;
+      };
+      if (!response.ok) {
+        this._local = [...this._local, {
+          role: 'assistant',
+          alert: true,
+          content: String(body?.detail || `There is no recorded set for this tab yet.`),
+        }];
+        this.requestUpdate();
+        return;
+      }
+      const card = body?.card;
+      const surfaceTurnId = String(body?.active_turn_id || '');
+      if (!card || !card.id || !surfaceTurnId) {
+        this._local = [...this._local, {
+          role: 'assistant',
+          alert: true,
+          content: 'That item is no longer on the surface, or the recorded set did not name itself.',
+        }];
+        this.requestUpdate();
+        return;
+      }
+      void this._openOrdinalCard(n, card, text, surfaceTurnId);
+    } catch (err) {
+      this._local = [...this._local, {
+        role: 'assistant',
+        alert: true,
+        content: `The recorded set could not be read: ${err instanceof Error ? err.message : String(err)}`,
+      }];
+      this.requestUpdate();
+    }
+  }
+
+  /**
+   * OPEN THE CARD THE PERSON POINTED AT, AND KEEP THE RECORD.
+   *
+   * The turn is written first — the choice is part of the conversation's audit — and then the
+   * card opens through the host's own `card-open` path (the click on a card sends the same
+   * event). A failed write is said on the confirmation line but does not cancel the read: the
+   * card is what they asked for.
+   */
+  private async _openOrdinalCard(
+    n: number,
+    card: Record<string, unknown>,
+    text: string,
+    surfaceTurnId: string,
+  ): Promise<void> {
+    const id = String(card.id ?? '');
+    if (!id) {
+      this._local = [...this._local, {
+        role: 'assistant', alert: true, content: 'That card has no id, so it cannot be opened.',
+      }];
+      this.requestUpdate();
+      return;
+    }
+    const title = String(card.title || 'Untitled');
+    let writeError = '';
+    if (this.conversationId) {
+      try {
+        const response = await fetch(
+          `/api/conversations/${encodeURIComponent(String(this.conversationId))}/messages`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-User-ID': this._userId() },
+            body: JSON.stringify({ role: 'user', content: text }),
+          },
+        );
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      } catch (err) {
+        writeError = err instanceof Error ? err.message : String(err);
+        logger.warn('the ordinal turn could not be saved', { conversationId: this.conversationId, error: writeError });
+      }
+    }
+    if (writeError) {
+      /* NO UNRECORDED TURN IS DRAWN. The card may still open (the read is the read), but the
+         ordinal turn has no conversation row, so it is not shown as a turn. The notice is the
+         only line, and the recorded set stays untouched. */
+      this._local = [...this._local, {
+        role: 'assistant',
+        alert: true,
+        content: `Not saved — ${writeError}. The card opened, but this turn was not written.`,
+      }];
+    } else {
+      this._local = [
+        ...this._local,
+        { role: 'user', content: text },
+        {
+          role: 'assistant',
+          alert: true,
+          content:
+            `Opening ${n} — “${title}”. ` +
+            `Resolved against set ${surfaceTurnId}.`,
+        },
+      ];
+    }
+    this.requestUpdate();
+    this.dispatchEvent(
+      new CustomEvent('card-open', {
+        detail: { sessionId: id, id },
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 
   /** The bar's stop — abort the in-flight call. */
@@ -875,11 +1236,11 @@ export class ConsoleChatPanel extends LitElement {
     const d = (e as CustomEvent).detail || {};
     this._dragStartY = typeof d.startY === 'number' ? d.startY : 0;
     this._dragStartHeight = this.inputHeight || 100;
-    const bar = this.renderRoot?.querySelector('chat-action-bar') as HTMLElement | null;
+    const bar = this.renderRoot?.querySelector('console-chat-action-bar') as HTMLElement | null;
     // THE TRAY, not <chat-footer>: the drawing's foot replaces it, so the bar the input height
     // must reserve is the foot's block — the design's own 97px (#40001123:6689), which is what
     // the fallback carries if the element is not up yet.
-    const footer = this.renderRoot?.querySelector('chat-plugin-tray') as HTMLElement | null;
+    const footer = this.renderRoot?.querySelector('console-chat-plugin-tray') as HTMLElement | null;
     this._barHeight = bar?.getBoundingClientRect().height || 82;
     this._footerHeight = footer?.getBoundingClientRect().height || 97;
   }
@@ -910,6 +1271,149 @@ export class ConsoleChatPanel extends LitElement {
     );
   }
 
+  /**
+   * THE FOOTER'S DOT BAND IS A HANDLE — the design seat's own behavior, on this column.
+   *
+   * The design chat's five boxes each resize by pulling the dots on their edge (the frame in
+   * `rooms/design/frame/chat-frame.ts`). The console's copy draws the same bands through the
+   * shared parts, but only the action bar's grip was wired; the footer's band was ornament, so
+   * a pull on it did nothing. This gives it the frame's footer rule exactly: a pull upward grows
+   * the footer by the hand's travel and takes that height out of the chat input above it, and a
+   * pull downward gives it back. The ceiling is the input's own floor, so the two can never
+   * overlap; the floor is the footer card's minimum.
+   *
+   * A DELTA, NOT A POSITION: the size is read at the press and changes by how far the pointer
+   * travelled, so the edge starts on the hand instead of jumping to it.
+   */
+  private _wireFooterGrip(): void {
+    const tray = this.renderRoot?.querySelector('console-chat-plugin-tray') as HTMLElement | null;
+    const band = tray?.shadowRoot?.querySelector('.gripper') as HTMLElement | null;
+    if (!tray || !band) {
+      // The parts draw their bands a frame or two after this seat does; retry a bounded few
+      // times rather than leave the handle dead because it was not up on the first render.
+      if (this._footerGripAttempts < 8) {
+        this._footerGripAttempts += 1;
+        window.setTimeout(() => this._wireFooterGrip(), 120);
+      }
+      return;
+    }
+    if (this._footerGripWired.has(band)) return;
+    this._footerGripWired.add(band);
+    band.style.cursor = 'ns-resize';
+    band.style.touchAction = 'none';
+    band.style.userSelect = 'none';
+    band.style.setProperty('-webkit-user-select', 'none');
+    band.addEventListener('pointerdown', (event) => {
+      const ev = event as PointerEvent;
+      if (ev.button !== 0) return;
+      ev.preventDefault();
+      const card = tray.shadowRoot?.querySelector('.card') as HTMLElement | null;
+      const input = this.renderRoot?.querySelector('console-chat-input') as HTMLElement | null;
+      if (!card || !input) return;
+      const startY = ev.clientY;
+      const startH = card.getBoundingClientRect().height;
+      const startInput = input.getBoundingClientRect().height;
+      const area = input.shadowRoot?.querySelector('.input-area') as HTMLElement | null;
+      const areaMin = area ? parseFloat(getComputedStyle(area).minHeight) : 0;
+      const inputFloor = Number.isFinite(areaMin) && areaMin > 0 ? areaMin : startInput;
+      const cardMin = parseFloat(getComputedStyle(card).minHeight);
+      const footerFloor = Number.isFinite(cardMin) && cardMin > 0 ? cardMin : startH;
+      // READ ONCE, AT THE PRESS, so the stop cannot move under the hand.
+      const maxDelta = Math.max(0, Math.min(100 - startH, startInput - inputFloor));
+      const minDelta = Math.min(0, footerFloor - startH);
+      const onMove = (move: PointerEvent): void => {
+        if (move.buttons === 0) { done(); return; }
+        const delta = Math.max(minDelta, Math.min(startY - move.clientY, maxDelta));
+        card.style.height = `${Math.round(startH + delta)}px`;
+        this.inputHeight = Math.round(startInput - delta);
+      };
+      const done = (): void => {
+        band.removeEventListener('pointermove', onMove);
+        band.removeEventListener('pointerup', done);
+        band.removeEventListener('pointercancel', done);
+      };
+      band.addEventListener('pointermove', onMove);
+      band.addEventListener('pointerup', done);
+      band.addEventListener('pointercancel', done);
+      band.setPointerCapture(ev.pointerId);
+    });
+  }
+
+  /**
+   * THE READOUT'S AND THE CONVERSATION BAR'S DOT BANDS ARE HANDLES TOO.
+   *
+   * The design seat's five boxes resize by pulling the dots on their bottom edge (the frame in
+   * `rooms/design/frame/chat-frame.ts`). The console's shared parts draw the same bands; here the
+   * readout and the conversation bar get the same pull, and the output card below takes the
+   * change. A pull down grows the box and shortens the card; a pull up gives the card its room
+   * back. The card keeps a floor of 120px — the same output floor the input drag already
+   * reserves — so a pull can never bury the thread.
+   *
+   * The band's own click is stopped: it is a handle, not the bar's button, so pulling the dots
+   * never opens or closes the conversation list.
+   */
+  private _wireSlotBands(): void {
+    const outputHeader = this.renderRoot?.querySelector('console-output-header') as HTMLElement | null;
+    const chatBar = this.renderRoot?.querySelector('console-chat-header') as HTMLElement | null;
+    const outputCard = (this.renderRoot?.querySelectorAll('console-chat-header')?.[1] ?? null) as HTMLElement | null;
+    const pairs = [
+      { host: outputHeader, cardSel: '.readout-area' },
+      { host: chatBar, cardSel: '.shell' },
+    ];
+    let missing = 0;
+    for (const { host, cardSel } of pairs) {
+      const band = host?.shadowRoot?.querySelector('.gripper, .grip') as HTMLElement | null;
+      if (!host || !band) { missing += 1; continue; }
+      if (this._slotBandsWired.has(band)) continue;
+      this._slotBandsWired.add(band);
+      band.style.cursor = 'ns-resize';
+      band.style.touchAction = 'none';
+      band.style.userSelect = 'none';
+      band.style.setProperty('-webkit-user-select', 'none');
+      band.addEventListener('click', (e) => e.stopPropagation());
+      band.addEventListener('pointerdown', (event) => {
+        const ev = event as PointerEvent;
+        if (ev.button !== 0) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        const card = host.shadowRoot?.querySelector(cardSel) as HTMLElement | null;
+        if (!card) return;
+        const startY = ev.clientY;
+        const startH = card.getBoundingClientRect().height;
+        /* A DOWNWARD PULL IS AN EXPANSION. The design card's open state is the bar's; the grip
+           sets it too, so the list is the card's body while the hand is pulling, not a clipped
+           shell with rows inside. */
+        if (host.dataset.slot === 'conversations' && !this._conversationsOpen) {
+          this._conversationsOpen = true;
+          this.requestUpdate();
+        }
+        const room = outputCard
+          ? Math.max(0, outputCard.getBoundingClientRect().height - 120)
+          : 0;
+        const maxH = startH + room;
+        const onMove = (move: PointerEvent): void => {
+          if (move.buttons === 0) { done(); return; }
+          const wanted = Math.max(startH, Math.min(startH + (move.clientY - startY), maxH));
+          card.style.flex = '0 0 auto';
+          card.style.height = `${Math.round(wanted)}px`;
+        };
+        const done = (): void => {
+          band.removeEventListener('pointermove', onMove);
+          band.removeEventListener('pointerup', done);
+          band.removeEventListener('pointercancel', done);
+        };
+        band.addEventListener('pointermove', onMove);
+        band.addEventListener('pointerup', done);
+        band.addEventListener('pointercancel', done);
+        band.setPointerCapture(ev.pointerId);
+      });
+    }
+    if (missing > 0 && this._slotBandAttempts < 8) {
+      this._slotBandAttempts += 1;
+      window.setTimeout(() => this._wireSlotBands(), 120);
+    }
+  }
+
   static styles = css`
     :host {
       display: flex;
@@ -917,6 +1421,24 @@ export class ConsoleChatPanel extends LitElement {
       height: 100%;
       min-height: 0;
       min-width: 0;
+      /*
+       * THE CONSOLE CHAT'S OWN PALETTE — DEFINED HERE, NOT READ FROM A GLOBAL SHEET.
+       *
+       * This seat and every part under it are the console's own files (rooms/console/chat/).
+       * They inherit these four values from this host and from nothing else, so a change to a
+       * shared chat stylesheet cannot recolor, resize or clip this column. The values are the
+       * v.4b drawing's, unchanged; they used to live on :root in index.css for every chat seat.
+       */
+      --chat-bg: #F7F8F2;
+      --chat-text: #171717;
+      --chat-user-bg: #CBE6E3;
+      --chat-rule: transparent;
+      /* The fold's design tokens, scoped the same way. */
+      --ds-navy: #00437c;
+      --ds-teal-tint: #edf2f2;
+      --ds-fs-label: 14px;
+      --ds-weight: 500;
+      --ds-radius-pill: 9px;
       /*
        * NO OVERFLOW HIDING. This host used to clip, and that clip was doing two
        * jobs, both of them wrong. It hid content that overflows — the class of
@@ -993,7 +1515,7 @@ export class ConsoleChatPanel extends LitElement {
       display: block;
       pointer-events: none;
     }
-    /* The rail is <chat-navigation-bar>, which carries its own Figma constraint
+    /* The rail is <console-chat-navigation-bar>, which carries its own Figma constraint
        (75px, blue gradient, radius). The panel stacks the remaining pieces; only
        the thread is allowed to grow and scroll.
 
@@ -1010,7 +1532,7 @@ export class ConsoleChatPanel extends LitElement {
        panel, flush against the edge of the box that clips it, and the panel paints
        over it. Until the rail is the panel's sibling inside a right-column
        container, any fix from inside this element is a workaround. */
-    chat-navigation-bar { flex-shrink: 0; will-change: transform; }
+    console-chat-navigation-bar { flex-shrink: 0; will-change: transform; }
     /* The panel FILLS its column and snaps to the edges of the browser window.
        contain: layout paint scopes its internals so a window drag-resize
        doesn't invalidate the whole surface every frame. */
@@ -1090,13 +1612,13 @@ export class ConsoleChatPanel extends LitElement {
       background: #CBE6E3;
       padding-top: 5px;
     }
-    chat-header { flex-shrink: 0; }
+    console-chat-header { flex-shrink: 0; }
     /* THE LEADING BLOCK'S TOP IS THE DRAWING'S OWN — #40001119:6308 says 16 (it said 20
        before the file moved, 2026-09-20), and every later block takes 6. It is marked on the
        instance that leads (the readout passes variant="lead") rather than left in a custom
        property: the value check compares what it can read, and a var() was a value neither it
        nor a reader could hold against the file. */
-    .chat-output-wrapper > chat-header:first-child { --block-pad-top: 16px; }
+    .chat-output-wrapper > console-chat-header:first-child { --block-pad-top: 16px; }
     /* THE CARD IS BOUNDED BY THE REGION, AND THAT IS WHAT MAKES THE THREAD SCROLL.
        It GROWS to fill what the bars leave (a short thread still fills the region, the
        design's own view) and it SHRINKS no further than the region allows — flex 1 1 auto
@@ -1106,8 +1628,11 @@ export class ConsoleChatPanel extends LitElement {
        conversation could not be rolled at all (owner, 2026-09-19: "still cannot scroll, it's
        weird"). The note that used to stand here — that allowing shrink would stop the region
        scrolling — was true while the REGION was the scroller, which it no longer is. */
-    chat-header[card] { flex: 1 1 auto; min-height: 0; }
-    small-dropdown { flex-shrink: 0; }
+    console-chat-header[card] { flex: 1 1 auto; min-height: 0; }
+    /* THE CONVERSATIONS LOT IS A CONTROL: pointer over its face. The grip inside still says
+       ns-resize because it is a drag, not a click. */
+    console-chat-header[data-slot="conversations"] { cursor: pointer; }
+    console-small-dropdown { flex-shrink: 0; }
     /* "chat-output-slot-area" #40001085:1521 — column, padding 10px 20px, gap 10px,
        vertical HUG. The HUG is why the Conversations row is as tall as the dropdown
        and no taller; only the two below it are drawn to fill.
@@ -1150,14 +1675,12 @@ export class ConsoleChatPanel extends LitElement {
       pointer-events: none;
       transition: visibility 0s linear var(--dur-pane, 760ms);
     }
-    /* The Conversations dropdown's rows, from "small-dropdown" state=open
+    /* The Conversations dropdown's rows, from "console-small-dropdown" state=open
        #40001085:2414: a column of white tiles, gap 5, radius 4, height 30,
        label #4E68D2 Semi Bold 600 / 14. */
-    /* A LONG LIST SCROLLS IN ITS OWN SMALL BOX — more than two rows, or a short window,
-       and a slim scrollbar appears inside the dropdown instead of the list stretching the
-       Conversations row down the column. Two rows are always held whole (2×30 + 5 gap =
-       65px); the viewport term only bites on a short window, where the box shrinks further
-       rather than crowding the results area below it. */
+    /* THE LIST FILLS THE CARD'S BODY AND SCROLLS THERE, exactly as the design seat's does.
+       The open card's height is the window; the list is not capped at two rows and does not
+       live in a separate box below the bar. */
     .conversation-list {
       margin: 0;
       padding: 0;
@@ -1165,10 +1688,26 @@ export class ConsoleChatPanel extends LitElement {
       display: flex;
       flex-direction: column;
       gap: 5px;
-      max-height: min(65px, 20vh);
+      flex: 1 1 auto;
+      min-height: 0;
+      max-height: none;
       overflow-y: auto;
       overscroll-behavior: contain;
     }
+    /* THE NEW-CONVERSATION CONTROL, BESIDE THE BAR'S OWN MARK. */
+    .conv-new {
+      flex: 0 0 auto;
+      width: 22px;
+      height: 22px;
+      padding: 0;
+      border: 1px solid rgba(117, 142, 135, 0.5);
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.5);
+      color: #3D515B;
+      font: 600 16px/1 'IBM Plex Sans', system-ui, sans-serif;
+      cursor: pointer;
+    }
+    .conv-new:hover { background: #fff; }
     /* 6px, and WEBKIT-ONLY ON PURPOSE — a scrollbar-width: thin here would take precedence
        in this app's own browser and draw Chrome's 11px bar instead (measured on the Scout's
        23-row list, 2026-10-02: an 11px gutter). The rest of the app's scrollers style only
@@ -1193,7 +1732,9 @@ export class ConsoleChatPanel extends LitElement {
       height: 30px;
       border-radius: 4px;
       background: #F7F8F2;
-      box-shadow: 2px 2px 6px 0 rgba(0, 0, 0, 0.15), -2px -2px 6px 0 rgba(0, 0, 0, 0.15);
+      /* FLAT TILE (owner, 2026-11-10): no drop shadow on the conversation row, in either the
+         Chat or the Tools list. The tile's fill and radius are the whole treatment. */
+      box-shadow: none;
     }
     .conversation-list button {
       border: none;
@@ -1218,7 +1759,7 @@ export class ConsoleChatPanel extends LitElement {
     /* WHEN THE THREAD WAS LAST SAVED — the owner's ask, 2026-09-24: "can you add timestamps to
        the conversations when they're saved."
        IT IS NOT IN THE DRAWING, AND THAT IS WORTH SAYING PLAINLY. v.4b draws no conversation
-       selector here at all; this list's look is the older "small-dropdown" state=open
+       selector here at all; this list's look is the older "console-small-dropdown" state=open
        #40001085:2414 (see registry.json), so there is no drawn time to copy. This is the app's
        own when — the same format the Evals feed shows (shared/when.ts) — recorded as an
        addition the design has yet to catch up with, the way the citation pill is.
@@ -1282,7 +1823,7 @@ export class ConsoleChatPanel extends LitElement {
       font-style: italic;
       opacity: 0.7;
     }
-    chat-messages { flex: 1 1 auto; min-height: 0; display: flex; }
+    console-chat-messages { flex: 1 1 auto; min-height: 0; display: flex; }
     /* The host's slot above the content. It takes what its content asks for and
        NOTHING when it is empty — no height, no border, no gap. This is what keeps the
        new slot cost-free for every assembly that does not fill it. */
@@ -1403,7 +1944,7 @@ export class ConsoleChatPanel extends LitElement {
     /* THE FILED INSPECTIONS, UNDER APPROVALS — the governance reports as cards, not chat turns:
        the header in the header's cream, the attention rows in amber, the ok rows in green. */
     .inspection-reports { display: flex; flex-direction: column; gap: 8px; padding: 4px 10px 10px; }
-    /* THE FOLDS ARE <chat-fold> NOW — the catalogue's 40px white dropdown tile, shared
+    /* THE FOLDS ARE <console-chat-fold> NOW — the catalogue's 40px white dropdown tile, shared
        with the catalog check and the trace. What the panel adds is the margin around it. */
     .fold-wrap { margin: 4px 10px 8px; }
     .inspection-report {
@@ -1434,6 +1975,72 @@ export class ConsoleChatPanel extends LitElement {
       color: #6B7280;
     }
     .view-empty { line-height: 1.5; }
+    .console-query {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin: 0 0 8px;
+      padding: 6px 10px;
+      border: 1px solid #E3E6EA;
+      border-radius: 8px;
+      background: #F7F8FA;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      color: #507274;
+    }
+    .console-query-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .console-query-missing {
+      flex: 0 0 auto;
+      font-size: 10px;
+      font-weight: 700;
+      color: #9A3412;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .console-refresh {
+      flex: 0 0 auto;
+      font: inherit;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #234354;
+      background: #FFFFFF;
+      border: 1px solid #D6DDE2;
+      border-radius: 6px;
+      padding: 3px 8px;
+      cursor: pointer;
+    }
+    .console-refresh:hover { border-color: #507274; }
+    /* THE TOOLS TAB LISTS WHAT HAS BEEN INGESTED — the console's own cards, newest first. */
+    .tools-cards { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+    .tools-caption {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #6B7A85;
+      padding: 0 2px;
+    }
+    .tool-card {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #E3E6EA;
+      border-radius: 10px;
+      background: #FFFFFF;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+      transition: border-color 120ms ease, background 120ms ease;
+    }
+    .tool-card:hover { border-color: #507274; background: #F7F8FA; }
+    .tool-card:focus-visible { outline: 2px solid #507274; outline-offset: 1px; }
+    .tool-card-title { font-size: 13px; font-weight: 600; color: #234354; }
+    .tool-card-meta { font-size: 11px; color: #6B7A85; }
     .view-spinner {
       width: 14px;
       height: 14px;
@@ -1445,10 +2052,10 @@ export class ConsoleChatPanel extends LitElement {
     @keyframes view-spin {
       to { transform: rotate(360deg); }
     }
-    chat-action-bar { flex-shrink: 0; }
-    chat-input { flex-shrink: 0; }
+    console-chat-action-bar { flex-shrink: 0; }
+    console-chat-input { flex-shrink: 0; }
     chat-footer { flex-shrink: 0; }
-    chat-plugin-tray { flex-shrink: 0; }
+    console-chat-plugin-tray { flex-shrink: 0; }
     /* A seat handed over by the host fills the column. The empty modifier is display:none rather
        than a zero-height box on purpose: an empty flex child with flex-grow would take the space
        the element's own pieces are supposed to have. */
@@ -1476,7 +2083,10 @@ export class ConsoleChatPanel extends LitElement {
      */
     const fromSurface = this.messages || [];
     const local = this._local;
-    if (!fromSurface.length || !local.length) return [...fromSurface, ...local];
+    if (!fromSurface.length || !local.length) {
+      const turns = [...fromSurface, ...local];
+      return this._withGreetingOptions(this._withToolLabels(turns));
+    }
 
     const same = (a: SeatMessage, b: SeatMessage) =>
       (a?.role || '') === (b?.role || '') && (a?.content || '') === (b?.content || '');
@@ -1488,13 +2098,101 @@ export class ConsoleChatPanel extends LitElement {
       const spoken = local.slice(-n);
       if (tail.every((m, i) => same(m, spoken[i]))) { caughtUp = n; break; }
     }
-    return [...fromSurface, ...local.slice(0, local.length - caughtUp)];
+    const turns = [...fromSurface, ...local.slice(0, local.length - caughtUp)];
+    return this._withGreetingOptions(this._withToolLabels(turns));
+  }
+
+  /**
+   * A TOOL TURN READS AS ITS LABEL, NOT AS THE WIRE TOKEN.
+   *
+   * Pressing the greeting's button writes `[figma-ingest]` to the conversation — that is the
+   * wire the assembly resolves, and the record of the press. A person reading their own thread
+   * should see "Figma ingest", the words on the button they pressed, not the token behind it.
+   * The stored turn is untouched; this is the thread's display.
+   */
+  private _withToolLabels(turns: SeatMessage[]): SeatMessage[] {
+    const labels = new Map(
+      (this.consoleTools ?? [])
+        .map((tool) => [String(tool?.token ?? ''), String(tool?.label ?? '')] as const)
+        .filter(([token, label]) => token && label),
+    );
+    if (!labels.size) return turns;
+    return turns.map((turn) => {
+      if (String(turn.role ?? '') !== 'user') return turn;
+      const match = String(turn.content ?? '').trim().match(/^\[([a-z0-9-]+)\]$/);
+      const label = match ? labels.get(match[1]) : undefined;
+      return label ? { ...turn, content: label } : turn;
+    });
+  }
+
+  /**
+   * THE GREETING'S OPTIONS COME FROM THE INVENTORY, NOT FROM THE MODEL'S SENTENCE.
+   *
+   * The greeting is one assistant turn written into a real conversation, and its words are
+   * hers. The choices beneath it are the CONSOLE'S: the assembly hands this seat the tools
+   * that exist (`/console/tools`), and each entry becomes the same `[label](action:token)`
+   * link the renderer already turns into a button. Adding a tool to the inventory adds a
+   * button with no edit here; a model that forgets to offer one cannot remove it.
+   *
+   * ONLY THE GREETING — the first turn, when nobody has spoken before it. A later answer is
+   * about what the person asked, and hanging the tool menu off it would put the same buttons
+   * on every reply.
+   *
+   * AND NO DOUBLE BUTTON: a stored greeting written before this rule may already carry the
+   * link (the old prompt asked for it), so a tool the content already names is left alone.
+   */
+  private _withGreetingOptions(turns: SeatMessage[]): SeatMessage[] {
+    /* THE TOOLS GREETING OFFERS THE AVAILABLE TOOLS — real entries only. An unbuilt tool is
+       named by the greeting's inventory line but gets no button; if a stored or model link still
+       names one, `_applyConsoleTool` refuses it in words. */
+    if (this.activeTab === 'tools') {
+      const greeting = turns[0];
+      if (!greeting || String(greeting.role ?? '') === 'user' || greeting.result || greeting.alert) {
+        return turns;
+      }
+      const tools = (this.consoleTools ?? [])
+        .filter((tool) => String(tool?.status ?? '') === 'available')
+        .map((tool) => ({
+          token: String(tool?.token ?? '').trim(),
+          label: String(tool?.label ?? '').trim(),
+        }))
+        .filter((tool) => tool.token && tool.label);
+      if (!tools.length) return turns;
+      let content = String(greeting.content ?? '');
+      const missing = tools.filter((tool) => !content.includes(`(action:${tool.token})`));
+      if (!missing.length) return turns;
+      const line = missing.map((tool) => `[${tool.label}](action:${tool.token})`).join(' · ');
+      content = `${content}${content.trim() ? '\n\n' : ''}${line}`;
+      return [{ ...greeting, content }, ...turns.slice(1)];
+    }
+    /* THE CHAT TAB'S ONE NAVIGATION LINK IS THE TOOLS TAB — not a tool's name.
+       Figma ingest is the only tool inside Tools today; the button is still "Tools", because
+       the tab is the door. The label is generic so adding a second tool does not add a second
+       door to the greeting. The model may also offer it in an answer (see the room script);
+       this is the greeting's own copy, drawn from the rail's allowed tabs. */
+    if (this.activeTab !== 'chat') return turns;
+    const tabs = String(this.allowedTabs || '').split(',').map((t) => t.trim());
+    if (!tabs.includes('tools')) return turns;
+    const greeting = turns[0];
+    if (!greeting || String(greeting.role ?? '') === 'user' || greeting.result || greeting.alert) {
+      return turns;
+    }
+    let content = String(greeting.content ?? '')
+      /* THE OLD PER-TOOL LINK IS THE SAME DOOR, WITH THE WRONG NAME. Stored greetings written
+         before this rule carry `[Figma ingest](action:figma-ingest)`; the display shows the tab
+         link instead, and the press moves to Tools. */
+      .replace(/\[Figma ingest\]\(action:figma-ingest\)/gi, '[Tools](action:tools)');
+    if (!content.includes('(action:tools)')) {
+      content = `${content}${content.trim() ? '\n\n' : ''}[Tools](action:tools)`;
+    }
+    if (content === String(greeting.content ?? '')) return turns;
+    return [{ ...greeting, content }, ...turns.slice(1)];
   }
 
   /**
    * DOES THE THREAD CARRY A RUN'S RESULTS? The card's results state is this one
    * fact — read from the same thread the messages element draws, and bound onto
-   * the card (chat-header's has-results), so the slot's colour and the turns'
+   * the card (console-chat-header's has-results), so the slot's colour and the turns'
    * marks can never disagree (see AGENTS-instructions/OUTPUT-STYLING.md R4).
    */
   private get _hasResultTurns(): boolean {
@@ -1555,6 +2253,79 @@ export class ConsoleChatPanel extends LitElement {
    * A tab with no line of its own gets the plain truth rather than an invention: the view
    * is empty, and it fills when the surface puts something in it.
    */
+  /** THE CARDS THIS CONSOLE HAS INGESTED — the design packages, newest first. */
+  private _ingestedCards(): Array<Record<string, any>> {
+    const cards = (this.consoleCards || []) as Array<Record<string, any>>;
+    return cards
+      .filter((card) => card && card.room_domain === 'design')
+      .sort((a, b) =>
+        String(b.lastUsed || b.createdAt || '').localeCompare(String(a.lastUsed || a.createdAt || '')),
+      );
+  }
+
+  /** A row opens its card — a READ. Recording the open as an outcome is the Phase 4 parity item. */
+  private _openIngestedCard(cardId: string): void {
+    if (!cardId) return;
+    this.dispatchEvent(
+      new CustomEvent('card-open', {
+        detail: { sessionId: cardId, id: cardId },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
+  /** Re-run the stored plan and draw the new set. The conversation does not change. */
+  private async _refreshSurface(): Promise<void> {
+    const conversationId = String(this.conversationId || '');
+    if (!conversationId) return;
+    const tab = this.activeTab || 'chat';
+    const namespace = tab === 'chat' ? 'console' : tab;
+    try {
+      const response = await fetch('/api/console/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-User-ID': this._userId() },
+        body: JSON.stringify({ conversation_id: conversationId, namespace }),
+      });
+      if (!response.ok) throw new Error(await response.text());
+      const body = (await response.json()) as { cards?: unknown[]; query?: unknown };
+      if (!Array.isArray(body?.cards)) throw new Error('the refresh returned no card list');
+      /* THE TAB'S CARDS UPDATE; THE CHAT DOES NOT RE-ASSEMBLE. The old path fired a full
+         console assembly, which would reload the whole surface and leave the tab. */
+      window.dispatchEvent(new CustomEvent('a2ui:console-refresh', {
+        detail: { tab, cards: body.cards, query: body.query ?? null },
+      }));
+    } catch (error) {
+      this._local = [...this._local, {
+        role: 'assistant',
+        alert: true,
+        content: `The view could not be refreshed — ${error instanceof Error ? error.message : String(error)}`,
+      }];
+      this.requestUpdate();
+    }
+  }
+
+  /** The Tools tab's placeholder: the ingested cards, live, newest first. */
+  private _ingestedCardsView(): unknown {
+    const cards = this._ingestedCards();
+    if (cards.length === 0) {
+      return html`<div class="view-waiting" role="status">Nothing ingested yet.</div>`;
+    }
+    return html`<div class="tools-cards">
+      <div class="tools-caption">Ingested cards · newest first</div>
+      ${cards.map(
+        (card) => html`<button
+          type="button"
+          class="tool-card"
+          @click=${() => this._openIngestedCard(String(card.id || ''))}
+        >
+          <span class="tool-card-title">${String(card.title || 'Untitled')}</span>
+          <span class="tool-card-meta">${String(card.state || card.status || '')}</span>
+        </button>`,
+      )}
+    </div>`;
+  }
+
   private _emptyViewLine(): unknown {
     const lines: Record<string, string> = {
       versions: 'No versions yet. A version is written when this package is saved.',
@@ -1716,11 +2487,14 @@ export class ConsoleChatPanel extends LitElement {
    * still never renders another element: this is the seat drawing its own thread.
    */
   private get _showsThread(): boolean {
-    return this.activeTab === 'chat' || this.activeTab === 'approvals';
+    /* TOOLS TALKS TOO. The tab's cards are on the left; the person asks about them in the same
+       chat column, so the thread is drawn there instead of the old static ingest list. The tab's
+       own greeting is still T2; until then the conversation starts when they type. */
+    return this.activeTab === 'chat' || this.activeTab === 'approvals' || this.activeTab === 'tools';
   }
 
   /**
-   * Whether the status bar will draw a line — the same condition <chat-header> applies to its
+   * Whether the status bar will draw a line — the same condition <console-chat-header> applies to its
    * own slots (a flat statusText, or any of the four readouts). The panel asks it so an EMPTY
    * status block is left out of the tree entirely rather than rendered hollow: a hollow block
    * is still the first child, and the leading block is the one that carries the drawing's
@@ -1734,14 +2508,14 @@ export class ConsoleChatPanel extends LitElement {
   }
 
   /**
-   * The status line for <output-header> — the frame's own line built from the live slots,
-   * in the same order and punctuation chat-header uses. The usage figures are NOT joined
-   * here: output-header owns the Tokens/Calls readouts it is handed.
+   * The status line for <console-output-header> — the frame's own line built from the live slots,
+   * in the same order and punctuation console-chat-header uses. The usage figures are NOT joined
+   * here: console-output-header owns the Tokens/Calls readouts it is handed.
    */
   /**
    * WHETHER THE ROOM HAS SLOTTED ITS OWN READOUT STRIP (the trace seat's facts — owner,
    * 2026-10-13 late: they live in the seat's readout bar, "It goes here"). The relay
-   * slot below sits inside <output-header>; this flag rides the same render and turns
+   * slot below sits inside <console-output-header>; this flag rides the same render and turns
    * the bar's built-in line off when the strip is present. False in every other room.
    */
   private _statusContentSlotted = false;
@@ -1789,6 +2563,7 @@ export class ConsoleChatPanel extends LitElement {
       const arrived = consumeArrival(this.sessionId ?? null);
       if (arrived) this._takeArrival(arrived.kind);
       void this._readConversations(this._userId());
+      this._askDefaultConversation();
     }
     if (changed.has('conversationId')) void this._loadHistory();
     /*
@@ -1817,7 +2592,7 @@ export class ConsoleChatPanel extends LitElement {
     this._greetIfArriving();
     // History arriving lands the column at the newest turn (see _scrollThreadToBottom)...
     // EXCEPT WHEN THE NEWEST TURN IS A RUN'S RESULT: those open at their HEAD, scrolled by
-    // the child (chat-messages.updated), and bottom-following here would fight it — the
+    // the child (console-chat-messages.updated), and bottom-following here would fight it — the
     // person would be handed the tail of the answer they are about to read (the owner,
     // 2026-09-24: "the output should be visible at the top and then the user can scroll").
     const lastTurn = this._thread[this._thread.length - 1];
@@ -1831,6 +2606,8 @@ export class ConsoleChatPanel extends LitElement {
     // results are the first content of their conversation and the top is already the head. Nothing
     // is placed, so nothing holds the person there.
     if (changed.has('collapsed') && !this.collapsed) this._scrollThreadToBottom();
+    this._wireFooterGrip();
+    this._wireSlotBands();
     this._noticeWhileAway();
     // NO THUMB SYNC HERE, and that is deliberate. `updated()` runs on EVERY render, and a
     // drag of the input's divider renders on every mousemove — so syncing from here read
@@ -1850,7 +2627,7 @@ export class ConsoleChatPanel extends LitElement {
    * THE THREAD OPENS AT ITS NEWEST TURN. A conversation is read from the bottom up — the
    * last thing said is the thing being answered — so the column's one scroller lands there
    * whenever the thread grows: history arriving, a turn sent, a reply landing. (The COLUMN
-   * scrolls, not the thread — chat-messages says why — so the move happens here.)
+   * scrolls, not the thread — console-chat-messages says why — so the move happens here.)
    *
    * TWO FRAMES, because the DOM grows after this render and the scroller has to be measured
    * once it has — the first frame lands it, the second catches anything that settled late
@@ -1872,7 +2649,7 @@ export class ConsoleChatPanel extends LitElement {
      * results after run have to load at the top of the results. You can't load it at the bottom of
      * the results."
      *
-     * The head is placed by <chat-messages> (it is the element that knows where the results
+     * The head is placed by <console-chat-messages> (it is the element that knows where the results
      * start); this is only the refusal to undo it. A conversational turn — the person's own, or
      * her reply to one — is not a result and still follows down exactly as it always has.
      */
@@ -1884,7 +2661,7 @@ export class ConsoleChatPanel extends LitElement {
       // thread element owns the seating — it is the element that knows where the question
       // is; this only asks for it. A thread that cannot seat (no such element) keeps the
       // old follow-to-bottom.
-      const thread = this.renderRoot?.querySelector('chat-messages') as
+      const thread = this.renderRoot?.querySelector('console-chat-messages') as
         | (HTMLElement & { seatConversation?: () => void })
         | null;
       if (thread?.seatConversation) {
@@ -1952,7 +2729,15 @@ export class ConsoleChatPanel extends LitElement {
    * NOT NULL), so the element asks the package's conversation for its own history.
    */
   private async _loadHistory(): Promise<void> {
-    if (this.messages?.length || !this.conversationId) { this._historyChecked = true; return; }
+    /* NO CONVERSATION YET IS NOT "CHECKED" (the design seat's rule). The id can arrive a moment
+       later from the default open; marking a thread read before it exists let the greeting spend
+       the arrival on a guess. */
+    if (this.messages?.length) { this._historyChecked = true; return; }
+    if (!this.conversationId) return;
+    /* THE TAB'S LIST IS READ BEFORE A THREAD IS. A bound id can be one the tab no longer owns
+       (a deleted row the host still names); fetching it is the 403 the list read is about to
+       correct. The default open reads the list and then asks for the history again. */
+    if (this.sessionId && !this._conversationsRead) return;
     if (!this._conversationBelongsToSeat(this.conversationId)) { this._historyChecked = true; return; }
     try {
       const resp = await fetch(`/api/conversations/${this.conversationId}/messages?limit=200`, {
@@ -2047,60 +2832,113 @@ export class ConsoleChatPanel extends LitElement {
     this._greeted = false;
   }
 
-  private _greetIfArriving(): void {
-    /*
-     * A CONSOLE WITH NOTHING TO READ IS AN ARRIVAL, ANNOUNCED OR NOT.
-     *
-     * The seat does not need an announcement to know it has nothing to read: it holds the thread.
-     * A console with no conversation bound has no history, so there is nothing for her to answer
-     * and nothing for the person to read either — that is the state she introduces herself into.
-     * The owner, 2026-09-23: "there's no reason to add a new greeting if the user has not engaged
-     * with the console chat … the AI is not the conversation. It's a human being that initiates
-     * the conversation." The first conversation is created by the person's first turn, not by
-     * looking.
-     */
-    if (!this._wantsGreeting && this.sessionId && !this.conversationId) {
-      this._historyChecked = true;
-      this._wantsGreeting = 'console';
-    }
-    /* THIS SEAT ANSWERS THE CONSOLE'S ARRIVAL AND NOTHING ELSE. Every other kind belongs to a
-       room this element is not in, and reading one would put another room's greeting here. */
-    if (this._wantsGreeting !== 'console') return;
-    if (this._greeted || !this._historyChecked) return;
-    if (this._historyError || this._sending) return;
-    /*
-     * SHE SAYS HELLO WHEN THERE IS NOTHING TO READ — and the test is the THREAD, not whether a
-     * conversation row exists.
-     *
-     * The first version of this rule read `if (this.conversationId) return` — "she greets only a
-     * console with no conversation" — and it silenced her on a console that HAS an empty one:
-     * measured 2026-09-23, a conversation existed with 0 messages, so no greeting, and the
-     * owner's report was exactly what that looks like from the seat: "This is gone again. The
-     * model has disappeared from console again."
-     *
-     * THE EMPTINESS IS THE FACT: nothing from the surface's history and nothing spoken locally.
-     * An empty conversation reads as empty, a conversation with words in it reads as words, and
-     * the greeting therefore happens once per thread: she says hello, her reply is written into
-     * that conversation, and every load after it reads her own words back instead of saying them
-     * again.
-     */
-    this._greeted = true;
-    const empty = (this.messages?.length ?? 0) === 0 && this._local.length === 0;
-    if (!empty) return;
-    void this._send(
-      'A person has just landed on the console — the index of every package they have built. '
-      + 'This screen is an index and nothing more: a card per package, with its name and its one '
-      + 'line, and nothing open. YOUR WORK HERE IS ORGANISATION — finding, filtering and sorting '
-      + 'their prompts — and NOT writing into one. The seats, the tools and the writes all belong '
-      + 'to a package, in that package\'s own chat; there is no prompt open here to write into. '
-      + 'Introduce yourself in a sentence or two, say what this screen is and that you can help '
-      + 'them find, filter or sort what is in it, and ask what they are looking for. Do NOT '
-      + 'describe, quote or comment on any particular package — naming one is reading over their '
-      + 'shoulder. Offer no buttons.',
-      { silent: true },
-    );
+  /**
+   * THE DEFAULT OPEN — the design tab's one creation path, not a greeting-time side effect.
+   *
+   * A tab/seat that has no conversation reads the tab's own list and, when it is empty, starts
+   * one through `_startNewConversation`; when the bound row is gone, it moves to the newest row
+   * the tab still owns. It never invents a conversation when the list could not be read, and it
+   * never creates from `_greetIfArriving`: the greeting only speaks into a thread that exists.
+   */
+  private _askDefaultConversation(): void {
+    this._wantsDefaultConversation = true;
+    void this._loadDefaultConversationNow();
   }
 
+  private async _loadDefaultConversationNow(): Promise<void> {
+    if (!this._wantsDefaultConversation || !this.sessionId) return;
+    this._wantsDefaultConversation = false;
+    this._openingDefault = true;
+    try {
+      await this._readConversations(this._userId());
+      /* A FAILED READ IS NOT AN EMPTY ONE. The rows are only assigned by a successful read, so a
+         null list means the seat could not find out — never a reason to create. */
+      if (!Array.isArray(this._conversationRows)) return;
+      const tab = this.activeTab || 'chat';
+      const rows = this._conversationRows.filter(
+        (row) => !row.archived && String(row.tab || 'chat') === tab,
+      );
+      if (!rows.length) {
+        this._startNewConversation();
+        return;
+      }
+      const bound = String(this.conversationId ?? '');
+      if (bound && rows.some((row) => String(row.id) === bound)) {
+        /* THE LIST HAS ANSWERED; the history attempt that waited for it can run now. */
+        if (!this._historyChecked) void this._loadHistory();
+        return;
+      }
+      this._moveSeatTo(String(rows[0].id), { tab });
+    } finally {
+      this._openingDefault = false;
+    }
+  }
+
+  /** THE ACTIVE TAB'S OWN WORDS. Chat is the index; Tools is the tool seat; Approvals has its
+   *  own greeting still to come (T4), so it does not borrow either. */
+  private _toolsGreetingPrompt(): string {
+    return TOOLS_GREETING_BASE
+      + formatToolInventory(this.consoleTools ?? [])
+      + TOOLS_GREETING_TAIL;
+  }
+
+  private _greetingPromptForTab(): string {
+    if (this.activeTab === 'chat') return CONSOLE_GREETING;
+    if (this.activeTab === 'tools') return this._toolsGreetingPrompt();
+    if (this.activeTab === 'approvals') return APPROVALS_GREETING;
+    return '';
+  }
+
+  private _greetIfArriving(): void {
+    /*
+     * THE DESIGN SEAT'S ARRIVAL RULE, ON THE CONSOLE'S TABS.
+     *
+     * The list is read first; a tab is greeted when its own list says there is nothing to read —
+     * no row, or one empty row — and the thread is empty. The default conversation is created by
+     * `_loadDefaultConversationNow`, never here; this function only speaks into a real thread.
+     */
+    const tab = this.activeTab || 'chat';
+    const rowsKnown = Array.isArray(this._conversationRows);
+    const tabRows = rowsKnown
+      ? (this._conversationRows ?? []).filter((row) => String(row.tab || 'chat') === tab)
+      : [];
+    const currentRow = tabRows.find((row) => String(row.id) === String(this.conversationId));
+    const onlyConversationIsEmpty = rowsKnown
+      && (tabRows.length === 0
+        || (tabRows.length === 1 && !!currentRow && (
+          /* Approvals rows can hold inspection reports as messages; those are records, not a
+             conversation. The tab is empty for greeting purposes when no chat turn is on the
+             thread, even if the queue has filed reports. */
+          tab === 'approvals'
+            ? (this.messages?.length ?? 0) === 0 && this._local.length === 0
+            : (currentRow.messageCount ?? 0) === 0
+        )));
+    if (!this._wantsGreeting && this.sessionId && !this.conversationId
+      && rowsKnown && tabRows.length === 0) {
+      this._historyChecked = true;
+      this._takeArrival('console');
+    }
+    if (!this._wantsGreeting && !this._sending && this.sessionId
+      && this._conversationsRead && this._historyChecked && !this._historyError
+      && onlyConversationIsEmpty
+      && (this.messages?.length ?? 0) === 0 && this._local.length === 0) {
+      this._takeArrival('console');
+    }
+    const kind = this._wantsGreeting;
+    if (!kind || this._greeted || !this._historyChecked) return;
+    if (this._historyError || this._sending || this._openingDefault || this._creatingConversation) return;
+    if (this.sessionId && !this._conversationsRead) return;
+    /* THE DEFAULT OPEN GOES FIRST. A greeting sent while the conversation is still being created
+       would be answered but not written down; this waits for the id. */
+    if (!this.conversationId) return;
+    if (this.sessionId && this.conversationId && !this._historyChecked) return;
+    if ((this.messages?.length ?? 0) > 0 || this._local.length > 0) return;
+    if (!onlyConversationIsEmpty) return;
+    const prompt = this._greetingPromptForTab();
+    if (!prompt) return;
+    this._greeted = true;
+    void this._send(prompt, { silent: true });
+  }
 
   /**
    * IS THIS CONVERSATION ONE OF THIS SEAT'S?
@@ -2114,6 +2952,9 @@ export class ConsoleChatPanel extends LitElement {
    */
   private _conversationBelongsToSeat(id: string): boolean {
     if (String(this._adoptedByHost) === String(id)) return true;
+    /* AN UNREAD LIST IS NOT A REFUSAL (the design seat's rule): the package's read is asynchronous,
+       and the seat binds its id before that read lands. */
+    if (this._conversationRows === null) return true;
     const list = this.conversations ?? [];
     // The surface's list carries ACTIVE rows only; this seat's own server read carries the
     // archived ones too, and a conversation archived from here is still this seat's and must
@@ -2157,8 +2998,32 @@ export class ConsoleChatPanel extends LitElement {
   // is what put the same text in the output column and in the thread beside it).
 
 
+  /**
+   * ROW 9: THE TREE MUST EQUAL THE RECORD.
+   *
+   * The cards drawn are `consoleCards`; the recorded set is `consoleQuery.shown_ids`. They are
+   * written by the same assembly/replay/refresh, but a later write could leave them apart. The
+   * context and the plan line say so rather than letting the chat answer from a tree the record
+   * does not support.
+   */
+  private get _treeRecordMismatch(): boolean {
+    const recorded = (this.consoleQuery as { shown_ids?: unknown } | null)?.shown_ids;
+    if (!Array.isArray(recorded)) return false;
+    const tree = (this.consoleCards ?? []).map((card) => String((card as { id?: unknown }).id ?? ''));
+    return recorded.length !== tree.length
+      || recorded.some((id, index) => String(id) !== tree[index]);
+  }
+
   private _buildWorkspaceContext(): string {
     const parts: string[] = [];
+    if (this._treeRecordMismatch) {
+      parts.push('');
+      parts.push('=== CONSOLE — THE CARDS DRAWN DO NOT MATCH THE RECORDED SET ===');
+      parts.push(
+        'The left column and the active surface_turn disagree. Do not answer as if the drawn '
+        + 'cards are the recorded set; say the view and its record are out of step.',
+      );
+    }
 
     /*
      * WHAT SHE IS SHOWN IN THIS ROOM: THE LIBRARY, AND NOTHING ELSE.
@@ -2170,15 +3035,38 @@ export class ConsoleChatPanel extends LitElement {
      * prompt that is not open, and her own control is `<reassemble-console …>`.
      */
 
-    if (this.consoleCards && this.consoleCards.length > 0) {
+    if (Array.isArray(this.consoleCards) && this.consoleCards.length === 0) {
+      const tab = this.activeTab || 'chat';
+      const tabName = tab === 'chat' ? 'Chat' : tab === 'tools' ? 'Tools'
+        : tab === 'approvals' ? 'Approvals' : tab === 'eval' ? 'Evals' : tab;
       parts.push('');
-      parts.push(`=== CONSOLE — PROMPT LIBRARY (${this.consoleCards.length} packages) ===`);
+      parts.push(`=== CONSOLE — ${tabName.toUpperCase()} TAB — NO CARDS ARE SHOWING ON THE LEFT ===`);
+    }
+    if (this.consoleCards && this.consoleCards.length > 0) {
+      /*
+       * WHAT IS ON THE LEFT, IN THE TAB THE PERSON IS LOOKING AT. The tab is a filter, and the
+       * cards it assembled are the set she is asked about ("what cards are showing?", "which
+       * one is the CRM thing?"). The heading names the tab and the order; the list is the same
+       * order the grid draws, so an answer can be checked against the screen. A card's own
+       * description is carried with it; nothing here is invented.
+       */
+      const tab = this.activeTab || 'chat';
+      const tabName = tab === 'chat' ? 'Chat' : tab === 'tools' ? 'Tools'
+        : tab === 'approvals' ? 'Approvals' : tab === 'eval' ? 'Evals' : tab;
+      parts.push('');
+      parts.push(`=== CONSOLE — ${tabName.toUpperCase()} TAB — THE CARDS ON THE LEFT, IN ORDER (${this.consoleCards.length}) ===`);
+      parts.push(
+        'These are the cards currently visible on the left, in the order the grid shows them. '
+        + 'A question about "what is showing" refers to this list and nothing else.',
+      );
       this.consoleCards.filter(Boolean).forEach((c: any, i: number) => {
         const facts = [
           c.category ? `category: ${c.category}` : null,
           (c.team_name || c.team) ? `team: ${c.team_name || c.team}` : null,
           (c.model_name || c.model) ? `model: ${c.model_name || c.model}` : null,
           c.status ? `status: ${c.status}` : null,
+          c.state ? `state: ${c.state}` : null,
+          c.username ? `by: ${c.username}` : null,
           typeof c.version === 'number' ? `v${c.version}` : null,
           c.message_count ? `${c.message_count} messages` : null,
           c.likes ? `${c.likes} likes` : null,
@@ -2236,12 +3124,20 @@ export class ConsoleChatPanel extends LitElement {
       const attrs = reassembleMatch[1];
       const sortMatch = attrs.match(/sort="([^"]*)"/);
       const filterMatch = attrs.match(/filter="([^"]*)"/);
-      window.dispatchEvent(new CustomEvent('a2ui:console-command', {
-        detail: {
-          sort: sortMatch ? sortMatch[1] : undefined,
-          filter: filterMatch ? filterMatch[1] : undefined,
-        },
-      }));
+      /*
+       * THE TAB'S SET STANDS. On Tools or Approvals the left column was assembled for that tab;
+       * a control tag in an answer must not re-assemble the whole surface back to Chat and undo
+       * the filter the person is looking at. A question about what is showing is answered from
+       * the set that is already there. The tag is stripped from her words either way.
+       */
+      if (this.activeTab === 'chat') {
+        window.dispatchEvent(new CustomEvent('a2ui:console-command', {
+          detail: {
+            sort: sortMatch ? sortMatch[1] : undefined,
+            filter: filterMatch ? filterMatch[1] : undefined,
+          },
+        }));
+      }
     }
     content = content.replace(reassembleRegex, '');
     return content.trim();
@@ -2261,6 +3157,30 @@ export class ConsoleChatPanel extends LitElement {
    * the person had written it, and it was a wall of instructions nobody could
    * read. The fix is not to stop asking; it is to stop showing the ask.
    */
+  /**
+   * IS THIS TURN A SEARCH OVER THE CURRENT TAB'S CARDS?
+   *
+   * The console's chat is also the filter box. An instruction ("show me the wireframe ones",
+   * "filter to the tokens work", "find the card hover") is sent to the room as a cards-only
+   * search of the ACTIVE tab; the model still answers in words. A question is left alone: the
+   * person asking what is showing must not lose the set they are asking about.
+   */
+  private _cardSearchText(text: string): string | null {
+    const trimmed = String(text || '').trim();
+    if (!trimmed || trimmed.endsWith('?')) return null;
+    const match = trimmed.match(
+      /^(?:show(?:\s+me)?|find|filter(?:\s+to|\s+by)?|only|just|looking\s+for|search(?:\s+for)?)\s+(.+)$/i,
+    );
+    if (!match) return null;
+    let query = String(match[1] || '')
+      .replace(/^the\s+/i, '')
+      .replace(/^cards?\s+(?:about|with|for)\s+/i, '')
+      .replace(/^ones?\s+(?:about|with|for)\s+/i, '')
+      .replace(/\s+ones?$/i, '')
+      .trim();
+    return query || null;
+  }
+
   private async _send(text: string, opts: { silent?: boolean } = {}): Promise<void> {
     text = (text ?? '').trim();
     if (!text || this._sending) return;
@@ -2278,8 +3198,15 @@ export class ConsoleChatPanel extends LitElement {
      * exempt: the console's recorded rule draws the thread there on purpose (the tab a
      * person asks the governance system its report from). Silent turns never flip —
      * nothing the person did raised them.
+     *
+     * TOOLS IS A CONSOLE OF ITS OWN NOW (tab-consoles.md). Its thread is drawn and its
+     * conversation is bound, so a question asked on Tools stays on Tools — switching it to Chat
+     * would answer about the wrong set of cards and lose the tab's thread. Approvals has always
+     * been exempt; Evals and Settings have no console yet, so a question there still lands in
+     * the chat thread where it can be read.
      */
-    if (!opts.silent && this.activeTab !== 'chat' && this.activeTab !== 'approvals') {
+    if (!opts.silent && this.activeTab !== 'chat' && this.activeTab !== 'approvals'
+      && this.activeTab !== 'tools') {
       this.activeTab = 'chat';
     }
     /*
@@ -2351,20 +3278,78 @@ export class ConsoleChatPanel extends LitElement {
       return;
     }
     const before = this._local.length;
+    /* WHICH THREAD THIS TURN WAS SPOKEN IN. If the person deletes or switches conversation
+       while it is in flight, the reply belongs to the thread they left — adopting its id
+       would pull the seat back onto a deleted row and the new default would sit unused
+       beside it. See the response guard below. */
+    const sentIn = String(this.conversationId || '');
+    /*
+     * THE SEARCH TURN IS WRITTEN BEFORE THE SEARCH RUNS.
+     *
+     * The search set must carry the user turn's real message id when it is recorded, and the
+     * teacher writes the user row only after the search request would already be in flight.
+     * So a search turn is written here first (the record knows its id), and the teacher is told
+     * `user_turn_written` so it does not write the same words twice. The teacher still writes
+     * her reply and still reads the turn as the person's.
+     *
+     * A failed write is not hidden: the search still filters the cards, and the plan line says
+     * it was not recorded. No set is invented for a turn that does not exist.
+     */
+    const cardSearch = opts.silent ? null : this._cardSearchText(text);
+    let searchTurnId = '';
+    let searchWriteError = '';
+    if (cardSearch && this.conversationId) {
+      try {
+        const turnResponse = await fetch(
+          `/api/conversations/${encodeURIComponent(String(this.conversationId))}/messages`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-User-ID': this._userId() },
+            body: JSON.stringify({ role: 'user', content: text }),
+          },
+        );
+        if (!turnResponse.ok) throw new Error(`HTTP ${turnResponse.status}`);
+        const turnBody = (await turnResponse.json().catch(() => ({}))) as { id?: unknown };
+        searchTurnId = String(turnBody?.id ?? '');
+        if (!searchTurnId) throw new Error('the conversation returned no message id');
+      } catch (err) {
+        searchWriteError = err instanceof Error ? err.message : String(err);
+      }
+    }
     if (!opts.silent) {
       this._local = [...this._local, { role: 'user', content: text }];
       this._scrollThreadToBottom();
+      /* THE SAME TURN IS A SEARCH OVER THIS TAB'S CARDS. The room receives the words, the
+         active tab and the written turn id; it runs a cards-only assembly, records the set
+         under the tab's namespace, and writes only /cards and /console/query. */
+      if (cardSearch) {
+        window.dispatchEvent(new CustomEvent('a2ui:console-search', {
+          detail: {
+            tab: this.activeTab || 'chat',
+            text: cardSearch,
+            turnId: searchTurnId,
+            recordError: searchWriteError,
+          },
+        }));
+      }
     }
     this._sending = true;
-    if (!opts.silent) {
-      // THE WORK CARD OPENS — the person's own turn; silent turns draw nothing.
-      this._workActive = true;
-      this._workStage = 'thinking';
-      if (this._workTimer) clearTimeout(this._workTimer);
-      // THE ROOM-AGNOSTIC CAP: a seat in a room that never builds must still end. The
-      // no-build fallback below fires first for those seats; this cap is the last resort.
-      this._workTimer = window.setTimeout(() => this._endWork(), 30000) as unknown as number;
-    }
+    /*
+     * THE WORK CARD OPENS FOR EVERY ANSWER — the person's own turn AND the app's own asks.
+     *
+     * This is the design seat's rule, verbatim (rooms/design/chat/chat-tab.ts, `_send`): a
+     * silent turn used to draw NOTHING, so every arrival's greeting landed with no thinking
+     * beat, and a real model answer with an unseen wait reads as injected text. What stays
+     * silent is only the ASK (it is never written as the person's turn); the WAIT is drawn —
+     * the thinking card, the elapsed time, her actual seconds. The Tools and Approvals
+     * greetings are app asks, and they must show the model thinking like every other answer.
+     */
+    this._workActive = true;
+    this._workStage = 'thinking';
+    if (this._workTimer) clearTimeout(this._workTimer);
+    // THE ROOM-AGNOSTIC CAP: a seat in a room that never builds must still end. The
+    // no-build fallback below fires first for those seats; this cap is the last resort.
+    this._workTimer = window.setTimeout(() => this._endWork(), 30000) as unknown as number;
     this.requestUpdate();
     let answered = false;
 
@@ -2407,6 +3392,9 @@ export class ConsoleChatPanel extends LitElement {
            * the index of every package they have built …"
            */
           person_turn: !opts.silent,
+          /* THE SEARCH TURN WAS WRITTEN BY THE SEAT — see the write above. The teacher still
+             treats it as the person's turn; it only skips the duplicate row. */
+          user_turn_written: Boolean(searchTurnId),
           // No temperature here. It used to send 0.45 while the request model defaulted
           // to 0.45 and the backend passed it straight through — three homes for one
           // number, and three numbers waiting to disagree. `chat` has ONE: CHAT_TEMPERATURE
@@ -2424,6 +3412,15 @@ export class ConsoleChatPanel extends LitElement {
       // the thread it is drawing — the reply is shown and then lost on reload. The move is
       // SHOWN, not silent.
       const returned = typeof data?.conversation_id === 'string' && data.conversation_id ? data.conversation_id : '';
+      /*
+       * AND THE SEAT MAY HAVE MOVED WHILE THE TURN WAS IN FLIGHT. A conversation deleted
+       * mid-request still answers with the id it was spoken in; adopting that id pulls the
+       * seat back onto a row that is gone and leaves the new default untouched — the fault
+       * measured on the console: delete the chat while she is greeting and the new
+       * `Console — Chat` appears in the list but not in the seat. The reply is not drawn in
+       * the thread that replaced it: it was said in the one the person left.
+       */
+      if (String(this.conversationId || '') !== sentIn) return;
       if (returned && returned !== this.conversationId) {
         const moved = !!this.conversationId;
         this.conversationId = returned;
@@ -2439,7 +3436,7 @@ export class ConsoleChatPanel extends LitElement {
           new CustomEvent('conversation-change', {
             bubbles: true,
             composed: true,
-            detail: { conversationId: returned },
+            detail: { conversationId: returned, surface: 'console' },
           }),
         );
         // The header's list is re-read too: the server just created this thread (a first
@@ -2485,12 +3482,23 @@ export class ConsoleChatPanel extends LitElement {
           }),
         );
       }
+      const persistenceError = typeof data?.persistence_error === 'string'
+        ? data.persistence_error
+        : '';
+      const persistence = applyPersistenceFailure(this._local, persistenceError);
+      this._local = persistence.turns;
       if (data?.error) {
         this._local = [...this._local, { role: 'assistant', content: `Error: ${data.error}` }];
       } else {
         const raw = String(data?.content ?? '(no answer)');
         const reply = this._processReply(raw);
-        if (reply) this._local = [...this._local, { role: 'assistant', content: reply }];
+        /* A REPLY THAT DID NOT PERSIST IS NOT DRAWN AS A TURN. It has no conversation row;
+           the notice below says so. A person's turn that did not persist stays visible with
+           the `not saved` mark — their words are not erased, but they are not presented as a
+           recorded turn. */
+        if (reply && !persistence.replyNotSaved) {
+          this._local = [...this._local, { role: 'assistant', content: reply }];
+        }
         answered = true;
       }
       /*
@@ -2501,10 +3509,10 @@ export class ConsoleChatPanel extends LitElement {
       // not write it down (routes/teacher.py `persistence_error`: a failed lookup, a failed
       // create, a failed message write); without this the person reads a reply that is gone
       // on reload, and nothing anywhere says so.
-      if (typeof data?.persistence_error === 'string' && data.persistence_error) {
+      if (persistenceError) {
         this._local = [
           ...this._local,
-          { role: 'assistant', content: `⚠️ Not saved — ${data.persistence_error}` },
+          { role: 'assistant', alert: true, content: `Not saved — ${persistenceError}` },
         ];
       }
       // AND EVERY OTHER WARNING THIS TURN PRODUCED — drawn in the thread and written to the
@@ -2512,7 +3520,7 @@ export class ConsoleChatPanel extends LitElement {
       // in the console trace"). Empty on a clean turn.
       if (Array.isArray(data?.warnings)) {
         for (const warning of data.warnings) {
-          this._local = [...this._local, { role: 'assistant', content: `⚠️ ${String(warning)}` }];
+          this._local = [...this._local, { role: 'assistant', alert: true, content: `${String(warning)}` }];
           try {
             logger.warn(`[chat] ${String(warning)}`, {
               conversationId: this.conversationId ?? null,
@@ -2561,7 +3569,7 @@ export class ConsoleChatPanel extends LitElement {
 
   /**
    * END THE WORK CARD — the one exit (the no-build fallback in _send, or the cap). The stage is
-   * NOT cleared: <chat-messages> reads it in the same update to record the turn in the card.
+   * NOT cleared: <console-chat-messages> reads it in the same update to record the turn in the card.
    */
   private _endWork(): void {
     if (this._workTimer) {
@@ -2673,12 +3681,12 @@ export class ConsoleChatPanel extends LitElement {
     this._inspectionReports = [];
     this.conversationId = id;
     this._historyError = '';
-    if (opts.tab) this.activeTab = opts.tab === 'approvals' ? 'approvals' : 'chat';
+    if (opts.tab) this.activeTab = opts.tab;
     this.dispatchEvent(
       new CustomEvent('conversation-change', {
         bubbles: true,
         composed: true,
-        detail: { conversationId: id },
+        detail: { conversationId: id, surface: 'console' },
       }),
     );
     this.requestUpdate();
@@ -2806,7 +3814,13 @@ export class ConsoleChatPanel extends LitElement {
   private _startNewConversation(): void {
     if (this._creatingConversation) return;
     this._creatingConversation = true;
-    void this._createConversation().finally(() => { this._creatingConversation = false; });
+    void this._createConversation().finally(() => {
+      this._creatingConversation = false;
+      // THE WAIT THAT WAS STARTED HAS ENDED: render once more so the greeting can take the
+      // conversation that now exists (see `_greetIfArriving`). Without this the only render
+      // during the create saw `_creatingConversation` true, returned, and nothing asked again.
+      this.requestUpdate();
+    });
   }
 
   private async _createConversation(): Promise<void> {
@@ -2825,7 +3839,13 @@ export class ConsoleChatPanel extends LitElement {
       const created = await writing(
         '/api/conversations',
         'POST',
-        { session_id: this.sessionId ?? undefined, title: this._successorTitle() },
+        {
+          session_id: this.sessionId ?? undefined,
+          title: this._successorTitle(),
+          // THE NEW ROW BELONGS TO THE TAB THAT MADE IT. Deleting the last Tools conversation
+          // makes another Tools conversation, not a chat row the Tools tab would not list.
+          tab: this.activeTab || 'chat',
+        },
         userId,
       );
       const next = typeof created?.id === 'string' ? created.id : '';
@@ -2837,10 +3857,13 @@ export class ConsoleChatPanel extends LitElement {
       this.messages = [];
       this._local = [];
       this._inspectionReports = [];
+      // AND THE LIST IS READ BEFORE THE ID MOVES. The greeting that follows is sent into
+      // `next`, and both `_loadHistory` and `_send` refuse an id the package's own list does
+      // not carry (the read and write guards). Waiting for the server's rows first makes
+      // "this conversation is mine" an answer rather than a hope — and the read itself moves
+      // the seat when it was empty, through `_moveSeatTo`, the app's one way in.
+      await this._readConversations(userId);
       this.conversationId = next;
-      // AND THE COUNT MOVES WITH IT: one archived, one created — the package's total is
-      // what the leading bar counts, so it is re-read rather than guessed at.
-      void this._readConversations(userId);
       // NO GREETING EVENT, AND NO ASSEMBLY. The owner, 2026-09-19: "I don't care about a
       // greeting. I care that the conversations create and then are they retrievable" — and
       // a greeting raised by re-assembling would reload the whole surface, which this must
@@ -2849,7 +3872,7 @@ export class ConsoleChatPanel extends LitElement {
         new CustomEvent('conversation-change', {
           bubbles: true,
           composed: true,
-          detail: { conversationId: next },
+          detail: { conversationId: next, surface: 'console' },
         }),
       );
     } catch (err) {
@@ -2888,7 +3911,7 @@ export class ConsoleChatPanel extends LitElement {
       if (!res.ok) { this._conversationsRead = true; return; }
       const body = (await res.json()) as {
         conversations?: Array<{
-          id?: unknown; title?: unknown; tab?: unknown; is_archived?: unknown; updated_at?: unknown;
+          id?: unknown; title?: unknown; tab?: unknown; is_archived?: unknown; updated_at?: unknown; message_count?: unknown;
         }>;
       };
       if (!Array.isArray(body?.conversations)) { this._conversationsRead = true; return; }
@@ -2901,6 +3924,7 @@ export class ConsoleChatPanel extends LitElement {
         // server orders the list by it), so the row's time and the list's order are the same
         // fact — the newest thread is the top row and the top row is the newest time.
         savedAt: String(c?.updated_at ?? ''),
+        messageCount: Number(c?.message_count ?? 0),
       })).filter((r) => r.id);
       const rowsChanged = !(rows.length === this._conversationRows?.length
           && rows.every((r, i) => r.id === this._conversationRows?.[i]?.id
@@ -2930,8 +3954,12 @@ export class ConsoleChatPanel extends LitElement {
        * tells the host (so the package's own pointer follows), and setting the id is what makes
        * `_loadHistory` read it. Nothing new is invented here.
        */
-      if (!this.conversationId && rows.length) {
-        this._moveSeatTo(rows[0].id);
+      const tab = this.activeTab || 'chat';
+      const tabRows = rows.filter((r) => String(r.tab || 'chat') === tab);
+      const boundIsThisTabs = !!this.conversationId
+        && tabRows.some((r) => String(r.id) === String(this.conversationId));
+      if (tabRows.length && !boundIsThisTabs) {
+        this._moveSeatTo(tabRows[0].id, { tab });
         return;
       }
       if (!rowsChanged) return;
@@ -2947,6 +3975,14 @@ export class ConsoleChatPanel extends LitElement {
   /** The bar's own click: open or close its list. */
   private _toggleConversations = (): void => {
     this._conversationsOpen = !this._conversationsOpen;
+    /* A DRAG LEAVES AN INLINE HEIGHT. The click's open/close must win over it or the card looks
+       stuck after the first pull. Clear the drag's inline size before the state change. */
+    const header = this.renderRoot?.querySelector('console-chat-header') as HTMLElement | null;
+    const shell = header?.shadowRoot?.querySelector('.shell') as HTMLElement | null;
+    if (shell) {
+      shell.style.height = '';
+      shell.style.flex = '';
+    }
     // Opening re-reads, so a conversation created or archived a moment ago is in the list
     // rather than missing until the next assembly.
     if (this._conversationsOpen) void this._readConversations(this._userId());
@@ -2966,8 +4002,16 @@ export class ConsoleChatPanel extends LitElement {
    * from here — the row is still reachable, it is just not the live one. Until the server
    * read lands (or if it cannot), the surface's own list is drawn, exactly as before.
    */
-  private _conversationRowsForList() {
+  /** THE TAB'S COUNT, which is what its bar says. The console's other tabs are not counted. */
+  private get _conversationCount(): number {
+    const tab = this.activeTab || 'chat';
     const rows = this._conversationRows
+      ?? (this.conversations ?? []).map((c) => ({ tab: String(c?.tab || 'chat') }));
+    return rows.filter((r) => String((r as { tab?: string }).tab || 'chat') === tab).length;
+  }
+
+  private _conversationRowsForList() {
+    const allRows = this._conversationRows
       ?? (this.conversations ?? []).map((c) => ({
         id: String(c?.id ?? ''),
         title: String(c?.title || '(untitled)'),
@@ -2978,8 +4022,14 @@ export class ConsoleChatPanel extends LitElement {
         // is drawn as nothing rather than as a guess.
         savedAt: '',
       })).filter((r) => r.id);
+    /* THE TAB'S ROWS, NOT THE CONSOLE'S. Each tab is a console of its own (conversations.tab),
+       so the Chat tab lists chat conversations, Tools lists tools, Approvals lists approvals.
+       The other tabs' rows are not "elsewhere" — they are a different process and do not belong
+       in this list at all. */
+    const tab = this.activeTab || 'chat';
+    const rows = allRows.filter((r) => String(r.tab || 'chat') === tab);
     if (!rows.length) {
-      return html`<p class="conversation-none">No conversations yet.</p>`;
+      return html`<p class="conversation-none">No conversations yet for this tab.</p>`;
     }
     return rows.map(
       (r) => html`<li>
@@ -3087,8 +4137,19 @@ export class ConsoleChatPanel extends LitElement {
         this.requestUpdate();
         return;
       }
+      /*
+       * THE NEXT ONE IS THE SAME TAB'S. The console's rows are per process (conversations.tab:
+       * chat, approvals), so the newest live row overall is not necessarily a successor — the
+       * chat seat was moving into the approvals thread and leaving the chat tab with no
+       * conversation of its own. The design seat's rule is "the newest live conversation"; here
+       * that means the newest live conversation OF THIS TAB. No same-tab row is the last-delete
+       * case below, which makes a default and greets into it.
+       */
+      const seatTab = this.activeTab || 'chat';
       const live = (this._conversationRows ?? [])
-        .filter((r) => !r.archived && String(r.id) !== String(id));
+        .filter((r) => !r.archived
+          && String(r.id) !== String(id)
+          && (String(r.tab || 'chat') === seatTab));
       const next = live.length ? String(live[0].id) : '';
       if (next) {
         this._moveSeatTo(next);
@@ -3106,20 +4167,26 @@ export class ConsoleChatPanel extends LitElement {
         this._moveSeatTo('');
         this._listNote = 'Removed. Nothing has been said here yet.';
         /*
-         * AND A PACKAGE WITH NO CONVERSATION IS A NEW PROMPT, so the removal is treated as an
-         * arrival and the seat starts the package over the same way an open does: a default
-         * conversation is made for it and she says hello (`nothingToRead` in _greetIfArriving).
+         * THE LAST DELETE IS AN ARRIVAL AGAIN — the design seat's own rule, in the console's own
+         * kind. The seat moves to no conversation, the arrival is re-taken (which clears both the
+         * greeting latch and the ensured latch), and the ensure above makes the default before she
+         * greets into it. Nothing is re-assembled: a new conversation is not a new surface.
          *
-         * The owner, 2026-09-24: "if the user removes all conversations and there's zero and
-         * there's nothing to load you have to engage the model … she needs to create a default
-         * conversation, say hello, because that's considered a PRE-RUN state." Measured the same
-         * evening, before this: deleting the last row left the seat with no conversation, her
-         * greeting was answered by the server and NOT written down ("this place has no
-         * conversation yet — it is answered and NOT written down"), and the person was left on a
-         * card with a thread in it that no row would ever hold — the audit trail the owner wants
-         * had a hole in it where the deletion was.
+         * THE KIND IS 'console', NOT 'resume'. This seat answers the console's arrival and nothing
+         * else (see `_greetIfArriving`), so taking a package's kind here left the arrival waiting
+         * for a greeting this seat never gives — the default came back only on the next reload.
+         *
+         * AND A CONVERSATION WITH NOTHING IN IT IS A NEW PROMPT: the ensure above creates one and
+         * she says hello into it. The owner, 2026-09-24: "if the user removes all conversations and
+         * there's zero and there's nothing to load you have to engage the model … she needs to
+         * create a default conversation, say hello, because that's considered a PRE-RUN state."
          */
-        this._takeArrival('resume');
+        this._takeArrival('console');
+        /* THE DEFAULT OPEN MAKES THE NEXT ONE. The remove leaves no same-tab row; the seat asks
+           its tab to open its default through the one creation path, and the greeting lands in
+           the real thread it creates. */
+        this._askDefaultConversation();
+        this.requestUpdate();
       }
       this.requestUpdate();
     } catch (err) {
@@ -3150,7 +4217,14 @@ export class ConsoleChatPanel extends LitElement {
     const current = (this.conversations ?? []).find((c) => String(c.id) === this.conversationId);
     const title = String(current?.title ?? '');
     const scheme = title.match(/^(\S+)\s+—\s+(.+)$/);
-    return scheme ? `${scheme[1]} — ${scheme[2]}` : undefined;
+    if (scheme) return `${scheme[1]} — ${scheme[2]}`;
+    // THE CONSOLE'S DEFAULT, WHEN THERE IS NO ROW TO COPY. Deleting the last conversation
+    // leaves nothing to take a scheme from, and the successor is still this TAB's default
+    // thread — the same name the backend's own get-or-create gives it (prompt_sessions_api,
+    // "Console — <Tab>"), so the row a delete brings back reads like the ones around it
+    // instead of "New Chat".
+    const tab = this.activeTab || 'chat';
+    return `Console — ${tab.charAt(0).toUpperCase()}${tab.slice(1)}`;
   }
 
   /**
@@ -3189,21 +4263,27 @@ export class ConsoleChatPanel extends LitElement {
     this.collapsed = false;
     this.activeTab = tab;
     /*
-     * EACH TAB TALKS IN ITS OWN CONVERSATION. Approvals is a different process from the chat
-     * (conversations.tab — the column the schema always had), and the console opens both
-     * conversations under its one session. Switching tabs therefore switches which
-     * conversation this seat reads and writes, so Approvals lands exactly where that process
-     * left off — the owner, 2026-09-19: "the user is right where that particular process left
-     * off." Tabs with no conversation of their own (versions, tools, trace, repair) keep the
-     * chat's.
+     * EACH TAB TALKS IN ITS OWN CONVERSATION, AND THE LIST ABOVE IT IS THAT TAB'S OWN.
+     *
+     * The console's tabs are consoles (console/tab-consoles.md): chat, approvals and tools each
+     * keep a row under the one console package (conversations.tab). The assembly hands this seat
+     * the map (`/console/tab_conversations`), so a press moves the seat to that tab's thread
+     * instead of leaving all of the console's conversations under whichever tab is showing. A
+     * tab with no conversation of its own (evals, settings) keeps the current thread; its list
+     * is filtered to its own rows, which are none until that console is built.
      */
-    const list = this.conversations ?? [];
-    const match = list.find((c) => String(c.tab || 'chat') === tab)
-      ?? list.find((c) => String(c.tab || 'chat') === 'chat');
-    if (match && match.id && String(match.id) !== this.conversationId) {
-      this.messages = [];
-      this._local = [];
-      this.conversationId = String(match.id);
+    const bound = String((this.tabConversations ?? {})[tab] || '');
+    const row = (this.conversations ?? []).find((c) => String(c.tab || 'chat') === tab);
+    const next = bound || (row?.id ? String(row.id) : '');
+    if (next && next !== this.conversationId) {
+      this._moveSeatTo(next, { tab });
+    }
+    /* EACH TAB ARRIVES ON ITS OWN THREAD. The design seat's default-open reads that tab's list
+       and, when there is no row, starts one; the greeting then speaks into it. Evals and Settings
+       have no console yet, so they keep the current thread and do not create one. */
+    if (tab === 'chat' || tab === 'tools' || tab === 'approvals') {
+      this._takeArrival('console');
+      this._askDefaultConversation();
     }
     // The VIEW switches either way; only a seat that has a run is asked the
     // question. See `tracePrompt`.
@@ -3217,7 +4297,13 @@ export class ConsoleChatPanel extends LitElement {
      */
     this.dispatchEvent(
       new CustomEvent('tab-change', {
-        detail: { tab },
+        detail: {
+          tab,
+          /* THE ROOM REPLAYS THE TAB'S RECORDED SET BEFORE IT DRAWS THE TAB BASE. It needs
+             the conversation that owns that set and the namespace it was recorded under. */
+          conversationId: this.conversationId || '',
+          namespace: tab === 'chat' ? 'console' : tab,
+        },
         bubbles: true,
         composed: true,
       }),
@@ -3248,7 +4334,7 @@ export class ConsoleChatPanel extends LitElement {
   private _onGripDown(e: MouseEvent): void {
     // A PRESS DURING A LIVE GESTURE REPLACES IT rather than stacking a second set of document
     // listeners on the first — the rule the sibling grip already states ("a press during a live
-    // gesture REPLACES it rather than stacking", chat-action-bar `_startDrag`), and the other way
+    // gesture REPLACES it rather than stacking", console-chat-action-bar `_startDrag`), and the other way
     // this gesture ends up unable to let go. Without it the old listeners are unreachable (the
     // fields that named them are overwritten) and no release can ever remove them.
     this._releaseGrip();
@@ -3311,7 +4397,7 @@ export class ConsoleChatPanel extends LitElement {
 
   /**
    * LET THE PAGE GO — the strip's three document channels off, once. The same discipline the
-   * composer's input grip already keeps (`_endDrag` in chat-action-bar, which is called by its
+   * composer's input grip already keeps (`_endDrag` in console-chat-action-bar, which is called by its
    * release AND by `disconnectedCallback`), applied to the column's strip.
    *
    * WHY IT HAS TO RUN WHERE THE ELEMENT GOES, not only where the mouse does: this element is
@@ -3442,7 +4528,7 @@ export class ConsoleChatPanel extends LitElement {
       ${seated
         ? nothing
         : html`
-            <chat-navigation-bar
+            <console-chat-navigation-bar
               seat-label="Console"
               active-tab=${this.collapsed ? '' : this.activeTab}
               allowed-tabs=${this.allowedTabs}
@@ -3454,7 +4540,7 @@ export class ConsoleChatPanel extends LitElement {
               @collapse-toggle=${this._onCollapseToggle}
             >
               <img slot="logo" src=${logoAsset} width="50" height="50" alt="Grace" />
-            </chat-navigation-bar>
+            </console-chat-navigation-bar>
             <div class="panel tab-${this.activeTab || 'none'} ${this.collapsed ? 'collapsed' : ''}">
               <!-- The listener sits on the WRAPPER so it hears conversation-select
                    from the Conversations dropdown below and from the thread. -->
@@ -3462,7 +4548,7 @@ export class ConsoleChatPanel extends LitElement {
                      @toggle-output-window=${this._onOutputWindow}
                      @remove-output-window=${this._onOutputWindow}>
                 <!-- THE STATUS BLOCK IS ABSENT WHEN IT HAS NOTHING TO SAY, not merely empty.
-                     chat-header draws nothing inside such a block, but the ELEMENT would still
+                     console-chat-header draws nothing inside such a block, but the ELEMENT would still
                      be there — and it is :first-child, so the leading block's deeper top
                      padding (20px, the drawing's own value for the first block) landed on an
                      empty box while the bar below it kept 10 and sat tight against the top
@@ -3473,11 +4559,11 @@ export class ConsoleChatPanel extends LitElement {
                      and the Conversations bar took the top. The owner, 2026-09-20: "you
                      left out the top panel." The drawing stacks four blocks and the status
                      line is the first of them; whether it HAS anything to say is
-                     chat-header's business, not whether the block exists.
+                     console-chat-header's business, not whether the block exists.
                      THE TOKEN READOUT LIVES HERE NOW, not in the foot: the owner,
                      2026-09-20: "The top panel contains Tokens: 0, it doesn't go into
                      footer anymore." The drawing's status line is the readout line — the
-                     numbers are joined into it by chat-header, which is where the navy
+                     numbers are joined into it by console-chat-header, which is where the navy
                      bar's readouts went when it was replaced. -->
                 <!-- THE OTHER TWO BARS, AS v.4b DRAWS THEM. The wireframe stacks three
                      single-line bars above the response card — the session status
@@ -3504,7 +4590,7 @@ export class ConsoleChatPanel extends LitElement {
                      draws today; a marker left on a dead id claims nothing and compares
                      nothing. (The re-draw also dropped the gold accent dot: all five now carry
                      the one stroke, as the readout's five already did.) -->
-                <output-header
+                <console-output-header
                   line=${this._statusLine}
                   ?attributed=${attributed}
                   ?readout-filled=${this._statusContentSlotted}
@@ -3517,7 +4603,7 @@ export class ConsoleChatPanel extends LitElement {
                        bar's own door (readout-content). Empty elsewhere: nothing is
                        forwarded and the bar is exactly what it always was. -->
                   <slot name="status-content" slot="readout-content" @slotchange=${this._onStatusSlotChange}></slot>
-                </output-header>
+                </console-output-header>
                 <!-- THE CONVERSATION FURNITURE STEPS OUT WHERE A ROOM'S OWN VIEW SHOWS
                      (owner, 2026-10-13 late: "you can remove the conversation panel …
                      in the trace view. We don't need it there." — and the trace view
@@ -3527,16 +4613,17 @@ export class ConsoleChatPanel extends LitElement {
                      tab showing its own view shows THE VIEW, nothing appended. Every
                      other tab and every other room: unchanged. -->
                 ${this._outputWindows.includes('conversations') && !this._tabClaimant(this.activeTab)
-                  ? html`<chat-header
+                  ? html`<console-chat-header
+                  data-slot="conversations"
                   status-text=${(() => {
-                    const n = this._conversationRows?.length ?? (this.conversations ?? []).length;
+                    const n = this._conversationCount;
                     // The drawing's copy is "23 Conversations"; one of them is one conversation.
                     return `${n} ${n === 1 ? 'Conversation' : 'Conversations'}`;
                   })()}
                   role="button"
                   tabindex="0"
                   aria-expanded=${this._conversationsOpen ? 'true' : 'false'}
-                  aria-label="Show the conversations"
+                  aria-label="Show this seat's conversations"
                   icon=${historyIcon}
                   icon-node="40001123:6745"
                   icon-size="22"
@@ -3547,15 +4634,28 @@ export class ConsoleChatPanel extends LitElement {
                   grip-row-node="40001126:2015"
                   grip-dots="40001126:2016,40001126:2017,40001126:2018,40001126:2019,40001126:2020"
                   dm-sans
+                  ?open=${this._conversationsOpen}
                   @click=${this._toggleConversations}
                   @keydown=${this._onConversationsKey}
-                ></chat-header>`
-                  : nothing}
-                ${this._conversationsOpen
-                  ? html`<div class="output-slot">
-                      <ul class="conversation-list">${this._conversationRowsForList()}</ul>
-                      ${this._listNote ? html`<p class="conv-note" role="status">${this._listNote}</p>` : nothing}
-                    </div>`
+                >
+                  <!-- THE NEW-CONVERSATION MARK, BESIDE THE BAR'S OWN. The press stops at the
+                       button so the bar does not also fold the card. -->
+                  <button
+                    slot="bar-actions"
+                    class="conv-new"
+                    type="button"
+                    title="New conversation"
+                    aria-label="New conversation"
+                    @click=${(e: Event) => {
+                      e.stopPropagation();
+                      this._startNewConversation();
+                    }}
+                  >+</button>
+                  <!-- THE LIST IS INSIDE THE CARD. A press on the bar opens it; the open
+                       card takes its rows' height and the list scrolls in the body. -->
+                  <ul class="conversation-list">${this._conversationRowsForList()}</ul>
+                  ${this._listNote ? html`<p class="conv-note" role="status">${this._listNote}</p>` : nothing}
+                </console-chat-header>`
                   : nothing}
                 <!-- THE DROPDOWN IS OUT OF THE TOP; ITS CAPABILITY IS NOT. See the
                      _conversationsTopSlot field above: v.4b draws no selector here, and the
@@ -3564,17 +4664,17 @@ export class ConsoleChatPanel extends LitElement {
                 ${this._conversationsTopSlot
                   ? html`
                       <div class="output-slot">
-                        <small-dropdown label="Conversations">
+                        <console-small-dropdown label="Conversations">
                           ${this._conversationItems()}
-                        </small-dropdown>
+                        </console-small-dropdown>
                       </div>
                     `
                   : nothing}
                 ${unannotated
-                  ? html`<error-banner
+                  ? html`<console-error-banner
                       code="UNANNOTATED-IN-USE"
                       message="A component in use was generated without its catalog annotation — its behaviour is being invented downstream."
-                    ></error-banner>`
+                    ></console-error-banner>`
                   : nothing}
                 <!-- THE REPAIR LIST IS NOT DRAWN HERE ANY MORE. It was a permanent
                      sibling in this template — a console list above the composer in
@@ -3609,7 +4709,7 @@ export class ConsoleChatPanel extends LitElement {
                      the response inside it. The scroller and every view that was in the
                      output area before are inside it, unchanged: the thread, the trace
                      fold, the view slot, the content-header slot. -->
-                <chat-header card .hasResults=${this._hasResultTurns}>
+                <console-chat-header card .hasResults=${this._hasResultTurns}>
                   <div class="content-scroll" @scroll=${this._onOutputScroll}>
                     <div class="content-header"><slot name="content-header"></slot></div>
                   ${this._showsThread
@@ -3620,7 +4720,7 @@ export class ConsoleChatPanel extends LitElement {
                         : nothing}
                       ${this.activeTab === 'approvals' && this._inspectionReports.length
                         ? html`<div class="fold-wrap">
-                            <chat-fold
+                            <console-chat-fold
                               label="Inspections"
                               count=${`${this._inspectionReports.length} filed`}
                               ?open=${this._approvalsOpen}
@@ -3646,22 +4746,48 @@ export class ConsoleChatPanel extends LitElement {
                                   </article>`,
                                 )}
                               </div>
-                            </chat-fold>
+                            </console-chat-fold>
                           </div>`
                         : nothing}
                       ${this._historyError
                         ? html`<p class="conversation-none" role="alert">${this._historyError}</p>`
                         : nothing}
-                      <chat-messages
+                      ${this.consoleQuery && (this.consoleQuery.text || this.consoleQuery.error)
+                        ? html`<div class="console-query" role="status">
+                            <span class="console-query-text">
+                              ${this.consoleQuery.error
+                                ? `Directive not applied — ${String(this.consoleQuery.error)}`
+                                : `${String(this.consoleQuery.text)} · ${String(this.consoleQuery.count ?? '')} cards`}
+                            </span>
+                            ${Array.isArray(this.consoleQuery.missing) && this.consoleQuery.missing.length
+                              ? html`<span class="console-query-missing">${this.consoleQuery.missing.length} no longer available</span>`
+                              : nothing}
+                            ${this.consoleQuery.record_error
+                              ? html`<span class="console-query-missing">${String(this.consoleQuery.record_error)}</span>`
+                              : nothing}
+                            ${this._treeRecordMismatch
+                              ? html`<span class="console-query-missing">The cards drawn differ from the recorded set.</span>`
+                              : nothing}
+                            ${this.consoleQuery.turn_id && this.consoleQuery.refreshable !== false
+                              ? html`<button
+                                  type="button"
+                                  class="console-refresh"
+                                  title="Run this view again"
+                                  @click=${() => this._refreshSurface()}
+                                >Refresh</button>`
+                              : nothing}
+                          </div>`
+                        : nothing}
+                      <console-chat-messages
                         .messages=${this._thread}
                         .sending=${this._workActive}
                         .stage=${this._workStage}
                         .spentActions=${[...this._spent]}
                         .spentTurn=${this._spentTurn}
-                      ></chat-messages>`
+                      ></console-chat-messages>`
                     : this.activeTab === 'trace' && !this._tabClaimant('trace')
                       ? html`<div class="fold-wrap">
-                          <chat-fold
+                          <console-chat-fold
                             label="Trace"
                             ?open=${this._traceOpen}
                             @fold-toggle=${(e: CustomEvent<{ open: boolean }>) => { this._traceOpen = e.detail.open; this.requestUpdate(); }}
@@ -3672,21 +4798,23 @@ export class ConsoleChatPanel extends LitElement {
                               : html`<div class="view-waiting" role="status">
                                   ${this._emptyViewLine()}
                                 </div>`}
-                          </chat-fold>
+                          </console-chat-fold>
                         </div>`
                       : html`<div class="view-slot tab-${this.activeTab || 'none'}">
                           <slot name="view" @slotchange=${this._onSlotChange}></slot>
                           ${this._viewSlotted()
                             ? nothing
-                            : html`<div class="view-waiting" role="status">
-                                ${this._emptyViewLine()}
-                              </div>`}
+                            : this.activeTab === 'tools'
+                              ? this._ingestedCardsView()
+                              : html`<div class="view-waiting" role="status">
+                                  ${this._emptyViewLine()}
+                                </div>`}
                         </div>`}
                   </div>
                   <!-- THE DRAWN SCROLLBAR, INSIDE THE CARD. It is a SIBLING of the scroller
                        and a child of the card, so it holds the card's right edge while the
                        conversation travels under it — the card owns position: relative for
-                       it (see chat-header). Nothing at all when the content fits
+                       it (see console-chat-header). Nothing at all when the content fits
                        (_railVisible false); a 4px thumb over the card when it does not —
                        _syncScrollThumb holds its length and offset. -->
                   ${this._showScrollBar && this._railVisible
@@ -3704,10 +4832,10 @@ export class ConsoleChatPanel extends LitElement {
                         ></div>
                       </div>`
                     : nothing}
-                </chat-header>
+                </console-chat-header>
               </div>
               <div class="chat-input-wrapper">
-                <chat-action-bar
+                <console-chat-action-bar
                   model-label=${this.modelLabel ?? 'Models'}
                   trailing="agent"
                   ?busy=${this._sending}
@@ -3716,17 +4844,17 @@ export class ConsoleChatPanel extends LitElement {
                   @input-resize-move=${this._onResizeMove}
                   @send-input-to-model=${this._onSendCommand}
                   @stop-model-thinking=${this._onStopCommand}
-                ></chat-action-bar>
-                <chat-input
+                ></console-chat-action-bar>
+                <console-chat-input
                   .height=${this.inputHeight}
                   @message-sent=${this._onMessageSent}
                   @keydown=${this._onComposerKey}
                 >
-                  <prompt-textarea
+                  <console-prompt-textarea
                     placeholder="chat input"
                     @value-input=${this._onDraftInput}
-                  ></prompt-textarea>
-                </chat-input>
+                  ></console-prompt-textarea>
+                </console-chat-input>
                 <!-- THE TRAY IS v.4b's FOOT. The navy <chat-footer> that stood here is
                      REPLACED: the drawing does not draw it, and the owner's ruling is that
                      the drawing is the truth — "If the design doesn't draw it, then it's
@@ -3736,7 +4864,7 @@ export class ConsoleChatPanel extends LitElement {
                      on the navy bar when the #CFD7D5 bar it replaced went away. -->
                 <!-- v.4b's foot. Its five marks retired 2026-10-14; label and credit alone —
                      see its header. -->
-                <chat-plugin-tray></chat-plugin-tray>
+                <console-chat-plugin-tray></console-chat-plugin-tray>
               </div>
             </div>
           `}

@@ -396,7 +396,8 @@ class A2UIConsoleCardGrid extends LitElement {
   /** The page a change has left us on, kept inside the range the new size allows. */
   private _pageCount(): number {
     const size = Math.max(1, this._cols * this._rows);
-    return Math.max(1, Math.ceil((Array.isArray(this.items) ? this.items.length : 0) / size));
+    const items = Array.isArray(this.items) ? this.items : [];
+    return Math.max(1, Math.ceil(items.length / size));
   }
 
   private _go(delta: number): void {
@@ -406,6 +407,11 @@ class A2UIConsoleCardGrid extends LitElement {
     this.dispatchEvent(new CustomEvent('card-page', {
       bubbles: true, composed: true, detail: { page: next },
     }));
+  }
+
+  /** A NEW CARD SET IS A NEW LIST: a tab's assembly opens at its first page, not the old page. */
+  protected willUpdate(changed: Map<PropertyKey, unknown>): void {
+    if (changed.has('items')) this.page = 0;
   }
 
   static styles = css`
@@ -516,6 +522,18 @@ class A2UIConsoleCardGrid extends LitElement {
       color: #6c757d;
       max-width: 420px;
     }
+    /* A FILTERED TAB WITH NOTHING IN IT IS SAID, NOT LEFT BLANK. Cards are the console's only
+       content today; a tab whose record has none says so in the same muted line as the
+       too-small answer, so "nothing is here" and "it did not arrive" never look alike. */
+    .empty {
+      margin: 0;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1.5;
+      color: #6c757d;
+      max-width: 420px;
+    }
   `;
 
   /**
@@ -559,6 +577,9 @@ class A2UIConsoleCardGrid extends LitElement {
     // pass exists it is still a {path} object, so this paints nothing — correct,
     // and visible rather than silently empty.
     const all = Array.isArray(this.items) ? this.items : [];
+    if (!all.length) {
+      return html`<p class="empty" role="status">No cards for this tab.</p>`;
+    }
     const size = Math.max(1, this._cols * this._rows);
     const pages = this._pageCount();
     // A page that the current size has emptied is not a page: the index is clamped here so a
@@ -576,14 +597,23 @@ class A2UIConsoleCardGrid extends LitElement {
     // `this.id`, so a card rendered without one deletes nothing.
     return html`${repeat(cards, (item: any) => String(item?.id ?? ''), (item: any) => {
       const sessionId = item?.id ?? '';
+      /* NO CARD WEARS PLACEHOLDER COPY. The line above the category is the card's own name:
+         the product room's category, Design Tools for a design card, the composer's own name
+         otherwise — never a literal that belongs to no record. */
+      const headerLabel =
+        item?.headerLabel
+          || (item?.room_domain === 'product' ? (item?.category ?? '') : '')
+          || item?.category
+          || (item?.seat === 'composer' ? 'Composer' : item?.seat === 'console' ? 'Console' : '');
+      const sublabel = item?.subcategory ?? '';
       return html`<agent-card-element
         id=${sessionId}
         data-a2ui-id=${sessionId}
         title=${item?.title ?? ''}
         category=${item?.category ?? ''}
         mark-src=${MARK_BY_SEAT[item?.seat ?? ''] ?? ''}
-        header-label=${item?.room_domain === 'product' ? (item?.category ?? '') : ''}
-        ?nodelete=${item?.room_domain === 'design'}
+        header-label=${headerLabel}
+        sublabel=${sublabel}
         function=${item?.function ?? 'Function like Repair'}
         description=${item?.description ?? ''}
         version=${item?.version || item?.message_count || 1}
