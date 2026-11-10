@@ -3,7 +3,7 @@
 > **Deterministic runtime protocols, data schemas, and governance architectures - One surface. Any payload. AI fills the slots.**
 
 **Raibach Interactive Design Studio** · John Holt  
-Version **0.9.1** · A2UI Protocol Compliant · 2026-08-01
+Version **0.9.1** · A2UI Protocol Compliant · 11-01-2026
 
 ## Demo: Wireframe interactive prototype
 https://site--semantic-design-systems--mgtvxtd7xr2v.code.run
