@@ -65,9 +65,15 @@ const PATTERNS = [
   { name: "private key", severity: "high", re: /-----BEGIN [A-Z ]*PRIVATE KEY-----/g },
   { name: "JWT", severity: "high", re: /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g },
   {
+    name: "encryption key / salt",
+    severity: "high",
+    re: /\b([A-Za-z0-9_]*(?:ENCRYPTION_KEY|AES_KEY|FERNET_KEY|MASTER_KEY|SIGNING_KEY|JWT_SECRET|HMAC|SALT)[A-Za-z0-9_]*)\s*["']?\s*[=:]\s*["']([^"'\s]{16,})["']/gi,
+    check: (_match, value) => !isPlaceholder(value),
+  },
+  {
     name: "literal credential assignment",
     severity: "heuristic",
-    re: /\b([A-Za-z0-9_]*(?:SECRET|PASSWORD|PASSWD|TOKEN|API_KEY|APIKEY|DATABASE_URL|DSN)[A-Za-z0-9_]*)\s*[=:]\s*["']([^"'\s]{16,})["']/gi,
+    re: /\b([A-Za-z0-9_]*(?:SECRET|PASSWORD|PASSWD|TOKEN|API_KEY|APIKEY|DATABASE_URL|DSN)[A-Za-z0-9_]*)\s*["']?\s*[=:]\s*["']([^"'\s]{16,})["']/gi,
     check: (_match, value) => !isPlaceholder(value),
   },
 ].map((p) => ({ ...p, re: new RegExp(p.re.source, p.re.flags) }));

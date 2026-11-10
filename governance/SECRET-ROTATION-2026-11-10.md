@@ -70,6 +70,9 @@ gets new credentials from scratch.
 
 - **GitGuardian** — mark the incident *revoked* (the service it belonged to no longer exists), not
   *resolved by rotation*. Reference this file in the comment.
+- Expect the same two blobs to be classified more than once. GitGuardian reads them as a database
+  assignment, an encryption key, a salt, a next-auth secret, API keys and passwords; those are one
+  incident with several labels, not several incidents.
 - **GitHub** — if alerts appear against the historical blobs `0315b397…` or `c3000be9…`, resolve
   them as revoked and point at this file. Do not delete the alert thread; the record is what makes
   the next alert intelligible.
