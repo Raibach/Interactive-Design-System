@@ -120,16 +120,19 @@ function draftDocument(draft: DraftPreviewState): string {
     '<style>' +
     'html, body { margin: 0; }' +
     '*, *::before, *::after { box-sizing: border-box; }' +
-    // A COLUMN SO THE CAPTION KEEPS THE TOP AND THE COMPONENT GETS THE REST — the component is
-    // centred in what is left, so the line naming the file stays where a reader looks first.
-    'body { min-height: 100vh; padding: 16px; background: #fafafa; font-family: "IBM Plex Sans", system-ui, sans-serif; overflow: auto; display: flex; flex-direction: column; }' +
+    // THE DOCUMENT IS THE COMPONENT'S HEIGHT, NOT THE IFRAME'S. It used to be `min-height: 100vh`
+    // with `overflow: auto`, which made the document a scroll box inside the panel: the panel
+    // could never be shorter than the column, and a component taller than the frame scrolled
+    // inside it. The frame now measures this document and takes its height (see the height
+    // message below), so the document is only as tall as the caption plus the element.
+    'body { padding: 16px; background: #fafafa; font-family: "IBM Plex Sans", system-ui, sans-serif; overflow: visible; }' +
     // AND IT IS CENTRED BY ITS OWN MARGIN (owner, 2026-09-30: *"center the component Vertically and
     // horizontally whenever it displays there"*). An auto margin is what centres it safely: a
     // component WIDER than the pane keeps its left edge reachable, because an auto margin resolves
     // to zero the moment there is no room, where `justify-content: center` would push half of it
     // out of reach. The size is untouched — this is still the component at the size the design
     // measured, not scaled to fit.
-    'body > ' + tag + ' { margin: auto; }' +
+    'body > ' + tag + ' { display: block; margin: 8px auto; }' +
     '#preview-caption { font-family: IBM Plex Mono, Menlo, monospace; font-size: 10px; color: #8a9499; margin-bottom: 8px; }' +
     '#preview-status { display: none; max-width: 520px; font-size: 13px; color: #b91c1c; font-family: IBM Plex Mono, monospace; white-space: pre-wrap; text-align: left; }' +
     '</style>' +
@@ -206,8 +209,30 @@ function draftDocument(draft: DraftPreviewState): string {
     // empty drawing) is reported as a failure here, because a blank box is not a success.
     '  const el = document.querySelector(' + JSON.stringify(tag) + ');' +
     '  if (el && el.updateComplete) { try { await el.updateComplete; } catch (e) {} }' +
+    // ── THE COMPONENT'S OWN STYLES, APPLIED. Lit normally installs `static styles` on the shadow
+    // root; if this document's CSP or engine skipped the adopted stylesheet, apply the class's own
+    // cssText here so the drawing is never raw HTML.
+    '  const ctor = el && el.constructor;' +
+    '  const declared = ctor && ctor.styles;' +
+    '  const cssText = declared ? (Array.isArray(declared) ? declared.map((s) => (s && s.cssText) || "").join("\\n") : (declared.cssText || "")) : "";' +
+    '  const root = el && el.shadowRoot;' +
+    // WHAT THE COMPONENT DREW, COUNTED BEFORE THE STYLE TAGS BELOW ARE ADDED. A style is an
+    // element too; counting it would turn a component that rendered nothing into a "drawn" one.
+    '  const renderedBefore = el && el.shadowRoot ? el.shadowRoot.childElementCount : 0;' +
+    // THE RAW CSS IN THE IFRAME'S HEAD, as ordered. The head copy covers the document; the copy
+    // below goes into the shadow root, where the component's own scoped selectors match.
+    '  if (cssText) {' +
+    '    const headStyle = document.createElement("style");' +
+    '    headStyle.textContent = cssText;' +
+    '    document.head.appendChild(headStyle);' +
+    '  }' +
+    '  if (root && cssText) {' +
+    '    const style = document.createElement("style");' +
+    '    style.textContent = cssText;' +
+    '    root.appendChild(style);' +
+    '  }' +
     '  const box = el ? el.getBoundingClientRect() : null;' +
-    '  const drawn = el && el.shadowRoot ? el.shadowRoot.childElementCount : 0;' +
+    '  const drawn = renderedBefore;' +
     // A NON-ZERO BOX IS NOT A DRAWING. Measured on right-column-panel-container: the element
     // loaded, held 964x634, and sat at x = -602.5 — entirely outside this frame — because its
     // root transform was applied around the corner. The element's ORIGIN must be inside the
@@ -231,6 +256,20 @@ function draftDocument(draft: DraftPreviewState): string {
     JSON.stringify(label) +
     "    + '.', false);" +
     '};' +
+    /*
+     * THE DOCUMENT ANNOUNCES ITS OWN HEIGHT. The frame above cannot read a height the document
+     * never states — and `100%` only ever echoed the iframe, which is the box being sized. The
+     * body's `scrollHeight` is the caption, the status line and the element, which is what the
+     * panel must hug. A ResizeObserver keeps it honest when the status text wraps or a face
+     * finishes loading; the two timers cover the first frames before layout has settled.
+     */
+    'const reportHeight = () => {' +
+    '  try {' +
+    '    parent.postMessage({ type: "draft-preview-height", height: Math.ceil(document.body.getBoundingClientRect().height) }, "*");' +
+    '  } catch (e) {}' +
+    '};' +
+    'if (window.ResizeObserver) { try { new ResizeObserver(reportHeight).observe(document.body); } catch (e) {} }' +
+    'setTimeout(reportHeight, 0); setTimeout(reportHeight, 120); setTimeout(reportHeight, 500);' +
     'load();' +
     '</script>' +
     '</body>' +
@@ -241,14 +280,48 @@ function draftDocument(draft: DraftPreviewState): string {
 export class DraftPreview extends LitElement {
   static properties = {
     draft: { type: Object },
+    /** The document's own height, reported from inside the frame — see the message below. */
+    _height: { state: true },
   };
 
   /** The draft to draw, bound by the shell to `/session/preview/draft`. */
   declare draft: DraftPreviewState | undefined;
 
+  /**
+   * The last height the document announced; 0 until it answers. A DECLARED reactive field, not a
+   * class-field initializer: a field of the same name would shadow Lit's accessor and the style
+   * would never re-render when the message arrived (measured: `_height` 380, iframe still 320).
+   */
+  declare _height: number;
+
   constructor() {
     super();
     this.draft = undefined;
+    this._height = 0;
+  }
+
+  /**
+   * THE FRAME TAKES THE DOCUMENT'S HEIGHT. The document is the thing that knows how tall the
+   * caption and the element are; the iframe is the box being sized, so asking it is circular.
+   * The message is accepted only from this element's own iframe.
+   */
+  private _onHeight = (event: MessageEvent): void => {
+    const iframe = this.renderRoot?.querySelector('iframe') as HTMLIFrameElement | null;
+    if (!iframe || event.source !== iframe.contentWindow) return;
+    const height = Number((event.data || {}).height);
+    if (!Number.isFinite(height) || height <= 0) return;
+    if (Math.abs(height - this._height) < 1) return;
+    this._height = height;
+  };
+
+  connectedCallback(): void {
+    super.connectedCallback();
+    window.addEventListener('message', this._onHeight);
+  }
+
+  disconnectedCallback(): void {
+    window.removeEventListener('message', this._onHeight);
+    super.disconnectedCallback();
   }
 
   render() {
@@ -269,6 +342,7 @@ export class DraftPreview extends LitElement {
       <iframe
         title="Draft preview"
         sandbox="allow-scripts allow-same-origin"
+        style=${`height: ${this._height > 0 ? `${this._height}px` : '320px'}`}
         srcdoc=${draftDocument(d)}
       ></iframe>
     `;
@@ -278,13 +352,14 @@ export class DraftPreview extends LitElement {
     css`
       /* No backticks in this stylesheet: it is a tagged template literal. */
       :host {
-        display: flex;
+        display: block;
         width: 100%;
-        /* THE PANE THE COMPONENT IS DRAWN IN. The component is not scaled to fit and this element
-           does not clip it: the frame around this one scrolls (component-preview's .frame), and the
-           document scrolls inside itself, which is the pane's own behaviour in the ingest form. */
-        height: 100%;
-        min-height: 320px;
+        /* THE FRAME HUGS THE DOCUMENT. The iframe's height is the height the document reported
+           (see _onHeight); this element adds nothing and clips nothing, so the panel around it is
+           as tall as the drawing plus its caption. The page around the panel is what scrolls if
+           the whole column is taller than the window — never this box. */
+        height: auto;
+        min-height: 0;
       }
       /*
        * THE FRAME FILLS THIS ELEMENT WITHOUT A PERCENTAGE, and that is not a style preference.
@@ -296,7 +371,8 @@ export class DraftPreview extends LitElement {
        * so the pane is the host's height whatever the parent's height turned out to be.
        */
       iframe {
-        flex: 1 1 auto;
+        display: block;
+        width: 100%;
         min-width: 0;
         border: 0;
         background: #fff;

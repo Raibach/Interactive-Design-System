@@ -26,6 +26,9 @@ import { markArrival } from "@/shared/arrival";
 import { componentProps, resolveTag } from "@/components/lit/a2ui-renderer";
 import { buildContent, type Content } from "./content";
 import { isCardLocked, lockedCardSentence } from "@/rooms/design/cardLifecycle";
+import { sayIngestLine } from "@/rooms/design/tools/ingest-chat";
+import { acceptIngestPreview } from "@/rooms/design/tools/ingest-acceptance";
+import { buildIngestSummary, ingestFidelityLine } from "@/rooms/design/tools/ingest-summary";
 import { parseFigmaUrl } from "@/utils/figmaUrl";
 import { generateUuid } from "@/utils/uuid";
 
@@ -337,7 +340,17 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
       window.requestAnimationFrame(() => {
         window.requestAnimationFrame(() => {
           if (!cancelled) {
-            window.dispatchEvent(new CustomEvent('open-component', { detail: { tag: openTag } }));
+            /*
+             * A RESTORE IS NOT A CLICK. The card's own tag is opened so the drawing comes back,
+             * but the chat must not be handed a NEW "is in the catalogue… remove it?" question
+             * every time the card is reopened — that is an answer to a row the person pressed,
+             * and nobody pressed it now. The flag is what the handler reads to draw the component
+             * without speaking (owner, 2026-11-09: the remove question "popping up" on every
+             * console card open).
+             */
+            window.dispatchEvent(
+              new CustomEvent('open-component', { detail: { tag: openTag, restored: true } }),
+            );
           }
         });
       });
@@ -465,61 +478,25 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
   );
 
   /*
-   * THE LOG LINE IS WRITTEN BY THE SEAT THAT MADE THE RUN. The chat element also writes host
-   * lines, but only while it is bound to a conversation; an ingest can fail before that binding
-   * exists, and the line was then drawn locally and lost. The seat knows this session's own
-   * conversation, so it writes the line there first and then hands it to the chat with
+   * THE CONVERSATION THIS VISIT'S WORKFLOW LINES ARE WRITTEN TO. The seat knows this session's
+   * own conversation; the line module writes there first and then hands the line to the chat with
    * `persisted` set — the chat draws it and does not write a second copy.
    */
-  const persistIngestLine = useCallback(async (content: string, alert: boolean): Promise<boolean> => {
+  const ingestConversationId = useCallback((): string => {
     const session = (designTreeRef.current.dataModel as Record<string, any>)?.session ?? {};
-    const conversationId =
-      liveConversationRef.current || String(session?.right_column?.conversation_id ?? "");
-    if (!conversationId) return false;
-    const response = await apiFetch(
-      `${API_BASE}/conversations/${encodeURIComponent(conversationId)}/messages`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          role: "assistant",
-          content,
-          metadata: { source: "host", alert },
-        }),
-      },
-    );
-    if (!response.ok) throw new Error(`the conversation answered ${response.status}`);
-    return true;
+    return liveConversationRef.current || String(session?.right_column?.conversation_id ?? "");
   }, []);
 
-  /**
-   * ONE LINE IN THE CHAT, WRITTEN ONCE. The seat writes the line into the session's conversation
-   * first, then hands it to the chat with `persisted` set, so the chat draws it and does not write
-   * a second copy. This is the same path the ingest's pass and failure lines use; the accept,
-   * approve, remove and existing-component messages go through it so every workflow step is in
-   * the card's log and survives a reload.
-   */
-  const sayInChat = useCallback(
-    async (content: string, alert = false): Promise<void> => {
-      let stored = false;
-      try {
-        stored = await persistIngestLine(content, alert);
-      } catch (error) {
-        console.error("the workflow line could not be saved:", error);
-      }
-      window.dispatchEvent(
-        new CustomEvent("a2ui:system-message", {
-          detail: {
-            role: "assistant",
-            content,
-            alert,
-            persisted: stored,
-            tab: "tools",
-          },
-        }),
-      );
-    },
-    [persistIngestLine],
+  /** One line in the ingest's conversation, persisted before it is drawn. */
+  const sayIngest = useCallback(
+    (content: string, alert = false) =>
+      sayIngestLine({
+        conversationId: ingestConversationId(),
+        content,
+        alert,
+        tab: "tools",
+      }),
+    [ingestConversationId],
   );
 
   /*
@@ -627,6 +604,32 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
           return;
         }
         const jobId = generateUuid();
+        // A NEW INGEST DISCARDS THE PREVIOUS DRAFT. The standing preview belongs to another job;
+        // its entry and temporary folder are dropped before the new read starts, so the pane can
+        // never show the old draft under the new answer.
+        const previousJob = previewRef.current?.draft?.jobId ?? previewRef.current?.jobId;
+        if (previousJob && previousJob !== jobId) {
+          try {
+            await apiFetch(`${API_BASE}/figma/discard`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ jobId: previousJob }),
+            });
+          } catch (e) {
+            window.dispatchEvent(
+              new CustomEvent("a2ui:system-message", {
+                detail: {
+                  role: "assistant",
+                  content: `The previous draft could not be discarded: ${
+                    e instanceof Error ? e.message : String(e)
+                  }. The new ingest replaces the preview; the old files stay until the server sweeps them.`,
+                  alert: true,
+                  tab: "tools",
+                },
+              }),
+            );
+          }
+        }
         // ── THE STEPS, AS THEY HAPPEN ─────────────────────────────────────────────────────────
         // The backend records a real step each time the work advances: reading the node, then one
         // line per layer it checks, then building and compiling. This polls that list and puts the
@@ -740,19 +743,7 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
           : [];
         const notes = annotations.filter((a) => a.kind === "note" && a.note);
         const props = annotations.filter((a) => a.kind === "property");
-        /* THE LAYER NAME, AND WHETHER THE CATALOGUE ALREADY HAS IT. A name lookup only: the
-           approved component's own values are never read or compared, because that would be the
-           AI interpreting one design against another. */
-        const existingName = (result as any)?.existingName as
-          | { tag?: string; nodeId?: string; approvedAt?: string }
-          | null
-          | undefined;
-        const exactness = (result as any)?.fidelity?.exactness as
-          | { exact?: number; compared?: number; differs?: number; percent?: number }
-          | undefined;
-        const exactLine = exactness
-          ? `Of the facts I could compare, ${exactness.exact ?? 0} of ${exactness.compared ?? 0} carry the design's own values exactly (${exactness.percent ?? 0}%).`
-          : "";
+        const exactLine = ingestFidelityLine(result as Record<string, any>);
         /* AND WHAT MOVED SINCE THE LAST TIME THIS NODE WAS MEASURED. This is the line the
            one-pixel test reads: a second ingest of the same node carries the previous
            measurement beside it, so the answer names the fact that changed, with both values —
@@ -813,12 +804,21 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
           // metadata; accept, approve and discard are said in the conversation.
           chatControls: true,
           tag: builtTag,
+          // THE VISIT'S OWN ROW. The acceptance event is filed against the card, not the room
+          // container; this is the same id the ingest request sends. No node id is involved.
+          sessionId: String(
+            currentDesignSession?.design_session_id ?? currentDesignSession?.id ?? "",
+          ),
           // THE WHOLE MEASURED TREE, so the list can open the component it just ingested. Every
           // layer, nested, with the names and sizes the design states.
           tree: ((result as any)?.details?.spec as Record<string, any> | undefined) ?? null,
-          // THE CATALOGUE WRITE SET IS NOT PART OF THE PREVIEW. The preview compares nothing
-          // against the system; approval names the children the server wrote in the chat.
-          patterns: [],
+          // THE CHILDREN THIS DESIGN STANDS ON, from the server's own list. The panel draws one
+          // box per entry; a new pattern starts ticked and an existing one starts unticked, and
+          // the approve sends exactly the ticked set. Nothing is selected on the designer's
+          // behalf that the panel does not draw.
+          patterns: Array.isArray((result as any)?.patterns)
+            ? ((result as any).patterns as Array<Record<string, any>>)
+            : [],
           // THE DRAWN DECLARATIONS PER LAYER — the specs list the panel shows beside the drawing.
           specs: ((details.specs as Array<Record<string, any>> | undefined) ?? []),
           // THE GATE'S READINGS ARE NOT DRAWN HERE. The preview is a read of the file, not a
@@ -835,21 +835,6 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
           sourceBytes: Number(details.sourceBytes ?? 0),
           name: details.target_node_name ?? "",
           nodeId: details.target_node_id ?? nodeId,
-          /*
-           * THE CATALOGUE COMPARISON, CARRIED FOR THE APPROVAL QUEUE — NOT DRAWN HERE.
-           *
-           * The preview is ephemeral and blind: it draws the design's own facts and nothing about
-           * the catalogue. The comparison the ingest made — whether the tag already exists, the
-           * entry whose layer name matches, the layers whose names already exist on other
-           * components — is approval material. It travels with the run, under this one field, so
-           * the approval reads it; no renderer in the preview reads it.
-           */
-          approvalFacts: {
-            alreadyInCatalogue: !!result.alreadyInCatalogue,
-            existing: existingName?.tag ? existingName : undefined,
-            collisions: Array.isArray(result.nameCollisions) ? result.nameCollisions : [],
-            instances: Array.isArray(result.nameInstances) ? result.nameInstances : [],
-          },
           jobId,
           draft,
           // THE DATA BINDING, IN THE PREVIEW — what this component will be given, from the rows
@@ -880,6 +865,12 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
           ].filter(Boolean) as Array<{ label: string; value: string }>,
         });
         /*
+         * THE RESULT IS THE WORK NOW: the form and the tree stand aside. Asked HERE, at the
+         * moment the preview and the chat carry the ingest's answer, so every submit docks —
+         * not only the one that first opened the column (see dockLeftForPreview).
+         */
+        dockLeftForPreview();
+        /*
          * THE CHAT IS ASKED THE FACE QUESTION (plan 1.5). The event is the seat's own, not the
          * general system-message channel: the room keeps other tabs' seats warm, and a sentence
          * broadcast to all of them would appear in a thread the ingest never touched. The Tools
@@ -902,78 +893,8 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
           ? ((result as any).fidelity.blocking as string[])
           : [];
         if (blocking.length) {
-          /*
-           * THE FAILURE LEADS WITH THE ACTION, NOT THE COVERAGE. The person is reading this to
-           * know what to fix. The unexamined keys are the thing to fix; the exact profile is the
-           * record beneath them; the other differences follow. The 666-fact verdict and the
-           * two-channel coverage stay in the activity record and the preview's own report, where
-           * a reader who wants the measurements can find them.
-           */
-          const validationFailure = (result as any)?.validationFailure as
-            | { profile?: string; keys?: string[] }
-            | null;
-          const validationKeys = Array.isArray(validationFailure?.keys)
-            ? validationFailure.keys
-            : [];
-          const validationKeySet = new Set(validationKeys);
-          const remainingBlocking = validationKeySet.size
-            ? blocking.filter(
-                (one) =>
-                  !Array.from(validationKeySet).some((key) => one.includes(`\`${key}\``)),
-              )
-            : blocking;
-          const exactness = (result as any)?.fidelity?.exactness as
-            | { exact?: number; compared?: number; unexamined?: number }
-            | null;
-          const exactLine =
-            typeof exactness?.exact === "number" && typeof exactness?.compared === "number"
-              ? `The gate compared ${exactness.compared} visual facts and ${exactness.exact} carry the design's own values exactly` +
-                (typeof exactness?.unexamined === "number" && exactness.unexamined > 0
-                  ? `; ${exactness.unexamined} stated key(s) have no examination.`
-                  : ".")
-              : "";
-          const keysLine = validationKeys.length
-            ? [
-                [
-                  `The design states ${validationKeys.length === 1 ? "a key" : `${validationKeys.length} keys`} that no examination covers:`,
-                  ...validationKeys.map((key) => {
-                    const meaning: Record<string, string> = {
-                      arcData:
-                        "the geometry of a vector arc; the drawing does not read it. Fix: read the arc data and draw the arc",
-                      componentProperties:
-                        "the values an instance carries from its component; the component does not carry them. Fix: read the instance's property values and carry them",
-                      maxWidth:
-                        "the maximum width a layer may take; the drawing does not apply it. Fix: read the maximum width and apply it",
-                    };
-                    return `- \`${key}\` — ${
-                      meaning[key] ??
-                      "no examination covers this key. Fix: add an examination for it, or declare it configuration"
-                    }.`;
-                  }),
-                ].join("\n"),
-                "The component is drawn, and it may be wrong where these keys apply.",
-              ].join("\n\n")
-            : "";
-          const actionLine = validationKeys.length
-            ? `**What to do:** add an examination for ${validationKeys.length === 1 ? "that key" : "each named key"}, or declare it configuration if it needs no drawing. Then run the ingest again.`
-            : "**What to do:** read the named differences below, fix the drawing or the measurement, then run the ingest again.";
-          const profile = String(validationFailure?.profile ?? "");
-          const content = [
-            validationKeys.length
-              ? "**The drawing is shown; the design is not fully examined.**"
-              : "**The drawing is shown with differences.**",
-            keysLine,
-            exactLine,
-            actionLine,
-            profile ? "```\n" + profile + "\n```" : "",
-            remainingBlocking.length
-              ? "**Other differences:**\n" + remainingBlocking.map((one) => `- ${one}`).join("\n")
-              : "",
-            "**Do you accept the drawing as it stands?** [Accept](action:preview-accept) or [Discard](action:preview-discard).",
-          ]
-            .filter((part) => part)
-            .join("\n\n");
-          reportFailure(content, "fidelity");
+          // THE SUMMARY IS ITS OWN MODULE: the counts lead, then the named keys and differences.
+          reportFailure(buildIngestSummary(result as Record<string, any>, blocking), "fidelity");
           /* THE FAILURE HAS ONE HOME. The chat carries it; the form and the preview stay about
              the work, not the report. */
           setDesignIngest({ busy: false, message: "" });
@@ -991,24 +912,7 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
             (exactLine ? `${exactLine}\n\n` : "") +
             "The drawing is in the third column with the file's own facts. Do you accept it?\n\n" +
             "[Accept](action:preview-accept) or [Discard](action:preview-discard).";
-          void (async () => {
-            let stored = false;
-            try {
-              stored = await persistIngestLine(passedContent, false);
-            } catch (error) {
-              console.error("the ingest success line could not be saved:", error);
-            }
-            window.dispatchEvent(
-              new CustomEvent("a2ui:system-message", {
-                detail: {
-                  role: "assistant",
-                  content: passedContent,
-                  persisted: stored,
-                  tab: "tools",
-                },
-              }),
-            );
-          })();
+          void sayIngest(passedContent);
         }
         /* THE CHAT OPENS WITH THE ANSWER. The approval question lives there, and the default
            arrangement after an ingest is her standing beside the drawing. */
@@ -1208,7 +1112,7 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
     };
     window.addEventListener("ingest-submit", onSubmit);
     return () => window.removeEventListener("ingest-submit", onSubmit);
-  }, [designIngestBusy, setDesignIngest, currentDesignSession, persistIngestLine]);
+  }, [designIngestBusy, setDesignIngest, currentDesignSession, sayIngest]);
 
   /*
    * ══ THE FIELDS AS THEY ARE TYPED, AND THE PREVIEW AS IT LANDED ═══════════════════════════════
@@ -1240,6 +1144,13 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
   });
   const previewRef = useRef<Record<string, any> | null>(null);
   /**
+   * THE CHILD PATTERNS THE DESIGNER HAS TICKED, as the panel last reported them. The chat's
+   * action link carries no payload, so without this the approve could not know the boxes it is
+   * approving; the panel dispatches `preview-patterns` on every change. Null means "no choice
+   * has been made", and the approve falls back to the server's own list.
+   */
+  const patternChoiceRef = useRef<string[] | null>(null);
+  /**
    * THE INGEST'S FAILURE IS SAID IN THE CHAT, NOT IN THE FORM. The left column holds the catalogue
    * and the pending state; a diagnostic is a conversation turn. The raw error is kept so the chat's
    * copy action reads exactly what the server said, and the chat is opened so the person sees it.
@@ -1263,36 +1174,21 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
     const httpCode = /^\d{3}$/.test(code) ? `HTTP ${code}` : "";
     const content = [httpCode, raw].filter(Boolean).join("\n\n");
     failureTextRef.current = content;
-    void (async () => {
-      let stored = false;
-      try {
-        stored = await persistIngestLine(content, true);
-      } catch (error) {
-        /* THE LINE COULD NOT BE WRITTEN. The chat is handed the line with `persisted` false, so
-           its own write is still offered; a failure there is said by the chat itself. */
-        console.error("the ingest failure line could not be saved:", error);
-      }
-      window.dispatchEvent(
-        new CustomEvent("a2ui:system-message", {
-          detail: {
-            role: "assistant",
-            content,
-            alert: true,
-            code,
-            persisted: stored,
-            tab: "tools",
-          },
-        }),
-      );
-      /*
-       * THE CHAT IS OPENED, THE LEFT COLUMN IS NOT RE-ARRANGED. The layout lives inside the seat's
-       * shadow root, so a document query here can never find it — the earlier version did exactly
-       * that and silently opened nothing. The event crosses the boundary; the shell holds the seat
-       * and asks that page's own workspace to open her, at the width she already has.
-       */
-      window.dispatchEvent(new CustomEvent("design-chat-open", { detail: { tab: "tools" } }));
-    })();
-  }, [persistIngestLine]);
+    void sayIngestLine({
+      conversationId: ingestConversationId(),
+      content,
+      alert: true,
+      tab: "tools",
+      extra: { code },
+    });
+    /*
+     * THE CHAT IS OPENED, THE LEFT COLUMN IS NOT RE-ARRANGED. The layout lives inside the seat's
+     * shadow root, so a document query here can never find it — the earlier version did exactly
+     * that and silently opened nothing. The event crosses the boundary; the shell holds the seat
+     * and asks that page's own workspace to open her, at the width she already has.
+     */
+    window.dispatchEvent(new CustomEvent("design-chat-open", { detail: { tab: "tools" } }));
+  }, [ingestConversationId]);
   useEffect(() => {
     const say = (content: string) =>
       window.dispatchEvent(
@@ -1745,6 +1641,17 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
     return () => window.removeEventListener("design-save-discard", onDiscard);
   }, [discardDesignSession]);
 
+  /* THE PANEL REPORTS THE CHILD BOXES, because the chat's approve carries no payload. One
+     listener for the whole visit: the standing choice is a ref, so a re-render does not lose it. */
+  useEffect(() => {
+    const onPatterns = (event: Event) => {
+      const patterns = (event as CustomEvent<{ patterns?: string[] }>).detail?.patterns;
+      if (Array.isArray(patterns)) patternChoiceRef.current = patterns;
+    };
+    window.addEventListener("preview-patterns", onPatterns);
+    return () => window.removeEventListener("preview-patterns", onPatterns);
+  }, []);
+
   /* LEAVING TOOLS ENDS THE VISIT (owner, 2026-11-07). The working session is removed; a card the
      visit opened is kept by its own mark, so `discardDesignSession` decides by the record, not by
      this event's name. The next press of Tools is a new session. */
@@ -1916,10 +1823,38 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
    * element). Drawing a draft's name would resolve through the catalogue and show the old
    * component — the defect this column was fixed to remove.
    */
+  /**
+   * DOCK THE LEFT COLUMN — the form and the component tree give the room to the result.
+   *
+   * Owner, 2026-11-09: *"collapse the left column with the data tree of components whenever user
+   * submit is done and the chat output opens with the results of ingest."* The workspace also
+   * docks when the preview container first enters the middle slot, which covers the first ingest
+   * and a card reopened from the console; a LATER submit in the same tab does not change the slot,
+   * so the seat asks at the moment the result is written. One dock, both entry points, and the
+   * person's rail still opens it again.
+   */
+  const dockLeftForPreview = useCallback(() => {
+    const renderer = designRendererRef.current as any;
+    const ws =
+      renderer?.shadowRoot?.querySelector("design-workspace") ??
+      renderer?.shadowRoot?.querySelector("tools-workspace");
+    ws?.dockLeftColumn?.();
+  }, []);
+
   const setDesignPreview = useCallback((preview: Record<string, any> | null) => {
     // WHAT THE MIDDLE COLUMN HOLDS, kept where SAVE can read it: a save happens in this seat, not
     // in the drawing, and the drawing is a shadow-root element no save handler can query.
+    const previous = previewRef.current;
     previewRef.current = preview;
+    // A NEW INGEST OWNS A NEW CHOICE. The panel starts every drafted pattern that is not a
+    // replacement ticked (see `willUpdate` there), and this is the same rule, so an approve
+    // pressed before the panel has reported a change writes exactly what the boxes show.
+    if (preview?.source === "ingest" && preview?.tag !== previous?.tag) {
+      patternChoiceRef.current = (Array.isArray(preview.patterns) ? preview.patterns : [])
+        .filter((entry: Record<string, any>) => entry?.drafted !== false && !entry?.replaces)
+        .map((entry: Record<string, any>) => String(entry?.tag ?? ""))
+        .filter(Boolean);
+    }
     setDesignTree((prev) => {
       const session = (prev.dataModel as Record<string, any>)?.session ?? {};
       const tag = preview?.tag ? String(preview.tag) : "";
@@ -2118,9 +2053,13 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
           tag?: string;
           facts?: Array<{ label: string; value: string }>;
           description?: string;
+          restored?: boolean;
         }>
       ).detail;
       const tag = String(detail?.tag ?? "");
+      // A RESTORED CARD DRAWS ITS COMPONENT BUT ASKS NOTHING — see the dispatch in the assembly
+      // effect. The question below belongs to a row the person pressed.
+      const restored = Boolean(detail?.restored);
       if (!tag) return;
       /*
        * THE ROW'S OTHER FACTS ARRIVE WITH THE CLICK. A component row shows three things — the
@@ -2227,17 +2166,25 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
           ].filter(Boolean) as Array<{ label: string; value: string }>;
         })(),
       });
-      // THE MODEL ANSWERS THE CLICK. The component is in the catalogue, so the only action is
-      // removal; the offer is in the conversation, not a second set of buttons on the preview.
-      const componentName = row?.name ?? tag;
-      void sayInChat(
-        `**${componentName}** is in the catalogue. Its metadata is in the third column. ` +
-          `The only action here is to remove it. Do you want to remove it?\n\n` +
-          `[Remove](action:preview-remove) or [Keep it](action:preview-keep).`,
-      );
-      // THE QUESTION IS IN THE CHAT, SO THE CHAT IS OPENED. A model that asks into a collapsed
-      // panel has not engaged; the person sees the offer where the answer is.
-      window.dispatchEvent(new CustomEvent("design-chat-open", { detail: { tab: "tools" } }));
+      /*
+       * THE MODEL ANSWERS A CLICK, NOT A RESTORE. A restored card already carries this component
+       * in its record; asking "do you want to remove it?" on every reopen filled the chat with
+       * the same question and made a saved card read as if it had just been selected. The
+       * component is still drawn above; only the conversation stays quiet.
+       */
+      if (!restored) {
+        // THE MODEL ANSWERS THE CLICK. The component is in the catalogue, so the only action is
+        // removal; the offer is in the conversation, not a second set of buttons on the preview.
+        const componentName = row?.name ?? tag;
+        void sayIngest(
+          `**${componentName}** is in the catalogue. Its metadata is in the third column. ` +
+            `The only action here is to remove it. Do you want to remove it?\n\n` +
+            `[Remove](action:preview-remove) or [Keep it](action:preview-keep).`,
+        );
+        // THE QUESTION IS IN THE CHAT, SO THE CHAT IS OPENED. A model that asks into a collapsed
+        // panel has not engaged; the person sees the offer where the answer is.
+        window.dispatchEvent(new CustomEvent("design-chat-open", { detail: { tab: "tools" } }));
+      }
       // AND THE ROW IS MARKED AS THE OPEN ONE (owner, 2026-10-25): the list highlights the
       // selected row from the model, so the mark stands with the rest of the state.
       setDesignTree((prev: any) => {
@@ -2275,43 +2222,21 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
       return () => window.clearInterval(timer);
     };
 
-    /*
-     * ACCEPT IS THE DESIGNER'S ANSWER TO THE DRAWING, AND IT IS A STEP OF ITS OWN. The ingest
-     * message asks whether the drawing is the design they want; Accept holds it for approval
-     * without writing anything to the catalogue. The status changes to Accepted, and the chat
-     * offers the approval that writes the component and its children.
-     */
-    const onPreviewAccept = (event: Event) => {
-      const preview =
-        (event as CustomEvent<{ preview?: Record<string, any> }>).detail?.preview ??
-        previewRef.current;
-      if (!preview?.jobId) return;
-      setDesignPreview({
-        ...preview,
-        accepted: true,
-        status: "Accepted — ready for approval",
-        noteLines: ["Accepted. Approve to add it and its children to the catalogue."],
-        note: "Accepted. Approve to add it and its children to the catalogue.",
-      });
-      void sayInChat(
-        "**Accepted.** The drawing is held for approval. " +
-          "[Approve & add to catalogue](action:preview-approve) or " +
-          "[Discard](action:preview-discard).",
-      );
-    };
-
     /* THE DESIGNER'S ANSWER TO AN EXISTING COMPONENT: keep it, and nothing changes. */
     const onPreviewKeep = () => {
-      void sayInChat("Kept in the catalogue. Nothing was removed.");
+      void sayIngest("The component was already in the catalogue; keeping it removed nothing and wrote nothing to the catalogue.");
     };
 
     const onPreviewApprove = async (event: Event) => {
       const detail = (event as CustomEvent<{ preview?: Record<string, any>; patterns?: string[] }>)
         .detail;
       const preview = detail?.preview;
-      // THE TICKED CHILD PATTERNS, as the panel drew them. A pattern the designer left unticked is
-      // not written and not touched — the server is told which tags to write and writes those.
-      const chosenPatterns = Array.isArray(detail?.patterns) ? detail!.patterns : undefined;
+      // THE TICKED CHILD PATTERNS, as the panel drew them. The chat's action link carries no
+      // payload, so the panel reports every change through `preview-patterns`; this is the
+      // standing choice. A pattern the designer left unticked is not written and not touched.
+      const chosenPatterns = Array.isArray(detail?.patterns)
+        ? detail!.patterns
+        : patternChoiceRef.current ?? undefined;
       const jobId = preview?.jobId;
       // A row opened from the list has no job behind it: that component is already in the
       // catalogue, and approving it is not a thing this room can do. Said plainly rather than
@@ -2413,7 +2338,7 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
           sourceBytes: Number(record?.sourceBytes ?? 0),
         });
         setDesignIngest({ busy: false, message: "", refresh: Date.now() });
-        void sayInChat(confirmation);
+        void sayIngest(confirmation);
         window.dispatchEvent(
           new CustomEvent("design-row-selected", { detail: { tag } }),
         );
@@ -2578,7 +2503,7 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
             : null,
         );
         setDesignIngest({ busy: false, message: "", refresh: Date.now() });
-        void sayInChat(removalNote);
+        void sayIngest(removalNote);
       } catch (err) {
         const text = err instanceof Error ? err.message : String(err);
         // THE PANEL KEEPS THE REASON AND STOPS SAYING "REMOVING…": a spinner left turning after a
@@ -2626,7 +2551,16 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
     };
     const gOpen = onlyWhenStanding(onOpenComponent);
     const gCard = onlyWhenStanding(onDesignCardOpen);
-    const gAccept = onlyWhenStanding((event: Event) => onPreviewAccept(withPreview(event)));
+    // ACCEPT IS THE DESIGNER'S ANSWER TO THE DRAWING; the act and its record live in the module.
+    const gAccept = onlyWhenStanding((event: Event) => {
+      const detail = (event as CustomEvent<{ preview?: Record<string, any> }>).detail;
+      void acceptIngestPreview({
+        preview: detail?.preview ?? previewRef.current,
+        conversationId: ingestConversationId(),
+        tab: "tools",
+        setPreview: setDesignPreview,
+      });
+    });
     const gKeep = onlyWhenStanding(onPreviewKeep);
     const gApprove = onlyWhenStanding((event: Event) => onPreviewApprove(withPreview(event)));
     const gDiscard = onlyWhenStanding((event: Event) => onPreviewDiscard(withPreview(event)));
@@ -2682,7 +2616,7 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
       window.removeEventListener("preview-remove", gRemove);
       window.removeEventListener("preview-collision-answer", gCollision);
     };
-  }, [designTree, setDesignIngest, setDesignPreview, sayInChat]);
+  }, [designTree, setDesignIngest, setDesignPreview, sayIngest, ingestConversationId]);
 
   /*
    * THE CONTENT REPORT — every time this engine's tree changes, the room is told what to inject

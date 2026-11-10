@@ -30,6 +30,108 @@ application binds, the consumer owns what a click means.**
 
 ---
 
+## 2026-11-09 — [figma-ingest] the chevron drew 16 px low, and the 170 rows could not see it
+
+**What was reported.** The owner, looking at the preview of
+`https://www.figma.com/design/20UPR2KQMsbAxlo5NJb1se/Wireframes--v.4b--SCE-Enterprise-AI-Prompt-Platform?node-id=40001175-2229`:
+*"I can't get the preview to show it 100% accurate and I don't understand why."* The run beside it
+reported 170 of 170 compared facts exact and `The design was drawn; every stated fact matched.` Both
+sentences were true. The drawing was not.
+
+**What the run actually said.** The node is `prompt-input-section-agent-role`, a 613 × 132
+horizontal frame. The ingest reads 174 stated facts on it: 170 compared and exact, 4 that ask for
+no drawing. The two runs before the 15:15 change to `design_renderer.py` had failed on `position`
+(`left 3, top 10 → left 3, top 4` in the first, a canvas coordinate written as a local one in the
+second); the first run after that change read 170/170. The 170 rows compare the spec's values with
+the declarations in the generated source. They do not lay anything out.
+
+**What the browser said.** The module was drawn in the real `<draft-preview>` element in Chromium
+and every layer's `getBoundingClientRect()` was compared with Figma's `absoluteBoundingBox` minus
+the root's box. After the fix, 23 of 23 layers agree to 0.00 px. Before it, the chevron's wrapper
+was at `(382, 38)` and its `<svg>` at `(382, 48)`, while Figma's box for the node is `(382, 32)`:
+the triangle was drawn below the square it belongs in, 16 px low.
+
+**The two instructions that wrote it.**
+
+| # | what it did | where |
+|---|---|---|
+| 1 | placed a finished-`svg` shape at its `relativeTransform` translation `(3, 10)` instead of its post-transform box corner `(3, 4)` | `design_renderer._child_offset` |
+| 2 | let the inline `<svg>` sit on the inherited text baseline — ten more pixels below a box whose height is the artwork's own | `design_renderer.render_spec`, the vector wrapper |
+
+A rotated vector's artwork is carried through the node's transform before it goes into the `<svg>`,
+so what the element draws is the node's POST-transform box, not the corner the rotation happened
+about. `Vector 10` states translation `(3, 10)` and a quarter turn; its box starts at `(3, 4)`. A
+shape that carries a finished `svg` now takes Figma's own box, and keeps the transform translation
+under a parent that is itself turned, where CSS's pre-transform space and Figma's page space are
+different numbers. The wrapper carries `line-height: 0`, so the svg starts at the box's top instead
+of on a text baseline. The code is `backend/design_renderer.py`, `_child_offset` and the vector
+branch of `render_spec`.
+
+**The finding this disproves.** The handoff written before this entry proposed emitting the root's
+`-1` on `:host` and countering it on text. That is wrong and was not done. The root's `-1` is
+relative to a parent that is flipped too; the net transform on the canvas is `+1`. Every child's
+`absoluteBoundingBox` sits at `+x` from the root's left edge (`-20968 + 3 = -20965`), and Figma's
+own render of the node is unmirrored — paperclip left, `Functions | Tools` right. Drawing the
+root's `-1` would have mirrored the component away from the file. The 19 REST/MCP `x` differences
+are the two channels' coordinate conventions, not a drawing difference. The correction is at the
+top of `frontend/src/rooms/design/HANDOFF-PREVIEW-ACCURACY-2026-11-09.md`.
+
+**The process, from here.** A passing row is not a verified drawing, because the 170 rows cannot
+see layout. Every change to a drawing rule uses this loop, in this order:
+
+1. **One ingest of the submitted link**, through the running app's `POST /api/figma/ingest`, with
+   the link's own `fileKey` and `node-id` (`-` becomes `:`). No fixture, no synthetic spec, no
+   second reader of the same numbers.
+2. **Read the run's own rows first**: `fidelity.exactness`, every row whose verdict is not `drawn`,
+   and `twoPass.counts`. A `differs` row carries the Figma value, the drawn value and the layer;
+   find the one instruction that wrote the drawn value.
+3. **Draw the module the run returned** (`result.preview.script`) in the real `<draft-preview>`
+   element. `py_compile`, `tsc` and a direct `render_spec` call prove syntax and strings, not a
+   drawing.
+4. **Measure every box.** For each layer, `getBoundingClientRect()` minus the host's rect against
+   Figma's `absoluteBoundingBox` minus the root's box; more than 0.01 px is a finding. This is the
+   measurement the 170 rows do not make.
+5. **Compare the pixels with Figma's own render** (`GET /v1/images` for the node) and attribute
+   every region that differs before calling it a defect — geometry and type are different findings.
+6. **Fix one instruction, re-ingest, repeat.** The same layer and the same fact must be shown
+   before and after. Do not change the coordinate rule until a failing layer has named it.
+
+**How the browser was measured.** The run's `preview.script` was written into a temporary page
+under `frontend/public/`, the page imported `/src/components/lit/draft-preview.ts`, set
+`draft = { tag, script }`, and Chromium read the iframe. `getBoundingClientRect()` was taken for
+every element with a class inside the component's shadow root, and compared with the raw node's
+`absoluteBoundingBox` minus the root's box. The page was deleted afterwards: it is a harness, not a
+feature. Figma's own render came from `GET /v1/images/{fileKey}?ids={nodeId}&format=png&scale=1`,
+composited on the pane's background before the diff.
+
+The rule underneath: a passing row count and the drawing share `_child_offset`, so when the rule is
+wrong both are wrong together. The browser is the second instrument, and it is the only one that
+sees layout.
+
+**Verified.**
+
+| claim | measurement |
+|---|---|
+| the chevron sits where Figma puts it | drawn at `(382, 32)`, Figma's box `(382, 32)`; before the fix `(382, 48)` |
+| every drawn layer's box is the design's | 23 of 23 layers at 0.00 px |
+| what the rows say about the fix | 170/170 exact before and after — the rows cannot see it |
+| the drawing matches Figma's render | pixel diff mean 4.92/255; what remains is confined to the text |
+
+**Left open.**
+
+- **The face.** The design states `Inter`; `/fonts/fonts.css` declares IBM Plex only, so the browser
+  draws Helvetica. Measured in the preview: `Agent Role` at `700 18px` is 95.0 px wide in Helvetica
+  against 85.5 px in Inter. The `fontNotice` reports the substitution. Loading Inter for previews
+  (or for the application) is a product decision, not made here.
+- **The pass sentence.** It still says `every stated fact matched` while the same run's two-channel
+  summary carries 19 differing and 27 REST-only facts. Those are conventions, not losses, but the
+  sentence does not carry the counts.
+- **No browser check in the pipeline.** This run was measured by hand. A future regression of the
+  box rule or of `line-height: 0` would pass the 170 rows and stay invisible until someone looks at
+  the pane.
+
+---
+
 ## 2026-11-02 (later) — [figma-ingest] the queue the missing face asks into now exists
 
 One thing changed for the ingest after the entry below, and it was not in the ingest: the place a

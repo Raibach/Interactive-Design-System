@@ -531,15 +531,15 @@ def get_cached_spec(
     file_key: str,
     node_id: str,
     *,
-    refresh: bool = False,
+    refresh: bool = True,
     allow_stale_fallback: bool = True,
 ) -> tuple[dict | None, str | None, str]:
     """
-    Cache-first spec accessor for DESIGNER and MCP callers — never a render path.
+    Live-first spec accessor for DESIGNER and MCP callers — never a render path.
 
     Resolution order:
-      1. Cache (PostgreSQL figma_specs) — unless refresh=True or DEV mode.
-         In DEV mode the cache is bypassed for read so every pull is fresh.
+      1. Cache (PostgreSQL figma_specs) — only when a caller explicitly passes refresh=False.
+         The default is refresh=True, so every call pulls Figma live.
       2. Live Figma pull + cache upsert.
       3. Stale-cache fallback — if the live pull fails/returns an empty spec
          AND allow_stale_fallback is True, serve whatever is in the cache so an
@@ -576,8 +576,9 @@ def get_cached_spec(
     if spec:
         return spec, None, "figma"
 
-    # 3) Stale-cache fallback (only triggered when the live pull failed)
-    if allow_stale_fallback:
+    # 3) Stale-cache fallback (only triggered when the live pull failed). A live-first caller
+    # never receives a stale spec.
+    if allow_stale_fallback and not refresh:
         row = _cache_read(file_key, node_id)
         if row and _spec_has_design_data(row.get("spec")):
             print(

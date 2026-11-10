@@ -791,7 +791,7 @@ class ConversationAPI:
             # It is also redundant: measured over all 238 rows it never once
             # disagrees with the package's owner. One fact, one place.
             cursor.execute("""
-                SELECT c.id, c.title, c.metadata FROM conversations c
+                SELECT c.id, c.title, c.metadata, c.session_id FROM conversations c
                 WHERE c.id = %s
                   AND (
                         c.user_id = %s
@@ -853,6 +853,27 @@ class ConversationAPI:
                 print(f"✅ Updated project {conv_project_id} timestamp (message added to conversation {conversation_id})")
 
             conn.commit()
+
+            # ── THE CONSOLE'S MEMORY KEEPS THE TURN (write-through) ─────────────────────
+            # The message is already stored; this makes it findable. A failure is printed:
+            # the record is the truth, the index is derived, and its lag is real.
+            try:
+                import console_memory
+                from datetime import datetime, UTC
+
+                console_memory.index_turn(
+                    {
+                        "message_id": str(message_id),
+                        "conversation_id": str(conversation_id),
+                        "card_id": str(conv.get("session_id") or ""),
+                        "user_id": str(user_id),
+                        "role": role,
+                        "content": content,
+                        "at": datetime.now(UTC).isoformat(),
+                    }
+                )
+            except Exception as _memory_error:  # noqa: BLE001 — the turn is stored; the index lag is said
+                print(f"[console memory] the turn was not indexed: {_memory_error}")
 
             # Save to memory system if enabled and memory_api is provided
             # For heavy content, memory saving is non-blocking and won't cause crashes

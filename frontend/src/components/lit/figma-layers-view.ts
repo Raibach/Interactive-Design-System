@@ -410,25 +410,6 @@ export class FigmaLayersView extends LitElement {
   private _drawn: DrawnIndex | null = null;
 
   /**
-   * The component the RECORD says was approved most recently — the only honest source for
-   * "just added".
-   *
-   * THE CATALOGUE'S OWN ORDER WAS TRIED FIRST AND IT IS WRONG. The last key in catalog.json is
-   * the last entry the writer APPENDED, which is the newest only until something is removed:
-   * take the last entry out and the new last key is whatever was already sitting at the end, so
-   * the mark lands on a component nobody touched and calls it just added. That is what it did.
-   *
-   * So this reads the activity record — an actual list of approvals with times — and takes the
-   * newest approval whose component is STILL DECLARED, which is what makes it survive an
-   * approve-then-remove.
-   *
-   * Empty when nothing has been approved here or the record could not be read, and EMPTY MEANS
-   * NO MARK: a mark that guesses is worse than no mark, because it is believed.
-   */
-  private _lastApproved = '';
-  private _lastApprovedNote = '';
-
-  /**
    * THE FILTER TYPED ABOVE THE LIST. It narrows what is drawn and changes nothing the catalogue
    * holds — the owner's word for it: *"that would change what's listed in the data tree it's a
    * filter."*
@@ -788,31 +769,6 @@ export class FigmaLayersView extends LitElement {
   }
 
   /**
-   * Read the newest approval from the activity record. See `_lastApproved` for why the
-   * catalogue's own order is not used.
-   */
-  private async _loadLastApproved(): Promise<void> {
-    try {
-      const res = await fetch('/api/figma/activity?limit=50&outcomes=true', { cache: 'no-store' });
-      if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
-      const data = await res.json();
-      const approved = (data?.entries ?? []).filter((e: any) => e?.kind === 'approved');
-      // The endpoint returns newest first; sorted again here so the answer does not depend on
-      // that staying true.
-      approved.sort((a: any, b: any) => String(b?.at || '').localeCompare(String(a?.at || '')));
-      const first = approved[0];
-      const tag = first
-        ? String((first.tags || first.written || [])[0] || '').replace(/\.ts$/, '')
-        : '';
-      this._lastApproved = tag;
-      this._lastApprovedNote = '';
-    } catch (error) {
-      this._lastApproved = '';
-      this._lastApprovedNote = error instanceof Error ? error.message : String(error);
-    }
-  }
-
-  /**
    * Read what draws each component — the renderer's own name resolution, and the element
    * manifest's tag-to-file map. See `_drawn` for why the list cannot be honest without it.
    */
@@ -1069,7 +1025,6 @@ export class FigmaLayersView extends LitElement {
 
     await this._loadCatalog();
     await this._loadFigmaNames();
-    await this._loadLastApproved();
     await this._loadDrawn();
     await this._loadUsage();
 
@@ -1296,9 +1251,9 @@ export class FigmaLayersView extends LitElement {
     `;
   }
 
-  private _renderNode(nodeId: string, rec: NodeRecord, justAdded: boolean): TemplateResult {
+  private _renderNode(nodeId: string, rec: NodeRecord): TemplateResult {
     return html`
-      <div class="node ${justAdded ? 'just' : ''}">
+      <div class="node">
         <div class="nhead">
           <span class="ntag">${rec.tag || '(no tag)'}</span>
           ${/* The tree below no longer draws its root, so a record's own layer name and text are
@@ -1306,7 +1261,6 @@ export class FigmaLayersView extends LitElement {
           ${rec.tree?.name ? html`<span class="lname">${rec.tree.name}</span>` : nothing}
           <span class="nid">${nodeId}</span>
           ${rec.tree?.text ? html`<span class="ltext">"${rec.tree.text}"</span>` : nothing}
-          ${justAdded ? html`<span class="newmark">just added</span>` : nothing}
           <span class="nmeta">${rec.layers ?? 0} layers · approved ${rec.approvedAt || 'at an unrecorded time'}</span>
         </div>
         ${this._renderLayerTree(rec, 0)}
@@ -1624,14 +1578,10 @@ export class FigmaLayersView extends LitElement {
             is the failure reports: a read that did not happen is a fact about the list, and this
             repository reports those rather than drawing a shorter list that looks complete. They are
             drawn only when something actually failed. */ ''}
-      ${this._figmaNamesError || this._lastApprovedNote
+      ${this._figmaNamesError
         ? html`<div class="setbad">
-            ${this._figmaNamesError
-              ? html` Figma layer names could not be read from the map (${this._figmaNamesError}), so
-                  generated components below are shown under their ids. `
-              : nothing}${this._lastApprovedNote
-              ? html` The record of what was approved could not be read (${this._lastApprovedNote}). `
-              : nothing}
+            Figma layer names could not be read from the map (${this._figmaNamesError}), so
+            generated components below are shown under their ids.
           </div>`
         : nothing}
 
@@ -1702,13 +1652,9 @@ export class FigmaLayersView extends LitElement {
          */
         const descriptionLine =
           comp.description || 'No description is declared for this component in this catalogue.';
-        // THE COMPONENT THIS LIST WAS JUST CHANGED BY, MARKED. Newest first is not enough on its
-        // own: two rows can share a date, and a reader needs to see which one the last action
-        // wrote. The record names the newest approval; this compares it by tag.
-        const isJust = !!this._lastApproved && tagFor(comp.name) === this._lastApproved;
         return html`
           <div
-            class="lrow branch ${isSelected ? 'on' : ''} ${isJust ? 'just' : ''}"
+            class="lrow branch ${isSelected ? 'on' : ''}"
             style="--d:0"
             role="button"
             tabindex="0"
@@ -1728,7 +1674,6 @@ export class FigmaLayersView extends LitElement {
                   (the name, the code, the description), it draws its own chevron, and the dot goes
                   in the status well it reserves. Nothing about the row is rebuilt here: the tree
                   supplies the data and answers the two events. */ ''}
-            ${isJust ? html`<span class="newmark">just added</span>` : nothing}
             <f-40001207-3497
               class="lrow-tile"
               .name=${this._label(comp.name)}
@@ -1851,7 +1796,7 @@ export class FigmaLayersView extends LitElement {
         happened. A design that was removed is not among them: the removal is written into the
         same record (who, when, why) and is history rather than a row here.
       </div>
-      ${orphans.map((id) => this._renderNode(id, doc!.nodes![id], false))}
+      ${orphans.map((id) => this._renderNode(id, doc!.nodes![id]))}
     </div>`;
   }
 
@@ -2278,25 +2223,6 @@ export class FigmaLayersView extends LitElement {
     .node { border-top: 1px solid #eef1f3; padding-top: 6px; }
     .node:first-child { border-top: none; }
 
-    /* THE ONE JUST ADDED — outlined green, so it is findable in a list that only grows. */
-    .node.just {
-      border: 1px solid #86c98a;
-      background: #f4fbf4;
-      border-radius: 6px;
-      margin: 4px 6px;
-      padding: 6px 0 4px;
-    }
-    .node.just + .node { border-top: none; }
-    .newmark {
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      color: #2f7d36;
-      background: #dcf0dd;
-      border-radius: 4px;
-      padding: 0 5px;
-    }
     .nhead {
       display: flex;
       align-items: baseline;
@@ -2385,16 +2311,6 @@ export class FigmaLayersView extends LitElement {
        tile is transparent; the row carries the ground. */
     .lrow.branch .lrow-tile { background: transparent; }
     .lrow.dup { background: #fffdf3; }
-
-    /* THE DECLARED COMPONENT JUST ADDED — the same green as the record below it, so the two
-       speak the same language: the row in the catalogue, and the design it was measured from.
-       A box-shadow rather than a border: a border would change the row's width and shift every
-       line under it, and this mark must cost the tree nothing. */
-    .lrow.just {
-      background: #f4fbf4;
-      box-shadow: inset 3px 0 0 0 #86c98a;
-    }
-    .lrow.just .lname { color: #2f7d36; }
 
     /* The line that introduces a component's measured layers — a heading inside its expansion,       so the two halves of one component read as two halves rather than as more properties. */
     .lrow.subhead {

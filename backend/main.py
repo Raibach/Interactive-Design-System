@@ -167,8 +167,12 @@ from routes import (
     misc,
     projects,
     prompt_sessions,
+    prompt_session_archive,
+    design_acceptance,
     design_console,
+    console_surface,
     design_reviews,
+    design_request_decisions,
     raibach_design,
     teacher,
     tools_surface,
@@ -176,8 +180,8 @@ from routes import (
 )
 
 for _m in (misc, conversations, projects, teacher, memory,
-           prompt_sessions, ai, figma, milvus, agent_rpc, files, auth, billing, governance,
-           figma_intake, builder_bridge, element_events, element_analytics, design_console, design_reviews, raibach_design, tools_surface, ux_chat):
+           prompt_sessions, prompt_session_archive, ai, figma, milvus, agent_rpc, files, auth, billing, governance,
+           figma_intake, builder_bridge, element_events, element_analytics, design_acceptance, design_console, console_surface, design_reviews, design_request_decisions, raibach_design, tools_surface, ux_chat):
     app.include_router(_m.router)
 
 

@@ -1,0 +1,13 @@
+{
+	"id": "7ccc2b2e-afc1-41c8-9ce7-0ce43ae724db",
+	"crn": "crn:v1:bluemix:public:project:us-south:a/2d9848f6ada749f1aec3307788ec7fd3:7ccc2b2e-afc1-41c8-9ce7-0ce43ae724db::",
+	"definition": {
+		"name": "Raibach-IDS-Assembly",
+		"description": "Used with the ids",
+		"destroy_on_delete": true
+	},
+	"configs": [],
+	"environments": [],
+	"resource_group_id": "e8cc715b49d342d48d2740263ab2b20f",
+	"location": "us-south"
+}

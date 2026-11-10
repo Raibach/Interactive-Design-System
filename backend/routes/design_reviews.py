@@ -4,14 +4,13 @@ Owner, 2026-11-02: a session is a growing package that can be shared, picked up 
 reassigned; an approval gate is "a recorded event inside of that session". This module is that
 record and nothing else: it does not draw, and it does not decide anything a person has not pressed.
 
-WHERE THE FOUR FACTS LIVE, and why no table was added:
+WHERE THE THREE FACTS LIVE, and why no table was added:
 
     the reviewer      `prompt_sessions.metadata.reviewer` — a jsonb key, written once per request
     the stage         `prompt_sessions.metadata.review_stage`, mirrored into `status` so a card can
                       wear it without a second read
     the events        `design_surface_events` — the table already stood with exactly the columns a
                       gate needs (session, surface, event, detail, time) and had no writer
-    the content       `prompt_versions`, written by Save and by the final approval
 
 The activity table could not carry these: its `element_id` is NOT NULL, and a review is an event on
 a SESSION, not on a component. The surface table is the right home, and giving it a writer is the
@@ -483,11 +482,6 @@ class RequestCreate(BaseModel):
     session_id: str | None = None
 
 
-class RequestDecision(BaseModel):
-    decision: str
-    note: str | None = None
-
-
 def _row_to_request(row: Any) -> dict[str, Any]:
     item = row if isinstance(row, dict) else {
         "id": row[0], "session_id": row[1], "kind": row[2], "subject": row[3], "reason": row[4],
@@ -568,38 +562,3 @@ def list_requests(
             cur.execute(f"SELECT {_QUEUE_COLUMNS} FROM design_requests ORDER BY at DESC")
         rows = cur.fetchall()
     return {"requests": [_row_to_request(row) for row in rows]}
-
-
-@router.post("/api/design/requests/{request_id}/decide")
-def decide_request(
-    request_id: int,
-    body: RequestDecision,
-    x_user_id: str | None = Header(None, alias="X-User-ID"),
-):
-    """One decision, recorded once. A decided request cannot be decided again."""
-    uid = _require_user(x_user_id)
-    api = state.prompt_sessions_api
-    if not api:
-        raise HTTPException(status_code=503, detail="Database not available.")
-    decision = str(body.decision or "").strip().lower()
-    if decision not in ("approve", "refuse"):
-        raise HTTPException(status_code=422, detail="decision must be 'approve' or 'refuse'.")
-    final = "approved" if decision == "approve" else "refused"
-    with api.get_db() as conn:
-        cur = conn.cursor()
-        cur.execute("SET app.current_user_id = %s", (uid,))
-        cur.execute(
-            f"""UPDATE design_requests
-                   SET decision = %s, decided_by = %s, decided_at = NOW(), note = %s
-                 WHERE id = %s AND decision = 'pending'
-                 RETURNING {_QUEUE_COLUMNS}""",
-            (final, uid, str(body.note or ""), request_id),
-        )
-        row = cur.fetchone()
-        conn.commit()
-    if not row:
-        raise HTTPException(
-            status_code=409,
-            detail="That request is not waiting for a decision — it is unknown, or already decided.",
-        )
-    return _row_to_request(row)

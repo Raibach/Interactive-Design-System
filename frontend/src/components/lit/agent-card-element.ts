@@ -53,6 +53,9 @@ export class AgentCardElement extends LitElement {
      * indicator — see the note in the render.
      */
     headerLabel: { type: String, attribute: 'header-label' },
+    /** The word under the top line when the card's own category is not the right one to show —
+     *  the design cards read "Design Tools" over "Figma" (owner, 2026-11-10). */
+    sublabel: { type: String },
     /**
      * DESIGN CARDS HAVE NO DELETE (2026-10-18). The card's trash control deletes a PROMPT
      * PACKAGE. A design element is a catalogue record, not a package — its card comes from
@@ -81,6 +84,7 @@ export class AgentCardElement extends LitElement {
   declare categoryTitleColor: string;
   declare categoryTextColor: string;
   declare headerLabel: string;
+  declare sublabel: string;
   declare nodelete: boolean;
   declare markSrc: string;
   /** First confirmation step: trash clicked once, waiting for the second click. */
@@ -103,6 +107,7 @@ export class AgentCardElement extends LitElement {
     this.categoryTitleColor = '';
     this.categoryTextColor = '';
     this.headerLabel = '';
+    this.sublabel = '';
     this.markSrc = '';
     this._deleteArmed = false;
   }
@@ -564,16 +569,9 @@ export class AgentCardElement extends LitElement {
         <div class="card-header">
           <img class="card-logo" src=${this.markSrc || chatMenuIcon} alt="" aria-hidden="true" />
           <div class="header-labels">
-            <!-- THE INDICATOR, NOT A VALUE — the owner, 2026-09-19: "'Agent Function | Category'
-                 is just an indicator. Don't insert category there. The category's own value
-                 keeps its line below."
-                 AND THE OWNER'S ONE EXCEPTION (2026-10-04): *"the cards have a name at the top
-                 — agent function pipe category … it should say product team."* The product-room
-                 cards read their category's name on this line instead — a data-driven
-                 headerLabel the GRID writes, so every other card keeps the literal.
-                 (No backticks in this comment, deliberately: a template literal ends at one.) -->
-            <div class="fn-line">${this.headerLabel || 'Agent Function | Category'}</div>
-            <div class="cat-line">${this.category || ''}</div>
+            <!-- The line above the category is the card's own label, written by the surface that draws it. -->
+            <div class="fn-line">${this.headerLabel || this.category || ''}</div>
+            <div class="cat-line">${this.sublabel || this.category || ''}</div>
           </div>
         </div>
 

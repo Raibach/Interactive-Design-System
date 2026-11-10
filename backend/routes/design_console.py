@@ -118,6 +118,10 @@ def design_card(
         "routing": routing or {},
         "reviewer": reviewer,
         "category": DESIGN_CONSOLE_CATEGORY,
+        # THE LABEL EVERY SURFACE SHOWS. The category above is the palette key; this is what
+        # the card says, so the console and this room draw the same words over the same record.
+        "headerLabel": "Design Tools",
+        "subcategory": "Figma",
         # THE CARD'S AREA (owner, 2026-10-27): every card this console lists is the design
         # seat's, so it wears the design seat's mark.
         "seat": "design",
@@ -1163,12 +1167,15 @@ def close_design_session(
     session_id: str,
     x_user_id: str | None = Header(None, alias="X-User-ID"),
 ) -> dict[str, Any]:
-    """CLOSE A TOOLS VISIT AS A CARD — NEVER PURGE IT.
+    """AN UNKEPT TOOLS VISIT IS DISCARDED — A CARD IS MADE BY THE SAVE, NOT BY LEAVING.
 
-    Every session is a card. Leaving the tab closes the visit; the row becomes a `design_session`
-    with the state Closed, and its conversation, greeting, turns, failures and ingest activity
-    remain the permanent record. The next press of the tab resolves a new working row because this
-    one is no longer a `design_tab`. Nothing here deletes a row, a conversation or an activity.
+    Every leave used to turn the visit into a `design_session` titled "Design — Tools", so the
+    console's dashboard accumulated one generic card per visit (owner, 2026-11-09: *"it keeps
+    creating a design – tools card on the dashboard"*). A card is the person's explicit Save, and
+    the seat does not call this route when the visit was kept (`keptThisVisitRef`). So a visit that
+    reaches here was never kept: its row is removed, the row's FKs cascade its conversation and
+    messages, and the next press of the tab resolves a fresh working row. The ingest activity rows
+    are the ingest's own record, not a card, and they stay.
     """
     if not x_user_id:
         raise HTTPException(
@@ -1211,53 +1218,39 @@ def close_design_session(
             detail=f"Session {session_id} is not a Tools visit, so it has no visit to close.",
         )
 
-    # ── THE SESSION BECOMES A CARD; NOTHING IS PURGED ────────────────────────────────────────
-    # The row, its conversations, its greeting, every turn and every activity row stay. A blank
-    # visit is still a session that began and ended, and its record is kept like any other.
-    updated = state.prompt_sessions_api.update_session(
-        user_id=x_user_id,
-        session_id=session_id,
-        status="Closed",
-        metadata={
-            "session_type": "design_session",
-            "session_state": "closed",
-            "closed_at": datetime.now().isoformat(),
-        },
-    )
-
-    # ── THE STATE CHANGE IS A TURN IN THE SESSION'S OWN CONVERSATION ─────────────────────────
-    # The row is the durable state; the conversation is the readable log. A failed line does not
-    # undo the close — the row and its status are already written — and the failure is printed,
-    # never swallowed as a clean close.
+    # ── THE UNKEPT VISIT IS DISCARDED, NOT CARDED ────────────────────────────────────────────
+    # The row is the visit; a card is the explicit Save. `keptThisVisitRef` in the seat already
+    # keeps a saved visit from reaching this route, so reaching it means nothing was kept. The
+    # delete cascades: conversations hang off `prompt_sessions.session_id` and messages off
+    # `conversations.id`, both ON DELETE CASCADE (measured on this database).
     conversation_id = str(row.get("conversation_id") or "")
-    if state.conversation_api:
+    if not conversation_id and state.conversation_api:
         try:
-            if not conversation_id:
-                conversations = state.conversation_api.get_conversations_by_session(
-                    session_id, x_user_id
-                )
-                if conversations:
-                    conversation_id = str(conversations[0].get("id") or "")
-            if conversation_id:
-                state.conversation_api.add_message(
-                    conversation_id,
-                    x_user_id,
-                    "assistant",
-                    "Session closed. Its activity is kept in this card.",
-                    metadata={
-                        "source": "host",
-                        "session_state": "closed",
-                        "at": datetime.now().isoformat(),
-                    },
-                    save_to_memory=False,
-                )
+            conversations = state.conversation_api.get_conversations_by_session(
+                session_id, x_user_id
+            )
+            if conversations:
+                conversation_id = str(conversations[0].get("id") or "")
         except Exception as e:
-            print(f"[design-close] the close line could not be written: {e}")
+            # A conversation that cannot be read does not block the discard; it is named.
+            print(f"[design-close] the visit's conversation could not be read: {e}")
 
+    deleted = state.prompt_sessions_api.delete_session(
+        session_id=session_id, user_id=x_user_id, permanent=True
+    )
+    print(
+        f"[design-close] the unkept Tools visit {session_id} "
+        f"{'was discarded' if deleted else 'could NOT be discarded'}"
+    )
     return {
-        "action": "closed",
-        "session": updated or row,
+        "action": "discarded" if deleted else "kept",
+        "session_id": session_id,
         "conversation_id": conversation_id,
+        "reason": (
+            "Leaving without a save discards the visit; a card is made by Save."
+            if deleted
+            else "The visit could not be removed; its record stands."
+        ),
     }
 
 

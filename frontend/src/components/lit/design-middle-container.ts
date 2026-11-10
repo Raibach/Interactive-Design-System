@@ -95,9 +95,13 @@ export class DesignMiddleContainer extends LitElement {
 
       :host {
         display: block;
-        height: 100%;
+        /* THE COLUMN GROWS WITH THE PANEL (owner, 2026-11-09). The host was a fixed 100% with the
+           body clipping what overflowed, which is what turned the output into a scroll box. It is
+           at least the pane's height, and taller when the panel is, so the pane scrolls one
+           document instead of the panel scrolling inside it. */
+        height: auto;
+        min-height: 100%;
         min-width: 0;
-        min-height: 0;
         /*
          * THE PANE IS A FLEX CONTAINER, so display:block alone is not enough: a flex child with no
          * flex-basis and no width is sized to its CONTENT, and this element's content is a hole
@@ -132,8 +136,8 @@ export class DesignMiddleContainer extends LitElement {
       .column {
         display: flex;
         flex-direction: column;
-        height: 100%;
-        min-height: 0;
+        height: auto;
+        min-height: 100%;
         min-width: 0;
         background: rgba(255, 255, 255, 0.5);
       }
@@ -144,7 +148,9 @@ export class DesignMiddleContainer extends LitElement {
         flex: 1 1 auto;
         min-height: 0;
         min-width: 0;
-        overflow: hidden;
+        /* The panel is measured by its content; nothing here clips it. The pane (workspace) is
+           the one scroller when the whole column is taller than the window. */
+        overflow: visible;
         display: flex;
       }
       /*
@@ -172,10 +178,10 @@ export class DesignMiddleContainer extends LitElement {
       .hole {
         display: flex;
         flex-direction: column;
-        height: 100%;
+        height: auto;
         min-height: 0;
         min-width: 0;
-        overflow: hidden;
+        overflow: visible;
       }
       ::slotted(*) {
         min-height: 0;

@@ -9,6 +9,8 @@ from typing import Any
 
 from database_pool import DatabasePoolManager
 
+from design_card_archive import archive_card
+
 
 # ── THE DESIGN ROOM'S CONVERSATION TABS ────────────────────────────────────────────────────────
 # One package per conversation tab, and one conversation under that package. The titles are the
@@ -1392,40 +1394,27 @@ class PromptSessionsAPI:
         self, session_id: str, user_id: str, permanent: bool = False
     ) -> bool:
         """
-        Delete a prompt session (soft delete by archiving or permanent)
+        Delete a prompt session: archived by default, permanently removed only when the
+        caller's own door asks for it explicitly. The archive keeps the row and its record.
         """
+        if not permanent:
+            return archive_card(self, session_id, user_id)
+
         with self.get_db() as conn:
             cursor = conn.cursor()
 
             try:
-                # Set user context for RLS
                 cursor.execute("SET app.current_user_id = %s", (user_id,))
-
-                if permanent:
-                    # Permanent deletion
-                    cursor.execute(
-                        """
-                        DELETE FROM prompt_sessions
-                        WHERE id = %s AND user_id = %s
-                        RETURNING id
-                    """,
-                        (session_id, user_id),
-                    )
-                else:
-                    # Soft delete (archive)
-                    cursor.execute(
-                        """
-                        UPDATE prompt_sessions
-                        SET is_archived = TRUE, updated_at = NOW()
-                        WHERE id = %s AND user_id = %s
-                        RETURNING id
-                    """,
-                        (session_id, user_id),
-                    )
-
+                cursor.execute(
+                    """
+                    DELETE FROM prompt_sessions
+                    WHERE id = %s AND user_id = %s
+                    RETURNING id
+                """,
+                    (session_id, user_id),
+                )
                 result = cursor.fetchone()
                 conn.commit()
-
                 return result is not None
 
             except Exception:

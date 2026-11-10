@@ -162,6 +162,7 @@ ACCEPTED_UNRENDERED = {
                              "re-derivation on a future resize is not.",
     "counterAxisSizingMode": "the same rule across the layout axis, and the same answer: the "
                              "measured size is what the rule produced.",
+    "minWidth": "minWidth is a constraint; it affects layout but is not drawn.",
 }
 
 _LAYOUT_PROPERTIES = {
@@ -917,29 +918,46 @@ def _linear_of(node: dict[str, Any]) -> tuple[float, float, float, float] | None
 
 
 def _child_offset(node: dict[str, Any], parent: dict[str, Any] | None) -> dict[str, float] | None:
-    """Where a child sits inside a parent that does not lay it out — the measured offset.
+    """The child's Figma-stated origin inside its immediate parent, for every child.
 
-    ONE RULE, ONE PLACE. This existed twice and the two copies disagreed: the vector's copy
-    omitted the border inset, so the chevron's arrow landed a pixel into its frame while every
-    other child landed correctly, and the render gate measured that as 54.6% of the arrow's own
-    box. Two implementations of one rule is the defect; this is the single one.
-
-    INSIDE A BORDER, CSS COUNTS FROM THE PADDING EDGE. An absolutely positioned child is placed
-    relative to the box inside its parent's border, while Figma's offsets are from the frame's
-    outer corner — so a parent with a stroke has its border width taken off the offset.
+    ONE RULE, EVERY CHILD. The origin is the `relativeTransform` translation, measured from the
+    parent's border box; CSS places an absolute child from the parent's padding box, so the
+    parent's stroke width is the one adjustment. The parent's layout mode does not choose a
+    different rule: the stated position is the geometry, and the flex declarations stay on the
+    parent for the checker, not to re-derive the child's place.
     """
     if parent is None:
         # THE ROOT IS PLACED BY WHOEVER USES THE COMPONENT. Its transform is relative to Figma's
         # canvas, not to a parent element — emitting it would move the component to the canvas
         # coordinates Figma happened to give it (measured: -23327, -4023).
         return None
-    parent_lays_out = bool(parent is not None and (parent.get("layout") or {}).get("layoutMode"))
-    # A NODE THAT STATES A TRANSFORM IS PLACED BY IT, not by its parent's flow. Its transform gives
-    # its own origin in the parent's space; `justify-content`, `gap` and the flow would otherwise
-    # override that origin, which is what pushed a mirrored group 415px outside its own frame.
-    linear = _linear_of(node)
-    if parent_lays_out and linear is None:
-        return None
+    inset = float(((parent.get("stroke") or {}).get("weight")) or 0)
+    # ── A VECTOR IS PLACED BY ITS ARTWORK'S BOX, NOT BY ITS LOCAL ORIGIN ──────────────────────
+    # The artwork's coordinates are baked through the node's own transform before they are put in
+    # the `<svg>` (see `_svg_for_vector`), so the rendered mark is the node's POST-transform box.
+    # The transform's translation is the corner the rotation happened about, which for a turned
+    # vector is not the corner of the box: `Vector 10` states translation (3, 10) and a quarter
+    # turn, and its box starts at (3, 4). Drawing the translation put the chevron six pixels below
+    # its frame and the preview showed the arrow outside the box it belongs in (measured
+    # 2026-11-09). Figma states the box itself, so the drawing takes that — the same
+    # `absoluteBoundingBox` every OTHER part of the measurement already uses — and subtracts the
+    # parent's border so CSS's padding-box origin lands the artwork where Figma draws it.
+    #
+    # ONLY A VECTOR WITH A FINISHED `svg` IS PLACED THIS WAY. A shape drawn from its bare `paths`
+    # is not transformed into a box, so it keeps the local origin below, exactly as before.
+    #
+    # AND ONLY UNDER A PARENT THAT IS NOT ITSELF TURNED. CSS positions an absolute child inside
+    # the parent's own (pre-transform) space, while two page-space boxes give the offset AFTER the
+    # parent's rotation; under a rotated parent those are different numbers, so the rotation's own
+    # translation is the only correct one and this branch stays out of the way.
+    if ((node.get("type") or "").upper() in SHAPE_TYPES and node.get("svg")
+            and _linear_of(parent) is None):
+        pos, parent_pos = node.get("position"), parent.get("position")
+        if pos and parent_pos and len(pos) == 2 and len(parent_pos) == 2:
+            return {
+                "left": round(float(pos[0]) - float(parent_pos[0]) - inset, 4),
+                "top": round(float(pos[1]) - float(parent_pos[1]) - inset, 4),
+            }
     # THE NODE'S OWN ORIGIN, WHEN FIGMA STATES THE TRANSFORM. `relativeTransform`'s translation is
     # where the node's local origin sits in the parent's space — the position BEFORE the box was
     # turned or mirrored. The absolute bounding box cannot give that: it is the box AFTER the
@@ -950,15 +968,14 @@ def _child_offset(node: dict[str, Any], parent: dict[str, Any] | None) -> dict[s
     if isinstance(transform, list) and len(transform) >= 2:
         try:
             return {
-                "left": round(float(transform[0][2]), 4),
-                "top": round(float(transform[1][2]), 4),
+                "left": round(float(transform[0][2]) - inset, 4),
+                "top": round(float(transform[1][2]) - inset, 4),
             }
         except (TypeError, ValueError, IndexError):
             pass
     pos, parent_pos = node.get("position"), parent.get("position")
     if not (pos and parent_pos and len(pos) == 2 and len(parent_pos) == 2):
         return None
-    inset = float(((parent.get("stroke") or {}).get("weight")) or 0)
     return {
         # FOUR DECIMALS, THE SAME AS `_px`. These were rounded to two, which is a silent edit of the
         # design's own offset: measured 2026-10-26 on node `I40001207:3564;40001207:3441`, the
@@ -1079,6 +1096,12 @@ def render_spec(spec: dict[str, Any], tag: str, catalog: dict[str, str] | None =
         # the child lands where Figma says it does rather than a border's width inside it.
         place = _child_offset(node, parent)
         declarations = _declarations(node, place)
+        # A PARENT OF A VECTOR IS ITS CONTAINING BLOCK. `_declarations` already states a position
+        # for a frame; this is the guard for anything that reaches here without one.
+        if any(
+            str((child or {}).get("type") or "").upper() in SHAPE_TYPES for child in kids
+        ) and not any(d.startswith("position:") for d in declarations):
+            declarations.append("position: relative")
 
         # THE CATALOGUE FIRST. A layer that is an instance of a component this repository already
         # draws is composed, not redrawn — and carries no measured CSS, because its box, its
@@ -1092,6 +1115,16 @@ def render_spec(spec: dict[str, Any], tag: str, catalog: dict[str, str] | None =
             # the click is its own business and not this file's.
             return f"<{supplied}{click_attr(node)}></{supplied}>"
 
+        # ── A LAYOUT LAYER MUST HAVE EMITTED ITS FLEX ───────────────────────────────
+        # A node that states layoutMode and is drawn from this spec must carry `display: flex`;
+        # otherwise the preview is a canvas of absolute positions wearing an auto-layout's name.
+        # This is a hard stop, not a report: the layer's name is in the error.
+        layout_mode = (node.get("layout") or {}).get("layoutMode")
+        if layout_mode in ("HORIZONTAL", "VERTICAL") and "display: flex" not in declarations:
+            raise ValueError(
+                f"layout layer {node.get('name')!r} states layoutMode {layout_mode} "
+                "but no flex layout was emitted"
+            )
         # A vector is the artwork the measurement produced — the finished svg, never a redraw.
         if node_type in SHAPE_TYPES and (node.get("svg") or node.get("paths") or node.get("path")):
             svg = node.get("svg")
@@ -1117,13 +1150,24 @@ def render_spec(spec: dict[str, Any], tag: str, catalog: dict[str, str] | None =
             # its rotation is already in that path's coordinates (see _transform_path), so a
             # wrapper that repeated either would paint a filled rectangle behind the arrow and
             # turn it a second time. That is what this rule is: where it sits, and how big it is.
+            # WHERE THE DESIGN SAYS THE ARTWORK SITS. The wrapper uses the ONE origin computed by
+            # `_child_offset` — the relativeTransform translation minus the parent's border — the
+            # same value every other child receives.
             if place is not None:
+                box = node.get("size") or []
                 box_decls = [
                     "position: absolute",
                     f"left: {_px(place['left'])}",
                     f"top: {_px(place['top'])}",
+                    # THE ARTWORK SITS AT THE BOX'S TOP, NOT ON A TEXT BASELINE. An inline `<svg>`
+                    # is a replaced inline element: its bottom is aligned to the parent's baseline,
+                    # and the inherited line height of the page then pushes it DOWN inside a box
+                    # whose height is the artwork's own. Measured 2026-11-09 on `Vector 10`: the div
+                    # was at y 38 and its `<svg>` at y 48 — ten pixels below the box, which is the
+                    # chevron drawn under its frame. `line-height: 0` removes the strut, so the svg
+                    # starts at the box's top; it changes no size, because the box is fixed.
+                    "line-height: 0",
                 ]
-                box = node.get("size") or []
                 if len(box) == 2:
                     box_decls.append(f"width: {_px(box[0])}")
                     box_decls.append(f"height: {_px(box[1])}")

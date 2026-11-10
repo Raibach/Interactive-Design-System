@@ -362,6 +362,21 @@ export class DesignWorkspaceLayout extends LitElement {
   /** Did the hand actually travel? A click is not a drag — see `_onMouseUp`. */
   private _gripMoved = false;
 
+  /** The left boundary, taken hold of: the pointer's distance from the pane's edge. */
+  private _leftGripOffset = 0;
+  private _leftGrabCollapsed = false;
+
+  /**
+   * THE LEFT BOUNDARY, AS THE RIGHT ONE IS — A NUMBER ONCE A HAND HAS MOVED IT.
+   *
+   * The shares are a proportion; the right strip is a number (`_rightPx`) and its edge follows
+   * the pointer. The left used a share of the whole host, so its boundary did not follow the
+   * hand. When the left has been dragged it becomes a pixel basis and the middle fills beside
+   * it; before that the share still decides the opening split.
+   */
+  private _leftPx = 0;
+  private _leftIsOperatorSet = false;
+
   /** Observes THIS element's width — see the element-size note in connectedCallback. */
   private _sizeObserver: ResizeObserver | null = null;
 
@@ -1175,6 +1190,19 @@ export class DesignWorkspaceLayout extends LitElement {
    */
   private static readonly CONSOLE_CHAT_MAX_PX = 800;
 
+  /**
+   * The width the left and middle panes divide — the panes themselves, measured. Her column is
+   * in the sum only when she is a pane, never when she is a layer over a drawing.
+   */
+  private _leftMiddleSpan(): number {
+    const left = this.renderRoot.querySelector('.pane.left') as HTMLElement | null;
+    const middle = this.renderRoot.querySelector('.pane.middle') as HTMLElement | null;
+    return Math.max(
+      1,
+      (left?.getBoundingClientRect().width ?? 0) + (middle?.getBoundingClientRect().width ?? 0),
+    );
+  }
+
   private _rightPxFromPointer(clientX: number): number {
     const w = Math.max(1, this.clientWidth);
     const grip = this._hasMiddle
@@ -1257,16 +1285,16 @@ export class DesignWorkspaceLayout extends LitElement {
      * unwind — and said out loud, because a silent refusal is indistinguishable from a dead grip.
      */
     let edge = 0;
-    if (side === 'right') {
-      const pane = this.renderRoot.querySelector('.pane.right') as HTMLElement | null;
-      if (!pane) {
-        console.error(
-          '[design-workspace] .pane.right is missing from the layout — the column grip was not started.',
-        );
-        return;
-      }
-      edge = pane.getBoundingClientRect().left;
+    const pane = this.renderRoot.querySelector(
+      side === 'left' ? '.pane.left' : '.pane.right',
+    ) as HTMLElement | null;
+    if (!pane) {
+      console.error(
+        `[design-workspace] .pane.${side} is missing from the layout — the column grip was not started.`,
+      );
+      return;
     }
+    edge = side === 'left' ? pane.getBoundingClientRect().right : pane.getBoundingClientRect().left;
     this.setAttribute('dragging', '');
     this._dragging = side;
     /*
@@ -1284,7 +1312,8 @@ export class DesignWorkspaceLayout extends LitElement {
      */
     if (side === 'left') {
       this._leftOwnedByOperator = true;
-      this._setLeftCollapsed(false);
+      this._leftGripOffset = edge - e.clientX;
+      this._leftGrabCollapsed = this._leftCollapsed;
     } else {
       this._openOwnedByOperator = true;
       /*
@@ -1364,21 +1393,26 @@ export class DesignWorkspaceLayout extends LitElement {
         this._setLeftCollapsed(this._rightPx >= content - DesignWorkspaceLayout.MIN_LEFT_PX - 1);
       }
     } else {
-      // The prompt's divider: the same cursor rule, on the other boundary.
-      let leftPx = e.clientX - this.getBoundingClientRect().left;
+      if (this._leftGrabCollapsed) {
+        this._leftGripOffset = 0;
+        this._leftGrabCollapsed = false;
+        this._setLeftCollapsed(false);
+      }
+      const span = this._leftMiddleSpan();
+      let leftPx = (e.clientX + this._leftGripOffset) - this.getBoundingClientRect().left;
       // A snap, so the floor is something a hand can hit rather than a target it must find.
       if (Math.abs(leftPx - DesignWorkspaceLayout.MIN_LEFT_PX) <= DesignWorkspaceLayout.SNAP_PX) {
         leftPx = DesignWorkspaceLayout.MIN_LEFT_PX;
       }
       leftPx = Math.max(
         DesignWorkspaceLayout.MIN_LEFT_PX,
-        Math.min(leftPx, content - DesignWorkspaceLayout.MIN_CHAT_PX),
+        Math.min(
+          leftPx,
+          Math.max(DesignWorkspaceLayout.MIN_LEFT_PX, span - DesignWorkspaceLayout.MIN_CHAT_PX),
+        ),
       );
-      // Back into a share, because the prompt and the canvas are the panes that divide what
-      // her column leaves: 0.68 : 1.32 is the same split as 0.34 : 0.66.
-      const total = Math.max(1e-6, this._left + this._middle);
-      this._left = (leftPx / content) * total;
-      this._middle = total - this._left;
+      this._leftPx = leftPx;
+      this._leftIsOperatorSet = true;
       this._setLeftCollapsed(leftPx <= DesignWorkspaceLayout.MIN_LEFT_PX + 1);
     }
 
@@ -1426,6 +1460,8 @@ export class DesignWorkspaceLayout extends LitElement {
       }));
     }
     this._dragging = null;
+    this._leftGrabCollapsed = false;
+    this._leftGripOffset = 0;
     this.removeAttribute('dragging');
   };
 
@@ -1451,6 +1487,7 @@ export class DesignWorkspaceLayout extends LitElement {
    */
   resetArrangement(): void {
     this._leftOwnedByOperator = true;
+    this._leftIsOperatorSet = false;
     this._setLeftCollapsed(false);
     this._left = 1;
     this._middle = 1;
@@ -1477,6 +1514,7 @@ export class DesignWorkspaceLayout extends LitElement {
    */
   openPrompt(): void {
     this._leftOwnedByOperator = false;
+    this._leftIsOperatorSet = false;
     this._setLeftCollapsed(false);
     this._left = 1;
     /*
@@ -1536,6 +1574,7 @@ export class DesignWorkspaceLayout extends LitElement {
    */
   splitEqually(): void {
     this._rightIsOperatorSet = false;
+    this._leftIsOperatorSet = false;
     this._left = 1;
     this._middle = 1;
     this.requestUpdate();
@@ -2111,7 +2150,9 @@ export class DesignWorkspaceLayout extends LitElement {
      */
     const leftFlex = this._leftCollapsed
       ? `0 0 ${minLeft}px`
-      : `${share(leftGrow)} 1 0%`;
+      : this._leftIsOperatorSet
+        ? `0 0 ${Math.max(minLeft, Math.round(this._leftPx))}px`
+        : `${share(leftGrow)} 1 0%`;
     /*
      * HER BOX IS SIZED HERE, IN THE INLINE STYLE, and it is sized differently depending on what
      * she is standing on — which is not a detail to be tidied away:
@@ -2147,7 +2188,7 @@ export class DesignWorkspaceLayout extends LitElement {
       ${this._hasMiddle
         ? html`<div class="gripper" @mousedown=${(e: MouseEvent) => this._onGripDown('left', e)}></div>`
         : nothing}
-      <div class="pane middle ${this._hasMiddle ? '' : 'collapsed'}" style="flex: ${share(middleGrow)} 1 0%;">
+      <div class="pane middle ${this._hasMiddle ? '' : 'collapsed'}" style="flex: ${this._leftIsOperatorSet ? '1 1 0%' : `${share(middleGrow)} 1 0%`};">
         <slot name="middle" @slotchange=${this._onMiddleSlotChange}></slot>
       </div>
       <!-- THE RIGHT COLUMN IS THE DESIGN'S CONTAINER, and this spacer is its FIRST

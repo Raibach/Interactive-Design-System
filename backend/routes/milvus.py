@@ -127,4 +127,20 @@ async def api_milvus_versions(prompt_id: str | None = None):
         print(f"[Milvus versions] Error: {e}", file=sys.stderr)
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.post("/api/milvus/console-index")
+def api_milvus_console_index(force: bool = False):
+    """Build the console's memory from Postgres (dev / first run).
 
+    One process owns the lite store, so the index is built HERE, inside the app's own client —
+    never by a second script opening the same file. Idempotent for a first build: a collection
+    that already holds vectors is reported, not duplicated.
+    """
+    try:
+        import console_memory
+
+        result = console_memory.index_all(force=force)
+    except Exception as exc:  # noqa: BLE001 — the failure is the answer
+        raise HTTPException(status_code=503, detail=f"CONSOLE INDEX FAILURE: {type(exc).__name__}: {exc}") from exc
+    if not result.get("ok"):
+        raise HTTPException(status_code=503, detail=f"CONSOLE INDEX FAILURE: {result.get('error')}")
+    return result

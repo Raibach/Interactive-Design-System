@@ -29,6 +29,7 @@ import "@/rooms/design/design-left-footer";
 import "@/rooms/design/ux/ux-app-frame";
 import type { Content } from "@/rooms/design/tools/content";
 import { ToolsDecisionDialog, type ToolsDecision } from "@/rooms/design/tools/ToolsDecisionDialog";
+import { takeToolOpen, type ToolOpenDetail } from "@/rooms/design/pendingOpen";
 
 /* THE FIGMA ENGINE IS ITS OWN PACKAGE, LOADED SEPARATELY — and it draws no surface of its own. */
 const ToolsSeat = lazy(() => import("@/rooms/design/tools"));
@@ -99,22 +100,25 @@ export default function DesignRoom({ onAssemblingChange }: DesignRoomProps) {
   }, []);
 
   /* The shell asks for the Figma content (a card click) or for the console (the Design button). */
+  const applyToolOpen = useCallback((detail: ToolOpenDetail) => {
+    const tag = String(detail.openTag ?? "");
+    const session = String(detail.openSession ?? "");
+    const system = String(detail.openSystem ?? "");
+    setToolsOpened(true);
+    /* THE PRESS OPENS A NEW PAGE. Its content is read by the page itself, so the previous
+       visit's content is cleared here: the new page starts on its own answer and never draws
+       the session that was left. */
+    setInjected(null);
+    setToolsStanding(true);
+    setToolsPress((n) => n + 1);
+    setOpenSession(session || null);
+    setOpenSystem(system || null);
+    setOpenTag(tag || null);
+  }, []);
+
   useEffect(() => {
     const onTools = (event: Event) => {
-      const detail = (event as CustomEvent<{ openTag?: string; openSession?: string; openSystem?: string; title?: string }>)?.detail ?? {};
-      const tag = String(detail.openTag ?? "");
-      const session = String(detail.openSession ?? "");
-      const system = String(detail.openSystem ?? "");
-      setToolsOpened(true);
-      /* THE PRESS OPENS A NEW PAGE. Its content is read by the page itself, so the previous
-         visit's content is cleared here: the new page starts on its own answer and never draws
-         the session that was left. */
-      setInjected(null);
-      setToolsStanding(true);
-      setToolsPress((n) => n + 1);
-      setOpenSession(session || null);
-      setOpenSystem(system || null);
-      setOpenTag(tag || null);
+      applyToolOpen(((event as CustomEvent<ToolOpenDetail>)?.detail ?? {}));
     };
     const onConsole = () => {
       setToolsStanding(false);
@@ -125,11 +129,15 @@ export default function DesignRoom({ onAssemblingChange }: DesignRoomProps) {
     };
     window.addEventListener("design-tools-open", onTools);
     window.addEventListener("design-console-open", onConsole);
+    /* The console wrote the note before the tab changed; this room did not exist to hear the
+       event, so it reads the note once, here. */
+    const pendingOpen = takeToolOpen();
+    if (pendingOpen) applyToolOpen(pendingOpen);
     return () => {
       window.removeEventListener("design-tools-open", onTools);
       window.removeEventListener("design-console-open", onConsole);
     };
-  }, []);
+  }, [applyToolOpen]);
 
   /*
    * THE SEAT'S QUESTION, DRAWN HERE. The seat renders nothing when it is headless, so it sends the

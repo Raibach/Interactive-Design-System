@@ -1,5 +1,238 @@
 # The Design room — changelog
 
+## 2026-11-09 (final) — three columns again, and the left boundary follows the hand
+
+**What was wrong, and what I did about it.** The chat-overlay, the auto-dock and a first
+pixel-width attempt were all mine, and together they broke the room: the output sat underneath the
+chat, the card showed a strange empty run when the left divider was pulled, and the rail's tabs
+left the middle collapsed. I reverted `design-workspace.ts`, `tools-workspace.ts` and
+`workspace-layout.ts` to the committed baseline, so the three panes are the committed ones again,
+and then changed ONE thing.
+
+**What is now true.** The middle is a pane between the left divider and the chat's own left edge —
+three distinct columns, bound on both sides. Measured in the running room on `console-card-hover`
+at 1500px: **left 374, middle 374, right 748**, with the left divider at x=374.
+
+The left divider now uses the RIGHT strip's model, which already worked: on the press it records
+the pointer's distance from the pane's edge and moves nothing; on each move it sets a **pixel
+width** for the left pane, and the middle fills beside it. Measured by driving the element:
+press at 376.25 (left stays 374); move to 426 → edge 424; 476 → 474; 576 → 574 — the same 2.25px
+grab offset each time, no jump, no share arithmetic.
+
+**What the rail's tabs do, and did before.** Clicking Home/Tools/Approve/UX is the ROOM's section
+navigation, not the chat's view: it changes the tab, the preview's content leaves with the Tools
+tab, and the middle collapses. The baseline does exactly the same (measured with the changes
+reverted: middle 0, left 750, right 750). It is not a gripper fault and not a regression from this
+work; changing it would be a navigation decision.
+
+**Reverted, not lost silently:** the chat overlay (it put the output under the chat), the
+auto-dock on preview open (it hid the form and was part of the confusing left state), and the
+`dockLeftColumn()` call in `ToolsSeat` is now a no-op. The preview's own fixes — the hugging panel,
+the restored card asking nothing, the save-time conversation snapshot — are untouched.
+
+
+## 2026-11-09 (late) — a card's log is the run, not the tab's chat
+
+**What the designer saw.** Reopening the `console-card-hover` card replayed three chat turns —
+"user-response-bubble / f-40001207-3559 / f-40001204-5752 is in the catalogue … do you want to
+remove it?" — as if the card were about those components. They were written at 17:52:49–53, after
+the card was saved at 17:37, while the saved card was still the tab's working session.
+
+**Why.** The save relabels the working `design_tab` row as the card and deliberately keeps its
+conversation ("Nothing is copied"). Everything the tab did afterwards — a catalogue row opened, a
+remove question — was therefore written into the card's log. And the restore path re-dispatched
+the card's own `open-component` on every open, asking the remove question again each time.
+
+**What changed.**
+
+- **The save snapshots the conversation.** `_snapshot_card_conversation` in `routes/ai.py` copies
+  the visit's thread into a conversation the card owns at the moment of the save (role, content,
+  metadata and timestamps, message by message) and points the card at the copy; the tab keeps its
+  own thread, so later actions cannot reach the card's. Verified with a test conversation: two
+  messages copied, the card's `conversation_id` moved to the copy, the source untouched.
+- **A restore asks nothing.** The `open-component` dispatch from the assembly effect carries
+  `restored: true`; the seat draws the card's component but does not append the "in the
+  catalogue … remove it?" question or open the chat for it.
+- **The three historical turns are removed** from the `console-card-hover` conversation (three
+  `conversation_messages` rows by id); the card's log is the six run turns that remain. Nothing
+  else in that conversation was touched.
+
+**Left open.** The tab's original conversation is still attached to the card's session, so the
+card's conversation list can show it beside the snapshot; the card's default thread is the
+snapshot. A save made before this entry (other than the cleaned card) still carries its visit's
+thread as its log.
+
+
+## 2026-11-09 (late) — leaving a Tools visit no longer makes a "Design — Tools" card
+
+**What the designer saw.** A generic "Design — Tools" card appeared on the design console's
+dashboard after visits, and kept appearing. Thirteen had accumulated in `prompt_sessions`
+(`session_type = design_session`, `design_tab = tools`, no `savedBy`, titles all "Design — Tools"),
+one per visit.
+
+**Why.** `POST /api/design/sessions/{id}/close` — the leave route the Tools seat calls — converted
+every unkept `design_tab` visit into a `design_session` card on purpose ("CLOSE A TOOLS VISIT AS A
+CARD — NEVER PURGE IT"). The seat only skips the close when the visit was saved
+(`keptThisVisitRef`), so every visit that ended without a save became a card. The card was never
+the component's: it carried the tab's generic title.
+
+**What changed.** The close route now **discards the unkept visit**: the row is deleted and the
+row's FKs cascade its conversation and messages. A card is made by the explicit Save (the seat
+does not call close when the visit was kept); the ingest activity rows are the ingest's own record
+and stay. The docstring says the new contract.
+
+**Verified.** A test visit with one conversation and one message was created for a throwaway user;
+the route answered `{"action":"discarded", …}`, and the session, conversation and messages all
+counted 0 afterwards (the test user was removed). The thirteen existing rogue cards were
+**archived**, not deleted (`is_archived = TRUE`, hidden by the console's own `IS NOT TRUE` filter);
+0 rogue rows remain visible, and the single live `design_tab` row stands.
+
+**Left open.** The visit's conversation no longer survives a leave without a save — that is the
+trade for no auto-cards. A page already showing the live row keeps it until its next read; the
+console is correct on refresh.
+
+
+## 2026-11-09 (evening) — the preview docks the left column
+
+**What the designer saw.** With the preview open, the ingest form still held a quarter of the
+room, so the output column was squeezed and the card clipped. Owner: *"When the third column
+opens, we don't need to see the left column at all… it's docked because now we're working with the
+preview and the chat."*
+
+**What changed.** `design-workspace` docks the left pane when the preview container
+(`design-middle-container`) enters the middle slot — the moment a card reopened from the console
+is restored. The Tools seat **also** docks at the ingest result, because a later submit in the
+same tab does not change the slot: the form and the component tree stand aside when the preview
+and the chat carry the answer, not only on the first ingest that opened the column. The new `dockLeftColumn()` is the dock **without** a Run's
+waiting state (`dockPrompt()` raises "Assembling the drawing…", which a preview that is already
+drawn must not claim); the pane keeps `_left = 1` so its rail reopens it at the standing split,
+and ownership is left alone so the person or a payload can open it again.
+
+**And the chat is a LAYER over the preview, not a pane beside it.** Owner, same message: *"Third
+column is not full width. Moving right gripper to resize chat out should not move other sections
+— it simply reduces the third column."* The drawing's own rule already says the canvas does not
+respond to anything on the right-hand side; the ingest's preview is the same ground. So
+`_rightOverDrawing` now also answers true for `design-middle-container`: the right pane takes the
+existing `.pane.right.over` form (absolute, width, z-3), the output keeps the full width behind
+it, and her grip sizes only her own box. The left boundary's span is then stable — it was her
+pane's changing width that made the left grip chase the layout while she was open.
+
+**Verified in the running room** on the saved `console-card-hover` card at 1500px:
+
+| pane | before | after |
+|---|---|---|
+| left (ingest form) | 374 | **60** (docked to its rail) |
+| Component Output | 374 | **1435** (full width behind the chat) |
+| chat | 748, in the flex line | **500, absolute** (`position: absolute`, z-3) |
+
+The left grip is still the share-based drag, but its span (left + output) is now constant while
+her column is open, so the edge follows the pointer instead of the pane.
+
+**Verified on a live submit through the form**, not only on a reopened card: the same
+`console-card-hover` link was pasted into the Tools form and submitted. At the result the left
+pane was **60** (the form and the component tree gone from the room), the Component Output
+**1435** with the card drawn whole, and the chat standing over it at **500** with the ingest's own
+findings and the Accept/Discard question. `tsc -b` exits 0. The left column is one click from its
+rail; the dock does not claim the column, so reopening it is not refused.
+
+**And the preview frame hugs the file.** Owner: *"the output for the preview panel should not be
+a scrollable box, it is a full width and height container that hugs the height of the inside
+files."* It was three scroll boxes stacked: `component-preview` stretched to the column and
+scrolled (`flex: 1 1 auto; overflow-y: auto`), its `.frame` was capped at `46vh` with
+`overflow: auto`, and the `draft-preview` document was `min-height: 100vh` with its own
+`overflow: auto` — so a 380px drawing sat in a 320px iframe inside a 46vh window. Now the
+document reports its **body** height to the frame (a message from inside, accepted only from
+that iframe's own window), the iframe takes it, the frame is not capped, and the column is the
+one scroller when the whole panel is taller than the window. Measured on the saved card: body
+380, iframe **380** (was 320, the fallback), frame 404, no internal scroll, and the card's own
+footer is on screen without scrolling. The saved card's status also stopped saying "the element
+drew nothing … left/top at 16, 947" — that was the iframe being shorter than its document, not a
+failure of the drawing.
+
+## 2026-11-09 (later) — the left column's gripper follows the hand
+
+**What the designer saw.** Grabbing the left column's divider jerked the panel away from the
+cursor, and the boundary could not be dragged right. The left edge ran at roughly half the
+pointer's speed; the first move after a press jumped it ~160 px to the left.
+
+**Why.** Two faults, in `tools-workspace.ts` and its two copies (`design-workspace.ts`,
+`components/lit/workspace-layout.ts`):
+
+- The drag turned the pointer into a SHARE by dividing by `content` — the whole host minus the
+  grips — but `_left` and `_middle` only divide the width her column leaves. On a 1400 px host
+  with her column at 697.5 px, a boundary dragged to 371 px rendered at 189 px: the gripper ran
+  at about 51 % of the cursor's speed, always away from the hand.
+- The press opened a collapsed prompt to its **stored share**, so a grab taken on the 60 px rail
+  threw the boundary a few hundred pixels before the hand moved. It also never recorded where on
+  the 5 px bar the grab was taken.
+
+**What changed.** The left boundary now keeps the two facts the right column's strip keeps:
+`_leftGripOffset` (the pointer's distance from the edge) and `_leftGrabCollapsed`. The press
+moves nothing — no resize, no uncollapse; a collapsed pane gets a width at the pointer on the
+first MOVE, and every move divides by the two panes' own measured widths (`_leftMiddleSpan()`),
+with the clamp expressed against that span so the middle keeps its floor. The same edit was
+applied to all three copies.
+
+**How it was verified.** A temporary harness mounted the real `<tools-workspace>` at 1400 px with
+the right column open at 697.5 px, then drove the same mouse sequence the screen uses:
+
+| move | pointer | left edge |
+|---|---|---|
+| press (no move) | 351.25 | 348.75 — unchanged |
+| +20 | 371.25 | 368.75 |
+| +60 | 411.25 | 408.75 |
+| +120 | 471.25 | 468.75 |
+| +200 | 551.25 | 548.75 |
+
+The constant 2.5 px is the grab taken at the centre of the 5 px bar; the edge follows the hand
+with no drift. Dragging left tracked the same way (pointer 251.25 → edge 248.75). Collapsed: the
+press moved nothing, the first move opened at the pointer (155.3 px where the pointer asked for
+162.5; the open layout's span differs from the collapsed one), and the next move was exact (212
+vs 212.5). The same checks passed on `<design-workspace>`; `tsc -b` exits 0.
+
+**Left open.** The first move out of a collapsed pane lands ~5 px short for the reason above; the
+next move corrects it. The harness was deleted after the check, so this gesture has no standing
+browser test in the repository.
+
+## 2026-11-09 — the preview draws the design: the chevron, and the proof that missed it
+
+**What the designer saw.** The preview of node `40001175:2229`
+(`prompt-input-section-agent-role`) drew the dropdown chevron's triangle below its square, 16 px
+low. The run beside it counted 170 of 170 facts exact and printed `every stated fact matched`.
+The link:
+`https://www.figma.com/design/20UPR2KQMsbAxlo5NJb1se/Wireframes--v.4b--SCE-Enterprise-AI-Prompt-Platform?node-id=40001175-2229`.
+
+**Why the proof missed it.** The 170 rows compare the measured spec with the declarations in the
+generated source. Layout is in neither side: an inline `<svg>` sitting on a text baseline, and a
+wrapper placed by its transform's origin instead of its box, are both invisible to a string
+comparison. The checker and the renderer also shared the same placement rule (`_child_offset`), so
+when the rule was wrong both agreed with each other.
+
+**What changed.** `backend/design_renderer.py`: a shape that carries a finished `svg` is placed by
+Figma's own `absoluteBoundingBox` — minus the parent's box and stroke — not by the transform's
+translation; the vector wrapper carries `line-height: 0`, so the svg starts at the box's top. The
+root's transform is still not drawn: the net canvas transform is `+1`, and the proposed root-mirror
+fix is disproved in the handoff correction.
+
+**How it was verified.** One ingest through the running app; the module the run returned was drawn
+in the real `<draft-preview>` element in Chromium; every layer's `getBoundingClientRect()` was
+compared with Figma's `absoluteBoundingBox` minus the root's box. Result: 23 of 23 layers at
+0.00 px. The chevron is at `(382, 32)`, which is Figma's box for it, against `(382, 48)` before.
+Pixel diff against Figma's own render: mean 4.92/255, and what remains is confined to the text.
+
+**The process.** The full loop — one ingest of the link, the run's own rows, the module drawn in the
+browser, every box against Figma's box, the pixels attributed, one instruction fixed and
+re-ingested — is written in the ingest's own record,
+[`design/figma-ingest/CHANGELOG.md`](../../../../design/figma-ingest/CHANGELOG.md), entry
+2026-11-09. The rule: a passing row count is not a verified drawing, and the browser is the only
+instrument that sees layout.
+
+**Left open.** The design states `Inter`; `fonts.css` declares IBM Plex only, so the preview draws
+Helvetica — `Agent Role` measures 95.0 px against Inter's 85.5 px. The `fontNotice` reports the
+substitution; whether the preview or the application should load Inter is a product decision. The
+run's pass sentence also still omits the two-channel counts (19 differing, 27 REST-only on this
+node).
+
 ## 2026-11-08 (audit) — the code behind the design seat, read at 288910a7
 
 The designer's screen is the subject of this record. It states what the code does now, at commit `288910a7` on branch `design-room-honest-ingest`, and what was measured in this session. It is a record, not a plan: it proposes no repair, and no second document was written.
@@ -261,7 +494,7 @@ The repair plan that follows from this record is in [REPAIR-PLAN-2026-11-08.md](
 
 **The three saved cards were released from the Supervisor Queue.** `deb5a8eb` "right-column-panel-container", `79ce2e2d` "Figma Wireframes for AI Prompt Platform" and `57a1503d` "Figma Wireframe Design Reference Prompt" had `review_stage=in-review` removed. Each is **Closed** and unlocked, each conversation carries a release line, and the queue returns zero cards. The release changed no content, no preview and no conversation history.
 
-**A save no longer sends a card into review.** The save path in `backend/routes/ai.py` used to write `review_stage=in-review` and the approval routing mask on every design save, so a card became read-only the moment it was kept. That block is removed for the current testing; a save keeps the card Closed and editable.
+**A save no longer sends a card into review.** The save path in `backend/routes/ai.py` used to write `review_stage=in-review` and the approval routing mask on every design save, so a card became read-only the moment it was kept. That block is removed for the current testing; a save keeps the card Closed and editable. This entry is the record of that decision, and the comment at `backend/routes/ai.py:5411-5415` points here.
 
 **The queue itself is preserved for later.** `backend/card_lifecycle.py`, `GET /api/design/queue`, the read-only ledger, the 423 refusals and `POST /api/design/sessions/{id}/queue` are untouched. When approvals return, the queue endpoint is the explicit act that sends a card to the supervisor. Nothing about the queue was deleted or disabled in code; it is simply not part of the current save.
 

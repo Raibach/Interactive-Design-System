@@ -45,10 +45,7 @@ import type { DesignChat } from "@/rooms/design/chat/design-chat";
 import { takeChat, type Tree } from "@/rooms/design/inject";
 import type { Content } from "@/rooms/design/tools/content";
 import { useDesignConsole } from "@/rooms/design/console/useDesignConsole";
-import { API_BASE } from "@/shared/apiHelper";
-import { apiFetch } from "@/shared/apiFetch";
-import { getStoredUserId } from "@/services/authService";
-import { listForPackage, remove } from "@/shared/conversations";
+import { useCardDelete } from "@/rooms/design/cards/useCardDelete";
 import {
   UX_APP_SECTION,
   ensureLeftColumn,
@@ -169,43 +166,14 @@ export default function DesignSeatShell({ injected, toolsStanding, toolsVisit, o
 
   /*
    * A CONFIRMED CARD DELETE IS THE DESIGN CONSOLE'S OWN. The card's arm→confirm is the whole
-   * confirmation; a second question would be a second guard on one act. The session's conversations
-   * go first, then the row, and only then the card leaves the list. A failure leaves the card where
-   * it is and says why in the chat the person is reading.
+   * confirmation; a second question would be a second guard on one act. The delete archives the
+   * session, so the row, its conversations and its activity stay in the record; a failure leaves
+   * the card where it is and says why in the chat the person is reading.
    */
-  const deleteCard = useCallback(async (cardId: string) => {
-    const userId = getStoredUserId();
-    try {
-      const rows = await listForPackage({ sessionId: cardId, userId });
-      for (const row of rows) {
-        await remove({ sessionId: cardId, userId }, row.id).catch(() => undefined);
-      }
-      const response = await apiFetch(
-        `${API_BASE}/prompt-sessions/${encodeURIComponent(cardId)}?permanent=true`,
-        { method: "DELETE" },
-      );
-      if (!response.ok) {
-        const detail = await response.text().catch(() => "");
-        throw new Error(
-          `the server answered ${response.status}${detail ? ` — ${detail.slice(0, 200)}` : ""}`,
-        );
-      }
-      removeCard(cardId);
-    } catch (e) {
-      window.dispatchEvent(
-        new CustomEvent("a2ui:system-message", {
-          detail: {
-            role: "assistant",
-            content: `The card could not be removed: ${
-              e instanceof Error ? e.message : String(e)
-            }. It is still on the console.`,
-            alert: true,
-            tab: toolsStanding ? TOOLS_TAB : railTab,
-          },
-        }),
-      );
-    }
-  }, [railTab, removeCard, toolsStanding]);
+  const deleteCard = useCardDelete({
+    removeCard,
+    tab: toolsStanding ? TOOLS_TAB : railTab,
+  });
 
   /* THE RAIL IS THE NAVIGATION. It selects the container that stands; it never selects a page. */
   const onTabRef = useRef(onTab);
