@@ -40,6 +40,14 @@ function isPlaceholder(value) {
 
 const EXAMPLE_HOST = /^(?:localhost|127\.0\.0\.1|0\.0\.0\.0|host|hostname|example\.(?:com|org|net)|db\.example)$/i;
 
+// A value that is really a variable name or an expression is not a credential.
+function looksLikeSecretValue(value) {
+  if (isPlaceholder(value)) return false;
+  if (/^[A-Z][A-Z0-9_]{3,}$/.test(value)) return false; // DEEPSEEK_API_KEY, the name of the variable
+  if (/[()\[\]{};]/.test(value)) return false;          // sum(usage_details['input'])
+  return true;
+}
+
 function dummyUrl(match) {
   // scheme://user:password@host
   const parsed = /^[a-z][a-z0-9+.-]*:\/\/([^:]*):([^@]*)@([^/\s:?]+)/i.exec(match);
@@ -68,13 +76,13 @@ const PATTERNS = [
     name: "encryption key / salt",
     severity: "high",
     re: /\b([A-Za-z0-9_]*(?:ENCRYPTION_KEY|AES_KEY|FERNET_KEY|MASTER_KEY|SIGNING_KEY|JWT_SECRET|HMAC|SALT)[A-Za-z0-9_]*)\s*["']?\s*[=:]\s*["']([^"'\s]{16,})["']/gi,
-    check: (_match, value) => !isPlaceholder(value),
+    check: (_match, value) => looksLikeSecretValue(value),
   },
   {
     name: "literal credential assignment",
     severity: "heuristic",
     re: /\b([A-Za-z0-9_]*(?:SECRET|PASSWORD|PASSWD|TOKEN|API_KEY|APIKEY|DATABASE_URL|DSN)[A-Za-z0-9_]*)\s*["']?\s*[=:]\s*["']([^"'\s]{16,})["']/gi,
-    check: (_match, value) => !isPlaceholder(value),
+    check: (_match, value) => looksLikeSecretValue(value),
   },
 ].map((p) => ({ ...p, re: new RegExp(p.re.source, p.re.flags) }));
 
