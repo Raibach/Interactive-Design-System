@@ -6,7 +6,7 @@
 Version **0.9.1** · A2UI Protocol Compliant · 11-01-2026
 
 ## Demo: Wireframe interactive prototype
-https://site--semantic-design-systems--mgtvxtd7xr2v.code.run
+https://astragalar-santa-unbelligerently.ngrok-free.dev
 Demo pin: (see resume)
 
 > The **A2UI Protocol v0.9.1 implementation & conformance specification** — every normative requirement of the protocol mapped, file by file, to the code that implements it, with an honest built/pending status map.
