@@ -38,6 +38,7 @@ last_site=0
 last_builder=0
 last_devroom=0
 last_ngrok=0
+last_preview=0
 now() { date +%s; }
 
 while true; do
@@ -50,6 +51,11 @@ while true; do
     last_site=$(now)
     echo "[supervisor] $(date '+%H:%M:%S') site :5001 down — starting"
     (cd "$ROOT/frontend" && nohup node node_modules/.bin/vite --port 5001 --strictPort < /dev/null >> "$LOGS/studio-site.log" 2>&1 &)
+  fi
+  if ! alive 4173 && (( $(now) - last_preview >= COOLDOWN )); then
+    last_preview=$(now)
+    echo "[supervisor] $(date '+%H:%M:%S') build :4173 down \u2014 starting"
+    (cd /tmp && nohup node "$ROOT/frontend/node_modules/vite/bin/vite.js" preview "$ROOT/frontend" --port 4173 --strictPort < /dev/null >> "$LOGS/studio-preview.log" 2>&1 &)
   fi
   if ! alive 3223 && ! alive 4000 && (( $(now) - last_builder >= COOLDOWN )); then
     last_builder=$(now)
@@ -83,7 +89,15 @@ while true; do
   if ! pgrep -f "ngrok start" >/dev/null 2>&1 && (( $(now) - last_ngrok >= COOLDOWN )); then
     last_ngrok=$(now)
     echo "[supervisor] $(date '+%H:%M:%S') ngrok tunnel down — starting"
-    nohup /opt/homebrew/bin/ngrok start --config "/Users/raibach/Library/Application Support/ngrok/ngrok.yml" --config "$ROOT/runtime/ngrok-endpoints.yml" studio < /dev/null >> "$LOGS/ngrok.log" 2>&1 &
+    cat > /tmp/ids-ngrok-endpoints.yml <<'NGROK_EOF'
+version: "3"
+endpoints:
+  - name: studio
+    url: https://astragalar-santa-unbelligerently.ngrok-free.dev
+    upstream:
+      url: http://127.0.0.1:4173
+NGROK_EOF
+    nohup /opt/homebrew/bin/ngrok start --config "/Users/raibach/Library/Application Support/ngrok/ngrok.yml" --config /tmp/ids-ngrok-endpoints.yml studio < /dev/null >> "$LOGS/ngrok.log" 2>&1 &
   fi
   sleep 15
 done
