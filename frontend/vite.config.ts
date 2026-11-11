@@ -1,4 +1,6 @@
 import path from "path"
+import { createGzip } from 'node:zlib'
+import type { Plugin } from 'vite'
 import { execSync } from "child_process"
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -11,12 +13,56 @@ try {
   releaseHash = execSync("git rev-parse --short HEAD", { encoding: "utf-8" }).trim();
 } catch { /* not a git repo */ }
 
+// ── THE WIRE IS COMPRESSED ON THE PREVIEW (2026-11-11) ────────────────────────────────────
+// The build's largest chunk is 5.0 MB of JavaScript. Served raw through the tunnel it measured
+// 19 seconds and the browser gave up on dynamic imports ("Failed to fetch dynamically imported
+// module"); a fresh visitor, no cache, saw a white page and then a PostHog "could not load"
+// card. The backend has gzip, but only the preview carries the tool proxies (/posthog,
+// /static, /builder, /dev, /governance) the rooms need, so the compression has to live here.
+// Text responses are gzipped on the way out: the 5 MB chunk becomes ~810 kB.
+function previewCompression(): Plugin {
+  return {
+    name: 'ids-preview-compression',
+    configurePreviewServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const accept = String(req.headers['accept-encoding'] || '')
+        const url = String(req.url || '').split('?')[0]
+        const compressible = url === '/' || /\.(?:js|mjs|css|html|json|svg|txt|map)$/.test(url)
+        if (req.method !== 'GET' || !compressible || !/\bgzip\b/.test(accept)) return next()
+
+        const gzip = createGzip({ level: 6 })
+        const write = res.write.bind(res)
+        const end = res.end.bind(res)
+        res.setHeader('Content-Encoding', 'gzip')
+        res.setHeader('Vary', 'Accept-Encoding')
+        res.removeHeader('Content-Length')
+        gzip.on('data', (chunk) => write(chunk))
+        gzip.on('end', () => end())
+        res.write = ((chunk: any, enc?: any, cb?: any) => {
+          gzip.write(chunk, enc as any)
+          const done = typeof enc === 'function' ? enc : cb
+          if (done) done()
+          return true
+        }) as any
+        res.end = ((chunk?: any, enc?: any, cb?: any) => {
+          if (chunk) gzip.write(chunk, enc as any)
+          gzip.end()
+          const done = typeof enc === 'function' ? enc : cb
+          if (done) done()
+          return res
+        }) as any
+        next()
+      })
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   define: {
     "import.meta.env.VITE_RELEASE_VERSION": JSON.stringify(releaseHash),
   },
-  plugins: [react(), figmaAssetPlugin(), figmaPreviewPlugin()],
+  plugins: [react(), figmaAssetPlugin(), figmaPreviewPlugin(), previewCompression()],
   esbuild: {
     // Target es2020 to force decorator transpilation for broader browser support
     target: 'es2020',
