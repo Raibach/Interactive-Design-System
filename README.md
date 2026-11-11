@@ -333,7 +333,7 @@ open http://localhost:5001
 ```
 
 - **Health:** `GET /api/health` → `{"database":"connected","milvus":"connected"}`
-- **Dev PIN:** `7377`
+- **Dev PIN:** `please request or see reume`
 - **Dev mode:** global no-cache middleware — no stale bytes
 
 ---
