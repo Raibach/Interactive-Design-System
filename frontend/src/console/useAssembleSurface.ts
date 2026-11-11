@@ -72,6 +72,13 @@ export function useAssembleSurface(deps: UseAssembleSurfaceDeps) {
 
     console.log(`🤖 [A2UI] Assembling surface with intent: ${intent}`, context ? `context: ${JSON.stringify(context)}` : '');
     isConsoleAssemblyInFlightRef.current = true;
+    /* THE DOOR READS THE DOCUMENT, NOT REACT (2026-11-10). The pin door in index.html may
+       only read the document — it is plain HTML and cannot see React state. This attribute is
+       that read: written the instant the card assembly begins, and never removed, so the door
+       cannot miss it if the assembly answers before the door's 400 ms floor. The door lifted
+       on `#root`'s first child before this, which is React's commit — measured: door gone at
+       2.4 s, the shell's ground painted bare until its image bytes landed at 3.0 s. */
+    document.documentElement.setAttribute('data-ids-assembly', 'begun');
     setIsAIAssembling(true);
     setAiAssemblyFailed(false);
     setAiAssemblyReport(null);

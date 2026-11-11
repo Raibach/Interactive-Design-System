@@ -51,10 +51,13 @@
       page load, never per room, and there is no code path from here into a room, a chat, or
       the server.
 
-      IT LIFTS WHEN THE APP HAS DRAWN, and only then. The test is a READ of the document — the
-      app puts its first element into #root — never a contract the application has to honour.
-      Two bounds: a 400 ms floor so a warm cache cannot make it flicker, and a 10 s dead stop,
-      because a cover may never outlive the truth it stands over.
+      IT LIFTS WHEN THE CARD ASSEMBLY HAS BEGUN (owner, 2026-11-10), and only then. The test
+      is a READ of the document — <html data-ids-assembly="begun">, written by the console at
+      the instant its assembly starts — never a contract the application has to honour. It used
+      to lift on the first element entering #root, which is React's commit and not the cards:
+      the curtain fell onto a bare ground. Two bounds: a 400 ms floor so a warm cache cannot
+      make it flicker, and a 10 s dead stop, because a cover may never outlive the truth it
+      stands over.
 
       THE PIN IS READABLE IN THIS FILE, stated plainly: it keeps a casual visitor out. It is not
       security, and the server never consults it.
@@ -152,10 +155,15 @@
           setTimeout(function () { if (door && door.parentNode) door.parentNode.removeChild(door); }, 340);
         }
 
-        /* The app has drawn when it has put its first element into #root. Read-only. */
+        /* The door lifts when the CARD ASSEMBLY BEGINS — not when #root gets its first child.
+           The old test (`root.childElementCount > 0`) was true at React's first commit, so the
+           curtain fell before the shell had its ground and long before the cards were asked
+           for: measured, door gone at 2.4 s, bare #110E1F until the ground image landed at
+           3.0 s, cards later still. The console writes `data-ids-assembly="begun"` on <html>
+           at the instant its assembly starts (frontend/src/console/useAssembleSurface.ts).
+           Read-only, and the 10 s dead stop below still bounds a server that never answers. */
         function drawn() {
-          var root = document.getElementById('root');
-          return !!(root && root.childElementCount > 0);
+          return document.documentElement.getAttribute('data-ids-assembly') === 'begun';
         }
 
         /*
