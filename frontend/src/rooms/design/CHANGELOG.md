@@ -1,5 +1,7 @@
 # The Design room — changelog
 
+> **READ FIRST.** Every time you work in this folder, read the latest entry and orient on what we're currently working on, then pick up from there. This is the only record of this folder's work.
+
 ## 2026-11-09 (final) — three columns again, and the left boundary follows the hand
 
 **What was wrong, and what I did about it.** The chat-overlay, the auto-dock and a first

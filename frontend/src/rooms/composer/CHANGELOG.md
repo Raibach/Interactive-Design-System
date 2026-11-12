@@ -1,5 +1,7 @@
 # Composer room changelog
 
+> **READ FIRST.** Every time you work in this folder, read the latest entry and orient on what we're currently working on, then pick up from there. This is the only record of this folder's work.
+
 ## 2026-10-24 — conversations save themselves, and each belongs to its package
 
 - **A spoken turn is written, not held.** The first person's turn in a blank Composer asks the

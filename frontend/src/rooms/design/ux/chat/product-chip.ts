@@ -12,7 +12,7 @@
  */
 import { LitElement, html, css } from 'lit';
 import { unsafeSVG } from 'lit/directives/unsafe-svg.js';
-import { UX_AUTO, UX_SELECTOR_PRODUCTS, type UxProduct } from './ux-products';
+import { UX_AUTO, UX_SELECTOR_PRODUCTS, type UxProduct } from './products';
 
 function glyph(key: string) {
   const svg = (body: string) => html`<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round">${unsafeSVG(body)}</svg>`;

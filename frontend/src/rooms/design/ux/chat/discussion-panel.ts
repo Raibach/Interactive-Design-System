@@ -9,7 +9,7 @@
  */
 import { LitElement, html, css, nothing } from 'lit';
 import { getStoredUserId } from '@/services/authService';
-import { UX_GRACE_INSTRUCTIONS } from './ux-voice';
+import { UX_GRACE_INSTRUCTIONS } from './voice';
 import discussionStop from '@/assets/posthog-discussion-stop.png';
 
 interface DiscussionTurn {

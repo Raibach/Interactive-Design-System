@@ -115,7 +115,14 @@ function draftDocument(draft: DraftPreviewState): string {
     // base scheme isn't hierarchical" — the error that named this). An import map resolves against
     // THE DOCUMENT instead, which does have an origin, so `from 'lit'` works untouched.
     '<script type="importmap">' +
-    JSON.stringify({ imports: { lit: new URL('/@id/lit', window.location.origin).href } }) +
+    JSON.stringify({
+      imports: {
+        lit: (import.meta.env.PROD
+          ? new URL('/id/lit.js', window.location.origin)
+          : new URL('/@id/lit', window.location.origin)
+        ).href,
+      },
+    }) +
     '</script>' +
     '<style>' +
     'html, body { margin: 0; }' +

@@ -38,6 +38,7 @@ catches an error to make the turn look fine.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -54,6 +55,13 @@ from pydantic import BaseModel
 
 import services as state
 from deps import get_user_id_from_header
+from posthog_read import (
+    PostHogReadError,
+    get_conversation,
+    list_conversations,
+    remove_conversation,
+    send_turn,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -179,6 +187,103 @@ def _ensure_ux_tab(user_id: str) -> dict[str, Any]:
     if not tab:
         raise RuntimeError("the UX tab's package did not resolve (not created)")
     return tab
+
+
+def _metadata_of(row: dict[str, Any]) -> dict[str, Any]:
+    meta = row.get("metadata") or {}
+    if isinstance(meta, str):
+        try:
+            meta = json.loads(meta) if meta.strip() else {}
+        except (json.JSONDecodeError, ValueError):
+            meta = {}
+    return meta if isinstance(meta, dict) else {}
+
+
+def _is_ux_session(row: dict[str, Any]) -> bool:
+    """A row this door may read or point: the working UX tab or a kept UX visit.
+
+    The working row is `design_tab | ux`. A save relabels it `design_session` and writes
+    `surface: 'ux'` in the same act, so the kept card still says which tab reopens it. No
+    other design row is a UX session.
+    """
+    meta = _metadata_of(row)
+    return meta.get("design_tab") == _UX_TAB or meta.get("surface") == _UX_TAB
+
+
+def _ux_session_row(user_id: str, session_id: str) -> dict[str, Any] | None:
+    """One prompt session by id, read as its owner and only when it is a UX session."""
+    with psycopg2.connect(DATABASE_URL) as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT id::text AS id, metadata
+                  FROM prompt_sessions
+                 WHERE id = %s AND user_id = %s
+                 LIMIT 1
+                """,
+                (session_id, user_id),
+            )
+            row = cur.fetchone()
+    if not row:
+        return None
+    row = dict(row)
+    return row if _is_ux_session(row) else None
+
+
+def _resolve_ux_session(user_id: str, session_id: str = "") -> str:
+    """The session this request is about — named by the card, or the tab's working row.
+
+    A named session that is not this person's UX session is refused; it is never silently
+    replaced by the working row, which would draw one session's pointer under another's card.
+    """
+    wanted = str(session_id or "").strip()
+    if wanted:
+        row = _ux_session_row(user_id, wanted)
+        if not row:
+            raise LookupError("That session is not this person's UX session.")
+        return str(row["id"])
+    return str(_ensure_ux_tab(user_id)["packageId"])
+
+
+def _read_design_conversation(user_id: str, conversation_id: str) -> dict[str, Any] | None:
+    from routes.raibach_design import design_connection, resolve_tab
+
+    tab = resolve_tab("ux", user_id)
+    with design_connection() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT id::text AS id, title
+                  FROM design_conversations
+                 WHERE id = %s AND tab_id = %s AND user_id = %s
+                """,
+                (conversation_id, tab["id"], user_id),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            cur.execute(
+                "SELECT role, content FROM design_messages WHERE conversation_id = %s "
+                "ORDER BY created_at, id",
+                (conversation_id,),
+            )
+            messages = [
+                {"role": str(message.get("role") or ""), "content": str(message.get("content") or "")}
+                for message in cur.fetchall()
+            ]
+    return {"id": str(row["id"]), "title": str(row.get("title") or ""), "messages": messages}
+
+
+def _delete_design_conversation(user_id: str, conversation_id: str) -> bool:
+    from routes.raibach_design import design_connection, erase_conversation_row
+
+    with design_connection() as conn:
+        try:
+            erase_conversation_row(conn, "ux", user_id, conversation_id)
+            return True
+        except LookupError:
+            return False
+
 
 
 class UxNotebookSave(BaseModel):
@@ -393,6 +498,294 @@ async def ux_chat_thread(
             for row in (rows or [])
             if not _is_seeded_intro(row)
         ],
+    }
+
+
+def _session_pointer(session_id: str) -> str:
+    with psycopg2.connect(DATABASE_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute("select posthog_conversation_id from prompt_sessions where id=%s", (session_id,))
+            row = cur.fetchone()
+    return str(row[0]) if row and row[0] else ""
+
+
+def _clear_session_pointer(session_id: str, conversation_id: str) -> None:
+    with psycopg2.connect(DATABASE_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "update prompt_sessions set posthog_conversation_id=null "
+                "where id=%s and posthog_conversation_id=%s",
+                (session_id, conversation_id),
+            )
+        conn.commit()
+
+
+def _set_session_pointer(session_id: str, conversation_id: str) -> None:
+    with psycopg2.connect(DATABASE_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "update prompt_sessions set posthog_conversation_id=%s, updated_at=now() where id=%s",
+                (conversation_id, session_id),
+            )
+        conn.commit()
+
+
+def _link_posthog_conversation(uid: str, data: dict[str, Any]) -> None:
+    """THE SESSION POINTS AT THE APPLICATION'S CONVERSATION. It does not copy it.
+
+    The conversation and its messages live in the vendor application (`ee_conversation` and its
+    LangGraph checkpoints). The UI makes them look like this seat's; the session records the id
+    it is showing so the card can name it. Nothing is mirrored, and nothing is restructured.
+    """
+    package = _ensure_ux_tab(uid)
+    link = {
+        "posthog_conversation_id": str(data.get("id") or ""),
+        "posthog_conversation_title": str(data.get("title") or ""),
+    }
+    with psycopg2.connect(DATABASE_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "update prompt_sessions set metadata = coalesce(metadata,'{}'::jsonb) || %s where id=%s",
+                (psycopg2.extras.Json(link), package["packageId"]),
+            )
+        conn.commit()
+
+
+@router.get("/api/ux/posthog/conversations")
+async def posthog_conversations(x_user_id: str | None = Header(None, alias="X-User-ID")):
+    """THE SESSION'S CONVERSATIONS — the ids this session owns, titled by the application."""
+    get_user_id_from_header(x_user_id)
+    try:
+        return {"conversations": list_conversations()}
+    except PostHogReadError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=502)
+
+
+@router.delete("/api/ux/posthog/conversations/{conversation_id}")
+async def posthog_conversation_remove(
+    conversation_id: str,
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
+):
+    """REMOVE THE APPLICATION'S CONVERSATION — the vendor's own delete, at its own door."""
+    uid = get_user_id_from_header(x_user_id)
+    removed_design = await asyncio.to_thread(_delete_design_conversation, uid, conversation_id)
+    if not removed_design:
+        try:
+            remove_conversation(conversation_id)
+        except PostHogReadError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=502)
+    try:
+        with psycopg2.connect(DATABASE_URL) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "update prompt_sessions set posthog_conversation_id=null "
+                    "where user_id=%s and posthog_conversation_id=%s",
+                    (uid, conversation_id),
+                )
+            conn.commit()
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("the removed conversation's pointer could not be cleared")
+        return JSONResponse(
+            {"error": f"The conversation was removed but the session still points at it: {exc}"},
+            status_code=503,
+        )
+    return {"removed": conversation_id}
+
+
+@router.get("/api/ux/session/conversation")
+async def ux_session_conversation(
+    session_id: str | None = Query(None),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
+):
+    """THE SESSION'S CONVERSATION, READ FRESH FROM THE APPLICATION ON EVERY OPEN.
+
+    `session_id` names the card being reopened. With none, the tab's working row is the
+    session — that is the leave-and-return default. The row stores one pointer and nothing
+    else: the application owns the thread.
+    """
+    uid = get_user_id_from_header(x_user_id)
+    try:
+        target = await asyncio.to_thread(_resolve_ux_session, uid, str(session_id or ""))
+        pointer = await asyncio.to_thread(_session_pointer, target)
+    except LookupError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=404)
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse({"error": f"The session could not be read: {exc}"}, status_code=503)
+    if not pointer:
+        return {"session_id": target, "source": "", "conversation": None}
+    design = await asyncio.to_thread(_read_design_conversation, uid, pointer)
+    if design:
+        return {"session_id": target, "source": "design", "conversation": design}
+    try:
+        data = await asyncio.to_thread(get_conversation, pointer)
+    except PostHogReadError as exc:
+        if "404" in str(exc) or "not_found" in str(exc):
+            return {
+                "session_id": target,
+                "source": "posthog",
+                "conversation": None,
+                "unavailable": (
+                    "PostHog has this conversation but its API will not return it yet: "
+                    "an untitled conversation is filtered out of the retrieve door."
+                ),
+            }
+        return JSONResponse({"error": str(exc)}, status_code=502)
+    messages = [
+        {
+            "role": "user" if message.get("type") == "human" else "assistant",
+            "content": str(message.get("content") or ""),
+        }
+        for message in data.get("messages", [])
+        if str(message.get("content") or "").strip()
+    ]
+    return {
+        "session_id": target,
+        "source": "posthog",
+        "conversation": {
+            "id": data.get("id") or pointer,
+            "title": data.get("title") or "",
+            "messages": messages,
+        },
+    }
+
+
+@router.post("/api/ux/session/conversation")
+async def ux_session_conversation_set(request: Request, x_user_id: str | None = Header(None, alias="X-User-ID")):
+    """POINT THE SESSION AT THE CONVERSATION THE PERSON IS LOOKING AT."""
+    uid = get_user_id_from_header(x_user_id)
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        return JSONResponse({"error": "The body is not valid JSON."}, status_code=400)
+    conversation_id = str((body or {}).get("conversation_id") or "").strip()
+    if not conversation_id:
+        return JSONResponse({"error": "No conversation was given."}, status_code=400)
+    try:
+        target = await asyncio.to_thread(
+            _resolve_ux_session, uid, str((body or {}).get("session_id") or "")
+        )
+        await asyncio.to_thread(_set_session_pointer, target, conversation_id)
+    except LookupError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=404)
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse({"error": f"The session could not be pointed at it: {exc}"}, status_code=503)
+    return {"session_id": target, "conversation_id": conversation_id}
+
+
+@router.post("/api/ux/session/save")
+async def ux_session_save(request: Request, x_user_id: str | None = Header(None, alias="X-User-ID")):
+    """KEEP THE SESSION AS ITS OWN CARD — the UX card, not the design tool's.
+
+    The card is the session row: its pointer to PostHog's conversation, its own fields, and the
+    console's card furniture. No conversation text is copied; the card names the session and the
+    conversation is read from PostHog when the card is opened.
+    """
+    uid = get_user_id_from_header(x_user_id)
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        return JSONResponse({"error": "The body is not valid JSON."}, status_code=400)
+    session_id = str((body or {}).get("session_id") or "").strip()
+    conversation_id = str((body or {}).get("conversation_id") or "").strip()
+    try:
+        target = await asyncio.to_thread(_resolve_ux_session, uid, session_id)
+    except LookupError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=404)
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse({"error": f"The session could not be read: {exc}"}, status_code=503)
+    pointer = await asyncio.to_thread(_session_pointer, target)
+    if not pointer and conversation_id:
+        await asyncio.to_thread(_set_session_pointer, target, conversation_id)
+        pointer = conversation_id
+    if not pointer:
+        return JSONResponse(
+            {"error": "This session has no conversation yet. Open or start a conversation first."},
+            status_code=409,
+        )
+    try:
+        with psycopg2.connect(DATABASE_URL) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "update prompt_sessions set "
+                    "title = coalesce(nullif(title,''), 'UX session'), "
+                    "category = 'UX', status = 'Active', is_active = true, is_archived = false, "
+                    "metadata = coalesce(metadata,'{}'::jsonb) || "
+                    "jsonb_build_object('session_type','design_session','surface','ux'), "
+                    "updated_at = now() where id=%s",
+                    (target,),
+                )
+            conn.commit()
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse({"error": f"The card could not be created: {exc}"}, status_code=503)
+    return {"saved": True, "session_id": target, "posthog_conversation_id": pointer}
+
+
+@router.post("/api/ux/posthog/turn")
+async def posthog_turn(request: Request, x_user_id: str | None = Header(None, alias="X-User-ID")):
+    """ONE TURN ON THE APPLICATION'S CHAT. Our id is handed over; the application stores it."""
+    uid = get_user_id_from_header(x_user_id)
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        return JSONResponse({"error": "The turn body is not valid JSON."}, status_code=400)
+    question = str((body or {}).get("question") or "").strip()
+    if not question:
+        return JSONResponse({"error": "The turn has no question."}, status_code=400)
+    session_id = str((body or {}).get("session_id") or "").strip()
+    conversation_id = str((body or {}).get("conversation_id") or "").strip()
+    try:
+        target = await asyncio.to_thread(_resolve_ux_session, uid, session_id)
+        if not conversation_id:
+            conversation_id = await asyncio.to_thread(_session_pointer, target)
+        if not conversation_id:
+            conversation_id = str(uuid.uuid4())
+        await asyncio.to_thread(_set_session_pointer, target, conversation_id)
+    except LookupError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=404)
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse({"error": f"The session could not record its conversation: {exc}"}, status_code=503)
+    try:
+        answer = await asyncio.to_thread(send_turn, conversation_id, question)
+    except PostHogReadError as exc:
+        return JSONResponse(
+            {"error": str(exc), "conversation_id": conversation_id, "session_id": target},
+            status_code=502,
+        )
+    return {"conversation_id": conversation_id, "session_id": target, "content": answer}
+
+
+@router.get("/api/ux/posthog/conversations/{conversation_id}")
+async def posthog_conversation(
+    conversation_id: str,
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
+):
+    """ONE CONVERSATION, LINKED TO THIS USER'S UX SESSION AND RETURNED FROM OUR OWN ROW."""
+    uid = get_user_id_from_header(x_user_id)
+    design = await asyncio.to_thread(_read_design_conversation, uid, conversation_id)
+    if design:
+        return {
+            "conversation_id": design["id"],
+            "title": design["title"],
+            "messages": design["messages"],
+            "source": "design",
+        }
+    try:
+        data = get_conversation(conversation_id)
+    except PostHogReadError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=502)
+    messages = [
+        {
+            "role": "user" if message.get("type") == "human" else "assistant",
+            "content": str(message.get("content") or ""),
+        }
+        for message in data.get("messages", [])
+        if str(message.get("content") or "").strip()
+    ]
+    return {
+        "conversation_id": data.get("id") or conversation_id,
+        "title": data.get("title") or "",
+        "messages": messages,
+        "source": "posthog",
     }
 
 

@@ -414,6 +414,12 @@ class A2UIConsoleCardGrid extends LitElement {
     if (changed.has('items')) this.page = 0;
   }
 
+  /** The host drops its grid layout for the empty state, so the message can be centred. */
+  protected updated(): void {
+    const empty = this._fits && Array.isArray(this.items) && this.items.length === 0;
+    this.classList.toggle('empty-state', empty);
+  }
+
   static styles = css`
     :host {
       display: grid;
@@ -522,16 +528,28 @@ class A2UIConsoleCardGrid extends LitElement {
       color: #6c757d;
       max-width: 420px;
     }
+    /* THE HOST FILLS THE PANE WHEN A TAB HAS NO CARDS, so the message below stands in the
+       pane's centre — where the cards would have been — instead of the top-left corner. */
+    :host(.empty-state) {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      padding: 0;
+    }
     /* A FILTERED TAB WITH NOTHING IN IT IS SAID, NOT LEFT BLANK. Cards are the console's only
        content today; a tab whose record has none says so in the same muted line as the
-       too-small answer, so "nothing is here" and "it did not arrive" never look alike. */
+       too-small answer, so "nothing is here" and "it did not arrive" never look alike.
+       The ink is the console's dark plum, not the muted gray, and the line stands centred in
+       the pane, so the answer is seen the moment the tab loads. */
     .empty {
       margin: 0;
       font-family: inherit;
-      font-size: 13px;
-      font-weight: 500;
+      font-size: 15px;
+      font-weight: 600;
       line-height: 1.5;
-      color: #6c757d;
+      color: #241a33;
+      text-align: center;
       max-width: 420px;
     }
   `;

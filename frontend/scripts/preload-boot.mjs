@@ -27,7 +27,8 @@ import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const root = fileURLToPath(new URL('../dist', import.meta.url));
+const outDir = process.env.BUILD_OUTDIR || 'dist';
+const root = fileURLToPath(new URL(`../${outDir}`, import.meta.url));
 const assetsDir = join(root, 'assets');
 const pagePath = join(root, 'index.html');
 

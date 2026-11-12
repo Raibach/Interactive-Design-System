@@ -27,8 +27,7 @@
  * not belong to. Switching tabs shows another container; it never empties this one.
  */
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
-import designSectionBackground from "@/assets/design-section2-bkg.webp";
-import "@/rooms/design/ux/ux-chat";
+import "@/rooms/design/ux/chat";
 /* THE TOOLS TAB'S OWN SEAT — imported here and by nothing else. */
 import "@/rooms/design/tools/tools-chat";
 /* THE CHAT TAB'S OWN PAGE — its own file and its own conversation file, built the same way the
@@ -40,14 +39,16 @@ import "@/rooms/design/chat/chat-tab";
    page and defeat the split. */
 /* THE REVIEWER'S SURFACE (owner, 2026-11-02): the sessions sent for review, in the right column. */
 import "@/rooms/design/review/design-review-view";
+/* THE SAME FOOTER UI AS THE FIGMA TOOL — its save is wired to the UX session, not to Tools. */
+import "@/rooms/design/design-left-footer";
+import { apiFetch } from "@/shared/apiFetch";
+import { API_BASE } from "@/shared/apiHelper";
 
-import type { DesignChat } from "@/rooms/design/chat/design-chat";
 import { takeChat, type Tree } from "@/rooms/design/inject";
 import type { Content } from "@/rooms/design/tools/content";
 import { useDesignConsole } from "@/rooms/design/console/useDesignConsole";
 import { useCardDelete } from "@/rooms/design/cards/useCardDelete";
 import {
-  UX_APP_SECTION,
   ensureLeftColumn,
   placeLeftColumn,
   useDesignRowSelection,
@@ -61,6 +62,9 @@ const TOOLS_TAB = "tools";
 
 /** The Chat tab — its own page, opened by the same press the Tools tab answers. */
 const CHAT_TAB = "chat";
+
+/** The UX tab — its own seat, drawn by its own file, not a view inside another tab's seat. */
+const UX_TAB = "ux";
 
 /**
  * THE QUESTION ABOUT A SESSION THE PERSON IS LEAVING, ASKED AS A REAL QUESTION.
@@ -96,6 +100,13 @@ type SeatView = HTMLElement & {
   section?: string;
 };
 
+/** THE CONTRACT EVERY TAB'S CHAT ANSWERS. A tab has its own element; this is all the
+ *  shell is allowed to assume about it, so no tab is typed as another tab's seat. */
+type SeatChat = HTMLElement & {
+  activeTab?: string;
+  collapsed?: boolean;
+};
+
 /** One tab's container: its own drawing surface, its own chat, its own left column. */
 type Seat = {
   tab: string;
@@ -104,7 +115,7 @@ type Seat = {
   visit: number;
   host: HTMLDivElement;
   renderer: any;
-  chat: DesignChat;
+  chat: SeatChat;
   view: SeatView | null;
   leftRef: RefObject<DesignLeft | null>;
   /* WHAT THIS CONTAINER WAS LAST DRAWN WITH — a tree is assigned only when it changed, because an
@@ -131,6 +142,9 @@ export default function DesignSeatShell({ injected, toolsStanding, toolsVisit, o
      the structure, and the console's own left application. */
   const { frame, consoleApp, error, coverDown, setError, upsertCard, removeCard } = useDesignConsole();
   const [railTab, setRailTab] = useState("chat");
+  /* THE UX CARD BEING REOPENED. Empty means the tab's working row: the last UX conversation a
+     person left, which is the default the UX seat loads on a fresh press. */
+  const [uxOpenSession, setUxOpenSession] = useState("");
 
   /* THE ROOM TELLS THE SHELL WHEN ITS SCREEN IS BUILT: the cover is down and the design console
      is readable. The shell's copy of this ring leaves on this message. */
@@ -224,6 +238,83 @@ export default function DesignSeatShell({ injected, toolsStanding, toolsVisit, o
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, []);
 
+  /**
+   * THE UX SESSION'S SAVE — its own route and its own card. The footer is the room's furniture;
+   * the function behind it is this tab's: the session row (with its PostHog pointer) becomes the
+   * card the console lists, and no conversation text is copied.
+   */
+  const saveUxSession = useCallback(async () => {
+    const seat = pageRef.current;
+    if (!seat || seat.tab !== "ux") return;
+    const chat = seat.chat as unknown as { sessionId?: string; conversationId?: string };
+    const footer = seat.leftRef.current?.host.querySelector("design-left-footer") as
+      | (HTMLElement & { busy?: boolean; result?: string })
+      | null;
+    const sessionId = String(chat.sessionId || "");
+    if (!sessionId) {
+      if (footer) footer.result = "This tab has no session yet.";
+      return;
+    }
+    if (footer) {
+      footer.busy = true;
+      footer.result = "";
+    }
+    try {
+      const response = await apiFetch(`${API_BASE}/ux/session/save`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: sessionId,
+          conversation_id: String(chat.conversationId || "") || undefined,
+        }),
+      });
+      const answer = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(answer?.error || `the server answered ${response.status}`);
+      /*
+       * THE CARD JOINS THE CONSOLE NOW, IN THE CONSOLE'S OWN SHAPE. The save's answer names the
+       * session; the card itself comes from the same single-card read the Tools save uses, so
+       * the grid is not rebuilt and the card's surface marker is the record's, not this page's.
+       */
+      let cardNote = "";
+      try {
+        const cardResponse = await apiFetch(
+          `${API_BASE}/design/cards/${encodeURIComponent(sessionId)}`,
+        );
+        const cardAnswer = (await cardResponse.json().catch(() => null)) as
+          | { card?: Record<string, any> }
+          | null;
+        if (cardResponse.ok && cardAnswer?.card?.id) {
+          window.dispatchEvent(
+            new CustomEvent("design-card-saved", { detail: { card: cardAnswer.card } }),
+          );
+        } else {
+          cardNote = cardResponse.ok
+            ? "the card read returned no card"
+            : `the card read answered ${cardResponse.status}`;
+        }
+      } catch (cardError) {
+        cardNote = (cardError as Error).message;
+      }
+      if (footer) {
+        footer.result = cardNote
+          ? `Saved — the card will appear when the console is read again (${cardNote}).`
+          : "Saved — the card is on the Console.";
+      }
+    } catch (error) {
+      if (footer) footer.result = `The save failed: ${(error as Error).message}`;
+    } finally {
+      if (footer) footer.busy = false;
+    }
+  }, []);
+
+  useEffect(() => {
+    const onSave = () => {
+      if (railTabRef.current === "ux") void saveUxSession();
+    };
+    window.addEventListener("design-left-save", onSave);
+    return () => window.removeEventListener("design-left-save", onSave);
+  }, [saveUxSession]);
+
   const onTabChange = useCallback(async (event: Event) => {
     const tab = String((event as CustomEvent<{ tab?: string }>)?.detail?.tab || "");
     if (!tab) return;
@@ -235,6 +326,12 @@ export default function DesignSeatShell({ injected, toolsStanding, toolsVisit, o
      * A new session belongs to a press that arrives from a different tab.
      */
     if (tab === railTabRef.current) return;
+
+    /* A SAVED UX CARD IS OPENED BY ITS CARD, ONCE. Leaving the UX tab ends that look at the
+       saved session; the next press is the tab's working row again, not the card. */
+    if (railTabRef.current === UX_TAB && tab !== UX_TAB) {
+      setUxOpenSession("");
+    }
 
     /*
      * LEAVING A TAB ENDS ITS SESSION. The owner, 2026-11-07: the Tools tab is a new session, and a
@@ -443,6 +540,23 @@ export default function DesignSeatShell({ injected, toolsStanding, toolsVisit, o
       const key = String(card?.element_key ?? "");
 
       /*
+       * A KEPT UX SESSION OPENS THE UX TAB AT THAT SESSION. The card's surface is the record's
+       * own marker (the UX save writes it); the id is the prompt_sessions row whose
+       * `posthog_conversation_id` the seat reads. Tools remains the destination for every other
+       * kept session.
+       */
+      if (
+        String(card?.surface ?? "") === UX_TAB
+        || String(card?.category ?? "") === "UX"
+      ) {
+        setUxOpenSession(id);
+        railTabRef.current = UX_TAB;
+        setRailTab(UX_TAB);
+        onTabRef.current?.(UX_TAB);
+        return;
+      }
+
+      /*
        * A DESIGN SYSTEM'S CARD OPENS THE TOOL IN THAT SYSTEM (owner, 2026-11-02): *"the card
        * should just open the tool with the loaded DS, which this one is the default."*
        *
@@ -534,8 +648,14 @@ export default function DesignSeatShell({ injected, toolsStanding, toolsVisit, o
        its own page with its own conversation file; every other tab keeps the shared <design-chat>
        until its own page is built. The page resolves its own package from the data it is given. */
     const chat = document.createElement(
-      tab === TOOLS_TAB ? "tools-chat" : tab === CHAT_TAB ? "chat-tab" : "design-chat",
-    ) as DesignChat;
+      tab === TOOLS_TAB
+        ? "tools-chat"
+        : tab === CHAT_TAB
+          ? "chat-tab"
+          : tab === UX_TAB
+            ? "ux-chat"
+            : "design-chat",
+    ) as SeatChat;
     chat.setAttribute("data-design-chat", tab);
     /* THE ROOM OWNS THE RAIL. A press moves the room to the container that belongs to the pressed
        tab; it never switches this seat's tab, its conversation or its thread. */
@@ -552,13 +672,6 @@ export default function DesignSeatShell({ injected, toolsStanding, toolsVisit, o
       view = document.createElement("design-review-view") as SeatView;
       view.setAttribute("slot", "view");
       view.setAttribute("view-tab", tab);
-      chat.appendChild(view);
-    } else if (tab === "ux") {
-      view = document.createElement("ux-chat") as SeatView;
-      view.setAttribute("slot", "view");
-      view.setAttribute("view-tab", tab);
-      /* THE HEADER'S FIRST LINE IS THE SECTION THE PERSON IS WORKING IN. */
-      view.section = UX_APP_SECTION;
       chat.appendChild(view);
     }
     chat.activeTab = tab;
@@ -866,7 +979,7 @@ export default function DesignSeatShell({ injected, toolsStanding, toolsVisit, o
         delete chatInfo.sessionId;
         const ownPackage =
           seat.tab === "approvals" ? ""
-            : seat.tab === "ux" ? packages.ux?.packageId
+            : seat.tab === "ux" ? uxOpenSession
               : packages.console?.packageId;
         if (ownPackage) chatInfo.sessionId = ownPackage;
       }
@@ -917,6 +1030,14 @@ export default function DesignSeatShell({ injected, toolsStanding, toolsVisit, o
           consoleApp,
           tree: hostTree,
         });
+        /* THE SAME FOOTER FURNITURE AS THE FIGMA TOOL, appended once per UX page. */
+        if (seat.tab === "ux" && !left.host.querySelector("design-left-footer")) {
+          const footerEl = document.createElement("design-left-footer") as HTMLElement & {
+            hideNew?: boolean;
+          };
+          footerEl.hideNew = true;
+          left.host.appendChild(footerEl);
+        }
         leftRef.current = left;
       }
     })();
@@ -924,7 +1045,7 @@ export default function DesignSeatShell({ injected, toolsStanding, toolsVisit, o
     return () => {
       cancelled = true;
     };
-  }, [frame, consoleApp, injected, toolsStanding, toolsVisit, railTab, openSeat, setError]);
+  }, [frame, consoleApp, injected, toolsStanding, toolsVisit, railTab, uxOpenSession, openSeat, setError]);
 
   if (error) {
     return <div style={{ padding: 24, color: "#f3b" }}>The design interface could not load: {error}</div>;
@@ -957,13 +1078,12 @@ export default function DesignSeatShell({ injected, toolsStanding, toolsVisit, o
           overflow: "hidden",
         }}
       />
-      {/* THE ROOM'S COVER — THE SHEET AND THE DISSOLVE (owner, 2026-10-25). The wait itself
-          (the ring and the sentence) moved to the shell, which draws it the instant the tab is
-          pressed; the sentence keeps its plum because it reads over this light sheet. This
-          cover keeps two jobs: it paints the same sheet the box's ground wears, so the ground
-          never changes, and its 700ms dissolve reveals the interface when the assembler's tree
-          has landed — a fade, never a pop. It draws no ring of its own, so exactly one ring
-          stands. */}
+      {/* THE ROOM'S COVER (owner, 2026-10-25, amended 2026-11-12). The wait itself (the ring
+          and the sentence) moved to the shell, which draws it the instant the tab is pressed.
+          The cover paints nothing — no fill and no sheet — so the room's own ground shows
+          through it and no fill flashes during the assembly. It still holds the stage's
+          pointer events until the console lands, so a press cannot reach a half-built
+          surface. */}
       <div
         aria-hidden={coverDown}
         data-room-cover="design"
@@ -976,11 +1096,6 @@ export default function DesignSeatShell({ injected, toolsStanding, toolsVisit, o
           alignItems: "center",
           justifyContent: "center",
           gap: 16,
-          backgroundColor: "#582846",
-          backgroundImage: `url(${designSectionBackground})`,
-          backgroundSize: "100% 100%",
-          backgroundRepeat: "no-repeat",
-          backgroundPosition: "top left",
           opacity: coverDown ? 0 : 1,
           transition: "opacity 700ms ease",
           pointerEvents: coverDown ? "none" : "auto",

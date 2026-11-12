@@ -2,8 +2,8 @@
  * <DevelopmentBox> — THE DEVELOPMENT TAB'S OWN CONTENT AREA.
  *
  * The room used to draw inside the shell's sandbox, with the sandbox's workspace slot painting
- * the lab tile. The box owns the ground now: the same paper tile, repeated at natural size over
- * the room's dark floor, exactly the values the shell painted. The room root carried by
+ * the lab tile. The box owns the ground now: the same paper tile, repeated at natural size,
+ * exactly the values the shell painted. The room root carried by
  * <DevelopmentRoom> stays inside it.
  *
  * THE TOOL IS NOT TOUCHED. The OpenHands application keeps its house patch, its chrome, its
@@ -34,7 +34,6 @@ export function DevelopmentBox() {
         minHeight: 0,
         minWidth: 0,
         overflow: 'hidden',
-        backgroundColor: '#2b2635',
         /* THE ROOM'S OWN GROUND — the lab tile the sandbox painted, now the room's. A
            graph-paper tile is drawn to REPEAT at natural size, from the top left. */
         backgroundImage: `url(${developmentLabBackground})`,

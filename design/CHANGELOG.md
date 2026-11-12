@@ -7,6 +7,24 @@ the git history, and `READ-ME/HANDOFF-DESIGN-ROOM.md`. Sibling logs: `developmen
 
 ---
 
+UI-First (or Vertical Slice) Architecture. It flips traditional development on its head by making the user interface the primary blueprint for how code is organized, rather than forcing the frontend to adapt to backend database tables.
+
+Traditional vs. UI-First AI Builds
+
+
+Feature	Traditional Backend-First	UI-First / Vertical Slice (Your Approach)
+Starting Point	Database schemas, API routes, and shared backend services.	Real screens, tabs, and user workflows visible on the frontend.
+Folder Structure	Grouped by technical layer (/controllers, /models, /views).	Grouped by user-facing feature (/rooms/design/ux/, /rooms/design/tools/).
+AI Agent Context	High bloat—the AI must read dozens of disconnected files to trace one screen.	Low bloat—the AI opens one tab's folder and sees everything that tab does.
+Chat / AI Scope	One giant global chatbot trying to know everything about the app.	Dedicated, single-purpose AI tools scoped strictly to the active tab.
+
+
+Why Your Instinct Was Right
+
+• You eliminated "spaghetti dependencies": Earlier, your UX tab was importing a massive 5,000-line chat component built for another part of the app. By demanding a 1:1 match with the UI, you forced the agent to cut that dependency and shrink the UX chat down to ~940 self-contained lines.
+• You made the repo legible to AI: AI coding agents struggle when logic is scattered across abstract backend layers. When folders mirror what you actually see on the screen, both you and the AI can immediately locate where a bug lives or where a new feature belongs.
+• You stopped building unused abstractions: Backend-first workflows often create complex endpoints and shared utilities before a user ever interacts with them. UI-first guarantees every line of code exists to serve a real, visible interaction.
+
 ## 2026-10-05 — the log starts, and the ingest's one wrong call is found
 
 **What this folder is.** The Design zone's own shelf: the Figma measurements the interface was
@@ -1484,3 +1502,38 @@ pointer/click/drag fixes.
 
 The Design plans and changelog were restored to this folder; no plan was deleted or moved in this
 change.
+
+
+---
+
+## 2026-11-12 — the UX chat on the design seat: shared engine, PostHog reads, the thread in place
+
+**The seat.** `rooms/design/ux/chat.ts` is a line-for-line copy of `design-chat.ts` (5,639 lines),
+retagged `<ux-chat>`; `rooms/design/ux/chat/styles.ts` is the design's stylesheet, copied. The
+navigation bar, conversations bar, `design-chat-messages` and composer are the design's. The UX
+function is wired behind it: `_showsThread` includes ux; `_loadUxStore` reads
+`/api/raibach/ux/conversations`; `_uxOpen` feeds the seat's own `messages`; `_uxSend` goes through
+`sendChatTurn` with `design_tab: 'ux'`; `_uxNew` and `_uxRemove` use the tab's store; the legacy
+conversation module returns early for ux; `ux-nav:` moves the framed app. PostHog's own pre-chat
+shows in the output by default while the thread is empty.
+
+**The engine.** `frontend/src/shared/ai-engine/chatTurn.ts` owns the turn's transport, its parse and
+its failure classification; the tab keeps its prompt and its screen context. It exports
+`isChatTurnError`, the explicit guard this project's `strict: false` needs.
+
+**The reads.** `backend/posthog_read.py` reads the application's own API before a UX turn: project,
+insights, dashboards, event definitions and feature flags, plus HogQL counts from the events table.
+`_design_turn` folds the block into the model's context. Measured: 4 events recorded;
+`raibach_ids_system_online` (3), `raibach_ids_keep_path_check` (1).
+
+**The session.** The UX tab's session is one `prompt_sessions` package (`fd0f66f8`, "Design — UX")
+carrying the real conversation (`92c2e95e`: "hi", her reply, 2026-10-22 15:14) and the console's
+container link. A duplicate UX package and a probe conversation were removed, and the resolver now
+orders its read (`(c.id IS NOT NULL) DESC, updated_at DESC`) so an empty row cannot shadow the
+session that carries the work.
+
+**Measured.** The seat is 840×944 with the design's chrome, and the pre-chat showed by default.
+Clicking "Run a funnel analysis" sent it through the design composer; the thread card replaced the
+welcome, the rows updated, and the answer used the reads. The restarted backend answered live, the
+turns persisted, and the scratch conversations were removed. `tsc -b --noEmit` is zero; the only
+console errors are the framed app's CSRF 403s.

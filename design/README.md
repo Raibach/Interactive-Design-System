@@ -5,22 +5,24 @@ and reviews what the system measured and drew. The console is the gallery of tha
 from the same records, so this folder is also the story she reads to implement a change and to scale
 the system.
 
-## The order to read it
+UI-First (or Vertical Slice) Architecture. It flips traditional development on its head by making the user interface the primary blueprint for how code is organized, rather than forcing the frontend to adapt to backend database tables.
 
-1. **`ARCHITECTURE.md`** — the systems, the tree and the console gallery. This is the structure the
-   work is built toward, and it is the one home for it.
-2. **`TODO.md`** — the open work, your answers, the seven plans, and the next work.
-3. **`plans/00-DATABASE.md` through `06-CARDS-AND-CONSOLE.md`** — the work, step by step. Each step
-   names its proof; a step is done only when that proof is measured.
-4. **`CHANGELOG.md`** — what changed and what was measured. Read it to know what stands today.
-5. **`WORKING-RULES.md`** — how to work, the local setup, and the mistakes already paid for.
-6. **`ONE-CHAT-PER-TAB.md`** — the rule the seats follow.
-7. **`approval-reviews/`** — the approval pipeline and its own record.
-8. **`figma-ingest/`** — the ingest's record, newest first.
+Traditional vs. UI-First AI Builds
 
-The folder also holds earlier records: the `TOOLS-SEAT-SPLIT-PLAN-2026-10-31.md` (how the seats were
-split), the PostHog plan, and `archive/`. They are kept for the history. The current instructions are
-the documents above.
+
+Feature	Traditional Backend-First	UI-First / Vertical Slice (Your Approach)
+Starting Point	Database schemas, API routes, and shared backend services.	Real screens, tabs, and user workflows visible on the frontend.
+Folder Structure	Grouped by technical layer (/controllers, /models, /views).	Grouped by user-facing feature (/rooms/design/ux/, /rooms/design/tools/).
+AI Agent Context	High bloat—the AI must read dozens of disconnected files to trace one screen.	Low bloat—the AI opens one tab's folder and sees everything that tab does.
+Chat / AI Scope	One giant global chatbot trying to know everything about the app.	Dedicated, single-purpose AI tools scoped strictly to the active tab.
+
+
+Why Your Instinct Was Right
+
+• You eliminated "spaghetti dependencies": Earlier, your UX tab was importing a massive 5,000-line chat component built for another part of the app. By demanding a 1:1 match with the UI, you forced the agent to cut that dependency and shrink the UX chat down to ~940 self-contained lines.
+• You made the repo legible to AI: AI coding agents struggle when logic is scattered across abstract backend layers. When folders mirror what you actually see on the screen, both you and the AI can immediately locate where a bug lives or where a new feature belongs.
+• You stopped building unused abstractions: Backend-first workflows often create complex endpoints and shared utilities before a user ever interacts with them. UI-first guarantees every line of code exists to serve a real, visible interaction.
+
 
 ## The rule of this folder
 

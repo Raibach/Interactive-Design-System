@@ -18,6 +18,7 @@ from grace_gui import (
     LAST_USAGE,
     retrieve_memory_context,
 )
+from posthog_read import read_for_turn as read_posthog_for_turn
 
 router = APIRouter()
 
@@ -51,6 +52,9 @@ class TeacherQueryRequest(BaseModel):
     self_reflection: bool = Field(False, validation_alias=AliasChoices("self_reflection", "selfReflection"))
     editorial: dict[str, Any] | None = None
     mode: str = "chat"
+    # THE UX TAB'S TURN. When it is true, the turn carries the application's own reads
+    # (posthog_read.py) into the model's context before it answers.
+    ux: bool = False
     metadata: dict[str, Any] | None = None
     # ── WHO SPOKE ─────────────────────────────────────────────────────────────
     # True when a person typed this turn. False for a turn the APPLICATION asks for on
@@ -217,6 +221,21 @@ async def _design_turn(request: TeacherQueryRequest, uid: str, query_llm):
     resolve_tab(request.design_tab, uid)
     db = design_connection()
     try:
+        # THE POSTHOG READS, BEFORE THE MODEL. The UX tab's answers are about the application;
+        # reading its lists first is what keeps the model from inventing them. These reads are
+        # ours (`posthog_read.py`), not the vendor agent's, whose key is out of credit (402).
+        posthog_block = ''
+        posthog_warnings: list[str] = []
+        if request.design_tab == 'ux':
+            try:
+                posthog_block, posthog_warnings = await asyncio.to_thread(
+                    read_posthog_for_turn, request.question or ''
+                )
+            except Exception as exc:  # noqa: BLE001 — the reason is drawn, never hidden
+                posthog_warnings = [f'The PostHog reads failed: {type(exc).__name__}: {exc}']
+        turn_context = request.context or ''
+        if posthog_block:
+            turn_context = f'{turn_context}\n\n{posthog_block}' if turn_context else posthog_block
         conv_id = request.conversation_id or ''
         if not conv_id:
             if not request.person_turn:
@@ -227,7 +246,7 @@ async def _design_turn(request: TeacherQueryRequest, uid: str, query_llm):
                 conv_id = create_conversation_row(db, request.design_tab, uid, title)["id"]
                 result = await asyncio.to_thread(
                     query_llm,
-                    context=request.context or '',
+                    context=turn_context,
                     question=request.question,
                     reasoning=request.reasoning,
                     reasoning_style=request.reasoning_style,
@@ -247,7 +266,7 @@ async def _design_turn(request: TeacherQueryRequest, uid: str, query_llm):
                     "tool_warnings": [],
                     "tool_results": [],
                     "persistence_error": None,
-                    "warnings": [],
+                    "warnings": posthog_warnings,
                 }
             title = (request.question or 'New Chat')[:80]
             conv_id = create_conversation_row(db, request.design_tab, uid, title)["id"]
@@ -258,7 +277,7 @@ async def _design_turn(request: TeacherQueryRequest, uid: str, query_llm):
             )
         result = await asyncio.to_thread(
             query_llm,
-            context=request.context or '',
+            context=turn_context,
             question=request.question,
             reasoning=request.reasoning,
             reasoning_style=request.reasoning_style,
@@ -278,7 +297,7 @@ async def _design_turn(request: TeacherQueryRequest, uid: str, query_llm):
             "tool_warnings": [],
             "tool_results": [],
             "persistence_error": None,
-            "warnings": [],
+            "warnings": posthog_warnings,
         }
     finally:
         db.close()
@@ -568,6 +587,23 @@ async def api_teacher_query(
                 + "\n\n=== CURRENT WORKSPACE ===\n"
                 + full_context
             )
+
+        # ── THE UX TAB'S POSTHOG READS ──────────────────────────────
+        # The UX tab's answers are about the application, and the package's own turn
+        # carries its reads: project, insights, dashboards, events (HogQL), flags.
+        # Ours (posthog_read.py), before the model; a failed read is a warning.
+        if request.ux:
+            try:
+                posthog_block, posthog_read_warnings = await asyncio.to_thread(
+                    read_posthog_for_turn, request.question or ''
+                )
+                warnings.extend(posthog_read_warnings)
+                if posthog_block:
+                    full_context = (
+                        f"{full_context}\n\n{posthog_block}" if full_context else posthog_block
+                    )
+            except Exception as exc:  # noqa: BLE001 — the reason is drawn, never hidden
+                warnings.append(f"The PostHog reads failed: {type(exc).__name__}: {exc}")
 
         # ── Tool calls: run them BEFORE the model ───────────────────
         # A tool call written into a prompt is only real if something executes it.

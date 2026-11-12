@@ -131,14 +131,17 @@ export class DesignLeftFooter extends LitElement {
     result: { type: String },
     /** Set by the host while the save is in flight; locks the control and reads "Saving...". */
     busy: { type: Boolean },
+    hideNew: { type: Boolean, attribute: 'hide-new' },
   };
   declare result: string;
   declare busy: boolean;
+  declare hideNew: boolean;
 
   constructor() {
     super();
     this.result = '';
     this.busy = false;
+    this.hideNew = false;
   }
 
   private _onSave() {
@@ -160,15 +163,17 @@ export class DesignLeftFooter extends LitElement {
     return html`
       ${this.result ? html`<span class="result">${this.result}</span>` : nothing}
       <div class="actions">
-        <button
-          class="new"
-          type="button"
-          ?disabled=${this.busy}
-          title="Create new session"
-          @click=${this._onNew}
-        >
-          Create new
-        </button>
+        ${this.hideNew
+          ? nothing
+          : html`<button
+              class="new"
+              type="button"
+              ?disabled=${this.busy}
+              title="Create new session"
+              @click=${this._onNew}
+            >
+              Create new
+            </button>`}
         <button
           class="save ${this.busy ? 'saving' : ''}"
           type="button"

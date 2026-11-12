@@ -628,6 +628,11 @@ class PromptSessionsAPI:
                      WHERE ps.user_id = %s
                        AND ps.metadata->>'session_type' = 'design_tab'
                        AND ps.metadata->>'design_tab' = %s
+                     /* ONE TAB, ONE ROW. A stray row used to win the read at random
+                        (no order at all). The row that already holds a conversation
+                        wins, then the newest; an empty duplicate can never shadow the
+                        session that carries the work. */
+                     ORDER BY (c.id IS NOT NULL) DESC, ps.updated_at DESC
                      LIMIT 1
                     """,
                     (user_id, tab),

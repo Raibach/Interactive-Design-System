@@ -27,7 +27,6 @@ load_dotenv(override=True)
 # environment variable can turn one back on.
 
 from fastapi import FastAPI, Request
-from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import FileResponse
@@ -48,12 +47,6 @@ app = FastAPI(
     docs_url=None,
     redoc_url=None,
 )
-
-# THE WIRE IS COMPRESSED (2026-11-11). The build's biggest chunk is 5.0 MB of JavaScript; served
-# raw through the tunnel it measured 19 s, and the browser gave up on dynamic imports with
-# "Failed to fetch dynamically imported module". The same file gzips to ~810 kB, so every JS,
-# CSS and HTML response now goes out compressed when the client asks for it.
-app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 # Configure CORS
 app.add_middleware(

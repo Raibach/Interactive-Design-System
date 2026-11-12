@@ -134,6 +134,27 @@ export class UxAppFrame extends LitElement {
     this._locationTimer = window.setInterval(read, 400) as unknown as number;
   }
 
+  /**
+   * THE CHAT CAN MOVE THE APPLICATION. The frame is same-origin, so a place is a path this page
+   * may set. The chat dispatches `ux-app-navigate` with `{ path }`; it is refused unless the
+   * path is under the application's own door (`/posthog`), so a reply can never steer the frame
+   * somewhere the room did not mount. A missing frame is said in the console, not swallowed.
+   */
+  private _onNavigate = (event: Event): void => {
+    const path = String((event as CustomEvent<{ path?: string }>).detail?.path || '');
+    if (!path.startsWith('/posthog')) {
+      console.error(`[ux-app-frame] refused a navigation outside /posthog: ${path}`);
+      return;
+    }
+    const iframe = this.renderRoot.querySelector('iframe') as HTMLIFrameElement | null;
+    const win = iframe?.contentWindow;
+    if (!win) {
+      console.error('[ux-app-frame] the chat asked for a navigation but no frame is drawn.');
+      return;
+    }
+    win.location.assign(path);
+  };
+
   private _stopLocationWatch(): void {
     if (this._locationTimer !== null) {
       window.clearInterval(this._locationTimer);
@@ -141,7 +162,13 @@ export class UxAppFrame extends LitElement {
     }
   }
 
+  connectedCallback(): void {
+    super.connectedCallback();
+    window.addEventListener('ux-app-navigate', this._onNavigate);
+  }
+
   disconnectedCallback(): void {
+    window.removeEventListener('ux-app-navigate', this._onNavigate);
     this._stopLocationWatch();
     super.disconnectedCallback();
   }

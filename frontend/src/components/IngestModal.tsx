@@ -1252,7 +1252,14 @@ export function IngestModal({ open, onClose, apiFetch, sessionId, sessionTitle, 
       // against THE DOCUMENT instead, which does have an origin, so `from 'lit'` works untouched
       // and the pane renders the bytes the ingest produced rather than a rewritten copy of them.
       '<script type="importmap">' +
-      JSON.stringify({ imports: { lit: new URL("/@id/lit", window.location.origin).href } }) +
+      JSON.stringify({
+        imports: {
+          lit: (import.meta.env.PROD
+            ? new URL('/id/lit.js', window.location.origin)
+            : new URL('/@id/lit', window.location.origin)
+          ).href,
+        },
+      }) +
       "</script>" +
       "<style>" +
       // NOT RESPONSIVE. The component is drawn at the size it was designed at — 775px wide

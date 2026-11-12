@@ -1,5 +1,7 @@
 # Product room changelog
 
+> **READ FIRST.** Every time you work in this folder, read the latest entry and orient on what we're currently working on, then pick up from there. This is the only record of this folder's work.
+
 ## 2026-10-24 — the Product owns its voice
 
 - `useProductThread.ts` holds the room's thread line and its draft canvas's design system. The

@@ -2,12 +2,12 @@
  * <DesignBox> — THE DESIGN TAB'S OWN CONTENT AREA.
  *
  * The room used to be a branch of the shell's sandbox, with its ground painted by the sandbox's
- * workspace slot. The box owns both now: the light design sheet over the room's plum, the room
- * root the tab gate hides in the click's own frame, and the lazy room inside it.
+ * workspace slot. The box owns both now: the light design sheet, the room root the tab gate
+ * hides in the click's own frame, and the lazy room inside it.
  *
  * The ground is the existing `design-section2-bkg.webp` at the same 100% × 100% stretch the
  * sandbox used. It sits behind everything, so the chat column and the console's cards draw over
- * it. The room's own cover paints the same sheet again while the design console lands.
+ * it.
  */
 import designSectionBackground from '@/assets/design-section2-bkg.webp';
 
@@ -28,7 +28,6 @@ export function DesignBox() {
         minHeight: 0,
         minWidth: 0,
         overflow: 'hidden',
-        backgroundColor: '#582846',
       }}
     >
       {/* THE ROOM'S OWN GROUND — the sheet the sandbox painted, now the room's. */}
@@ -42,7 +41,6 @@ export function DesignBox() {
           width: '100%',
           height: '100%',
           objectFit: 'fill',
-          backgroundColor: '#582846',
         }}
       />
       {/* THE ROOM ROOT. The marker names the room's root; the key keeps React from recycling the

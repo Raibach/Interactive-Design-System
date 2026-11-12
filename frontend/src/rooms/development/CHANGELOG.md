@@ -1,5 +1,7 @@
 # Development room changelog
 
+> **READ FIRST.** Every time you work in this folder, read the latest entry and orient on what we're currently working on, then pick up from there. This is the only record of this folder's work.
+
 ## 2026-10-24 — the room owns its ground, its refs and its seat binding (Step 1 of five)
 
 - **The person sees the same room.** Development opens straight in: the paper lab tile behind both

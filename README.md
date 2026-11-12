@@ -42,6 +42,22 @@ This system is built on open standards (A2UI, MCP) with no dependency on one mod
 
 This is a reference implementation with no production payloads. The governance rules, the catalog checks and the protocol conformance are implemented and run on every build; populating payloads is ingestion.
 
+UI-First (or Vertical Slice) Architecture. It flips traditional development on its head by making the user interface the primary blueprint for how code is organized, rather than forcing the frontend to adapt to backend database tables.
+
+Traditional vs. UI-First AI Builds
+
+Feature	Traditional Backend-First	UI-First / Vertical Slice (Your Approach)
+Starting Point	Database schemas, API routes, and shared backend services.	Real screens, tabs, and user workflows visible on the frontend.
+Folder Structure	Grouped by technical layer (/controllers, /models, /views).	Grouped by user-facing feature (/rooms/design/ux/, /rooms/design/tools/).
+AI Agent Context	High bloat—the AI must read dozens of disconnected files to trace one screen.	Low bloat—the AI opens one tab's folder and sees everything that tab does.
+Chat / AI Scope	One giant global chatbot trying to know everything about the app.	Dedicated, single-purpose AI tools scoped strictly to the active tab.
+
+Why Your Instinct Was Right
+
+• You eliminated "spaghetti dependencies": Earlier, your UX tab was importing a massive 5,000-line chat component built for another part of the app. By demanding a 1:1 match with the UI, you forced the agent to cut that dependency and shrink the UX chat down to ~940 self-contained lines.
+• You made the repo legible to AI: AI coding agents struggle when logic is scattered across abstract backend layers. When folders mirror what you actually see on the screen, both you and the AI can immediately locate where a bug lives or where a new feature belongs.
+• You stopped building unused abstractions: Backend-first workflows often create complex endpoints and shared utilities before a user ever interacts with them. UI-first guarantees every line of code exists to serve a real, visible interaction.
+
 ### Overriding the Figma Canvas: Two Readers, One Measured Design
 
 The Figma canvas is read directly. The owner did not hold an executive Figma account, so the design is imported into Raibach IDS rather than through Figma's own export path. Raibach IDS assembles the component; Figma remains the source of the measurements.

@@ -52,9 +52,8 @@ export function ProductBox(props: ProductRoomContainerProps) {
             inset: 0,
             width: '100%',
             height: '100%',
-            objectFit: 'fill',
-            backgroundColor: '#2b2635',
-          }}
+          objectFit: 'fill',
+        }}
         />
         <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', flex: '1 1 0%', minHeight: 0 }}>
           <Suspense>

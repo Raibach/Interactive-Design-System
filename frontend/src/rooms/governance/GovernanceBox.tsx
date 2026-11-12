@@ -2,8 +2,8 @@
  * <GovernanceBox> — THE GOVERNANCE TAB'S OWN CONTENT AREA.
  *
  * The room used to draw inside the shell's sandbox, with the sandbox's workspace slot painting
- * the wave. The box owns the ground now: the wave at cover/centre over the room's floor, the
- * same drawing the shell used, and the room root carried by <GovernanceRoom> stays inside it.
+ * the wave. The box owns the ground now: the wave at cover/centre, the same drawing the shell
+ * used, and the room root carried by <GovernanceRoom> stays inside it.
  */
 import dataWave4Background from '@/assets/data-wave4-flipped.webp';
 
@@ -29,7 +29,6 @@ export function GovernanceBox(props: GovernanceRoomContainerProps) {
         minHeight: 0,
         minWidth: 0,
         overflow: 'hidden',
-        backgroundColor: '#2b2635',
       }}
     >
       {/* THE ROOM'S OWN GROUND — the wave the sandbox painted, now the room's. */}

@@ -1,8 +1,8 @@
 /**
  * <ConsoleBox> — THE CONSOLE TAB'S OWN CONTENT AREA.
  *
- * The box owns the console's own ground — the dark plum and the waves video that the shared
- * sandbox used to paint — and mounts the room inside it. The shell mounts this box only
+ * The box owns the console's own ground — the waves video that the shared sandbox used to
+ * paint — and mounts the room inside it. The shell mounts this box only
  * while the Console tab is selected, exactly as it mounts the Product box.
  */
 import { Suspense, lazy } from 'react';
@@ -29,7 +29,6 @@ export function ConsoleBox(props: ConsoleRoomContainerProps) {
         minHeight: 0,
         minWidth: 0,
         overflow: 'hidden',
-        backgroundColor: '#270F31',
       }}
     >
       {/* THE CONSOLE'S OWN GROUND — the same waves the sandbox painted, now the room's. */}

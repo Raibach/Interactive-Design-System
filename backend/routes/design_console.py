@@ -93,6 +93,7 @@ def design_card(
     category_color: str = "",
     category_title_color: str = "",
     category_text_color: str = "",
+    surface: str = "",
 ) -> dict[str, Any]:
     """One card in the Design console's shape. THE ONLY BUILDER OF THIS SHAPE.
 
@@ -117,6 +118,10 @@ def design_card(
         "locked": locked,
         "routing": routing or {},
         "reviewer": reviewer,
+        # THE SEAT THE SESSION'S FUNCTION BELONGS TO. A kept UX visit is a design session like
+        # the Tools visits, and its card must be able to say which tab reopens it. Empty for
+        # every card that is not a kept session of a bespoke tab.
+        "surface": surface,
         "category": DESIGN_CONSOLE_CATEGORY,
         # THE LABEL EVERY SURFACE SHOWS. The category above is the palette key; this is what
         # the card says, so the console and this room draw the same words over the same record.
@@ -660,6 +665,9 @@ def design_console(x_user_id: str | None = Header(None, alias="X-User-ID")) -> l
                 reviewer=str(_meta.get("reviewer") or ""),
                 created_at=_row.get("created_at"),
                 last_used=_row.get("updated_at") or _row.get("last_accessed_at"),
+                # WHICH TAB'S SESSION THIS CARD REOPENS. The save writes `surface: 'ux'`; every
+                # other kept session has no surface and opens the Tools tab as before.
+                surface=str(_meta.get("surface") or ""),
             )
         )
 
@@ -926,6 +934,10 @@ def design_card_read(
             reviewer=str(meta.get("reviewer") or ""),
             created_at=row.get("created_at"),
             last_used=row.get("updated_at") or row.get("last_accessed_at"),
+            # THE SAVED CARD KEEPS THE TAB IT BELONGS TO. The console's grid and the single-card
+            # read answer with the same field, so a save's own answer cannot route differently
+            # from the card the next console load draws.
+            surface=str(meta.get("surface") or ""),
             # THE CATEGORY'S COLOURS COME FROM THE RECORD'S OWN JOIN, not a second read.
             category_color=row.get("category_color") or "",
             category_title_color=row.get("category_title_color") or "",
@@ -1019,6 +1031,7 @@ def design_queue(
             reviewer=str(_meta.get("reviewer") or ""),
             created_at=_row.get("created_at"),
             last_used=_row.get("updated_at") or _row.get("last_accessed_at"),
+            surface=str(_meta.get("surface") or ""),
             category_color=cat.get("color") or "",
             category_title_color=cat.get("title_color") or "",
             category_text_color=cat.get("text_color") or "",

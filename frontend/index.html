@@ -190,6 +190,30 @@
           }, 100);
         });
         pin.addEventListener('input', function () { err.className = 'err'; });
+        /* THE DOOR KEEPS THE CARET (owner, 2026-11-11). While the door stands, nothing behind it
+           may take the caret: the application mounts under the curtain, and its rooms' frames
+           pulled the cursor out of the pin box halfway through typing. Any focus that lands
+           outside the door returns to the pin until the pin is submitted. */
+        document.addEventListener('focusin', function (ev) {
+          if (!door.parentNode || door.className === 'waiting') return;
+          if (!door.contains(ev.target)) pin.focus();
+        });
+        /* THE CARET IS HELD UNTIL THE DOOR LIFTS (owner, 2026-11-11). The gate's font arrives a
+           beat after the page (the visible re-draw of the gate text), and that swap makes the
+           browser drop the caret in the pin box; the rooms' frames mounting behind the door can
+           pull focus too. The door re-asserts the pin's caret every quarter second and once the
+           fonts have settled, so nothing carries the caret away before the pin is submitted. */
+        function holdCaret() {
+          if (!door.parentNode || door.className === 'waiting') { clearInterval(hold); return; }
+          if (document.activeElement !== pin) {
+            pin.focus();
+            if (pin.setSelectionRange) pin.setSelectionRange(pin.value.length, pin.value.length);
+          }
+        }
+        var hold = setInterval(holdCaret, 250);
+        if (document.fonts && document.fonts.ready) {
+          document.fonts.ready.then(function () { holdCaret(); });
+        }
         pin.focus();
       })();
     </script>
