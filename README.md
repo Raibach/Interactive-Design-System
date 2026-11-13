@@ -1,7 +1,5 @@
 # Interactive Design System Manager
-
-> **Deterministic runtime protocols, data schemas, and governance architectures - One surface. Any payload. AI fills the slots.**
-**Raibach Interactive Design Systems** · John Holt  
+Raibach Interactive Design Systems** · John Holt  
 
 ## Demo: Wireframe interactive prototype
 https://astragalar-santa-unbelligerently.ngrok-free.dev
