@@ -153,14 +153,45 @@ contract can evaluate.
 | Palette carries the contract | Built. `_draft_safe_palette` includes it. |
 | Dry test | Built. `backend/test_accessibility_contract.py` exercises the failure, the approval, and the composition refusal. |
 
-## What remains
+## What the gate enforces today
+
+| Check | State |
+| --- | --- |
+| The four declarations are present and each names its source | Enforced at approval. `role`, `label`, `keyboard`, and `announcement`; a value with no allowed source is a finding. |
+| Every WCAG identifier exists in the vendored standard | Enforced. An identifier the JSON-LD does not contain is `UNKNOWN_WCAG_CRITERION`, never a silent pass. |
+| Every criterion names a verification mode | Enforced. `automated`, `manual`, or `unverified`. |
+| The contract is complete before the catalogue write | Enforced at approval. An incomplete contract returns HTTP 503 with the missing declarations, and the catalogue is unchanged. |
+| The contract travels with the entry | Enforced. The catalogue entry and the allowlist entry hold the block; the palette includes it. |
+| The composition names a certified component | Enforced. An entry whose block is incomplete is refused at composition. |
+| Every property the contract marks required is present and non-empty | Enforced at composition. A missing or blank property is `ACCESSIBILITY_PROPERTY_MISSING`. |
+
+## What the gate does not enforce yet
+
+These are the six generative failure modes the contract is built around. The contract carries each
+rule's vocabulary and shape; the checks that need the rendered element's own facts are the next
+increment.
+
+| Failure mode | What the check needs | State |
+| --- | --- | --- |
+| Placeholder-only labeling | A forbidden-value list for the accessible name: the component name, the property name, an empty string, `undefined`, and the generic words a model reaches for (`Button`, `Image`, `Label`). | Not enforced. The gate checks presence and a non-empty value; it does not yet refuse a generic word. |
+| A container pretending to be a button | The component's declared type and the generated element's role; an action binding must appear only on an interactive type, and the element must carry a role or be a native button. | Not enforced. The contract records the type; the composition gate does not yet test the action binding. |
+| Hallucinated alternative text | A source for the accessible name, recorded as the Figma node and fact. | Partly enforced. The label must come from a text layer or a declaration; a guessed value has no allowed source. There is no accuracy check against the design. |
+| Visual-only structure | The node's visual role (heading, region, list) and the element's semantic role. | Not enforced. The contract has no heading or region rule yet. |
+| Colour-only state | A comparison of state variants: if only fill or stroke changes, the rule fails unless text, icon, or an announced state also changes. | Not enforced. The fact table records fills and effects; the variant comparison is not written. |
+| Suppressed focus | A focus-variant fact and a visible focus style in the generated element. | Not enforced. The fact table has no focus-indicator fact and the generated source has no focus style. |
+
+## What the measurement adds
 
 The contract states its criteria but does not yet run an automated contrast or target-size
-measurement against the rendered element. Those criteria are declared with their WCAG identifiers
-and their verification mode; the measurement that would turn a manual claim into evidence is the
-next increment. The same is true of the six failure-mode rules: the contract carries the
-vocabulary and the shape, and the rules that need the rendered element's own facts will be
-checked when the measurement is added.
+measurement against the rendered element. When that measurement lands, three things become
+possible:
+
+- **Contrast (WCAG 1.4.3).** Compute the ratio from the text fill and the surface fill when both
+  are solid. When the surface is an image or a gradient, the criterion stays manual and the
+  contract records the gap rather than inventing a number.
+- **Target size (WCAG 2.5.8).** Measure the node's width and height against the minimum.
+- **Evidence.** Attach the measurement's artifact to the criterion, so an `automated` claim has a
+  record behind it. Today the verification mode is declared; the evidence is the next increment.
 
 ## The demonstration
 
