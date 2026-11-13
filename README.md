@@ -1,5 +1,4 @@
 # Interactive Design System Manager
-Raibach Interactive Design Systems · John Holt  
 
 ## Demo: Wireframe interactive prototype
 https://astragalar-santa-unbelligerently.ngrok-free.dev
