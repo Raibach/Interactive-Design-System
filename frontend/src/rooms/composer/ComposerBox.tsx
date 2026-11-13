@@ -3,13 +3,21 @@
  *
  * The room used to draw inside the shell's sandbox, with the sandbox's workspace slot painting
  * the ground and the sandbox's fixed slot routing choosing between the spinner and the surface.
- * The box owns both now: the composer image, the surface host and its spinner, and the
- * renderer the model's tree is written into.
+ * The box owns both now: the composer image over the room's plum, the surface host and its
+ * spinner, and the renderer the model's tree is written into.
  *
  * THE LEFT NAV IS OURS AND STAYS ABOVE THE ROOM (root z 50, panel 55, logo 60). The box sits at
  * 40, as the other rooms do, so the R logo and the navigation it opens are never covered.
  */
 import composerBackground from '@/assets/composer-image-bg.webp';
+
+/* THE GROUND IS DECODED AT BOOT, not on the press (owner, 2026-11-12). On a cold load the
+   browser downloads the ground only when this box mounts, so the room's flat base colour stood
+   alone while the image came down. Decoding it at boot means a press paints the finished ground
+   in the click's own frame. */
+const _groundPreload = new Image();
+_groundPreload.src = composerBackground;
+if (_groundPreload.decode) _groundPreload.decode().catch(() => {});
 
 import { Suspense, lazy } from 'react';
 import type { ComposerRoomProps } from '@/rooms/composer/ComposerRoom';
@@ -37,8 +45,9 @@ export function ComposerBox(props: ComposerRoomProps) {
         minHeight: 0,
         minWidth: 0,
         overflow: 'hidden',
-        /* THE ROOM'S OWN GROUND — the composer image the sandbox painted, stretched exactly
-           as it was. */
+        backgroundColor: '#582846',
+        /* THE ROOM'S OWN GROUND — the composer image the sandbox painted, stretched over the
+           room's plum exactly as it was. */
         backgroundImage: `url(${composerBackground})`,
         backgroundSize: '100% 100%',
         backgroundRepeat: 'no-repeat',

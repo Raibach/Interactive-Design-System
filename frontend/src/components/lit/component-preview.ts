@@ -1108,11 +1108,12 @@ export class ComponentPreview extends LitElement {
     const parent = this.parentElement;
     if (!parent) return;
     const apply = () => {
-      // MEASURED, NOT GUESSED: the pane takes the column's own box, so fifty percent of it is the
-      // column's centre. `width: 100%` resolved to zero here because the element is slotted, and a
-      // ring centred in a zero-width box is not centred — it is invisible.
+      // MEASURED, NOT GUESSED: `width: 100%` resolved to zero here because the element is
+      // slotted, and a ring centred in a zero-width box is not centred — it is invisible. The
+      // height is NOT pinned: the column tracks its content now, and pinning this height to a
+      // content-sized parent would feed its own measurement back into itself and grow without
+      // end. The wait box keeps its own floor, so the ring always has a centre.
       this.style.width = `${parent.clientWidth}px`;
-      this.style.height = `${parent.clientHeight}px`;
     };
     apply();
     if (!this._pendingObserver) {
@@ -1138,8 +1139,9 @@ export class ComponentPreview extends LitElement {
     if (this.preview?.pending) {
       const steps = this.preview.steps ?? [];
       return html`<div class="pending">
-        <span class="bigspin" aria-hidden="true"></span>
-        <p class="ptext">${this.preview.note || "Processing — reading the Figma file. Standby."}</p>
+          <span class="bigspin" aria-hidden="true"></span>
+          <p class="ptext">${this.preview.note || "Processing — reading the Figma file. Standby."}</p>
+        </div>
         ${steps.length
           ? html`<details class="acc" open>
               <summary>The run so far — ${steps.length} step${steps.length === 1 ? "" : "s"}</summary>
@@ -1149,8 +1151,7 @@ export class ComponentPreview extends LitElement {
                 )}
               </div>
             </details>`
-          : nothing}
-      </div>`;
+          : nothing}`;
     }
     // NO RUN YET. Said in words: an empty pane and a preview of nothing are different claims.
     if (this.preview === undefined || this.preview === null) {

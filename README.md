@@ -10,8 +10,14 @@ https://astragalar-santa-unbelligerently.ngrok-free.dev
 Demo pin: (see resume)
 
 > The **A2UI Protocol v0.9.1 implementation & conformance specification** — every normative requirement of the protocol mapped, file by file, to the code that implements it, with an honest built/pending status map.
->
-> **🧭 How this repo is run:** [`READ-ME/THE_METHOD.md`](READ-ME/THE_METHOD.md) — live-verification design engineering. Claims are hypotheses; only observed runtime behavior is knowledge. Includes the suppression taxonomy and the AI-session steering procedure.
+
+The stack, in one line each:
+
+- TypeScript throughout the frontend — React for the shell, Lit for the components, Vite to build, Tailwind for styles.
+- Python and FastAPI on the backend — the API, the routes, and the surface assembly.
+- PostgreSQL — the one database; sessions, conversations, cards, and activity all live in its tables.
+- Milvus — the vector store, for memory and for search over the ingested components.
+- The model provider — DeepSeek, reached through the single teacher turn.
 
 ---
 
@@ -42,21 +48,26 @@ This system is built on open standards (A2UI, MCP) with no dependency on one mod
 
 This is a reference implementation with no production payloads. The governance rules, the catalog checks and the protocol conformance are implemented and run on every build; populating payloads is ingestion.
 
-UI-First (or Vertical Slice) Architecture. It flips traditional development on its head by making the user interface the primary blueprint for how code is organized, rather than forcing the frontend to adapt to backend database tables.
+## Vertical Slice Architecture
 
-Traditional vs. UI-First AI Builds
+This repository is organized by what a person sees and does, not by technical layer. Each tab of the studio is one self-contained slice: the folder for a tab holds everything that tab needs — its interface, its conversation, its session handling, and its own process — and nothing it does depends on another tab's folder.
 
-Feature	Traditional Backend-First	UI-First / Vertical Slice (Your Approach)
-Starting Point	Database schemas, API routes, and shared backend services.	Real screens, tabs, and user workflows visible on the frontend.
-Folder Structure	Grouped by technical layer (/controllers, /models, /views).	Grouped by user-facing feature (/rooms/design/ux/, /rooms/design/tools/).
-AI Agent Context	High bloat—the AI must read dozens of disconnected files to trace one screen.	Low bloat—the AI opens one tab's folder and sees everything that tab does.
-Chat / AI Scope	One giant global chatbot trying to know everything about the app.	Dedicated, single-purpose AI tools scoped strictly to the active tab.
+- **Feature-based organization.** The Tools tab lives in `frontend/src/rooms/design/tools/` with its own chat, its own conversation file, and its own session contract; the UX tab lives in `frontend/src/rooms/design/ux/`. A change to one tab cannot reach into another tab's files.
+- **End-to-end implementation.** A slice runs through every layer its work needs. The Tools tab's session lifecycle is owned by its own backend file, `backend/routes/tools_session.py`, not by a shared store that every other tab also reads. What a slice does, it does from its own folder.
+- **No shared abstractions.** There is no generic repository or service layer standing between the tabs. Each slice takes the simplest implementation its own work needs; nothing is forced through a common path that would couple one tab's behavior to another's.
+- **Localized changes.** Because a feature is one folder, a repair stays inside that folder. The working rule this repository follows is that a fix for one tab may not borrow a shared helper at another tab's expense; when two tabs' rules differ, each tab owns its own file.
 
-Why Your Instinct Was Right
+**The complete stack.**
 
-• You eliminated "spaghetti dependencies": Earlier, your UX tab was importing a massive 5,000-line chat component built for another part of the app. By demanding a 1:1 match with the UI, you forced the agent to cut that dependency and shrink the UX chat down to ~940 self-contained lines.
-• You made the repo legible to AI: AI coding agents struggle when logic is scattered across abstract backend layers. When folders mirror what you actually see on the screen, both you and the AI can immediately locate where a bug lives or where a new feature belongs.
-• You stopped building unused abstractions: Backend-first workflows often create complex endpoints and shared utilities before a user ever interacts with them. UI-first guarantees every line of code exists to serve a real, visible interaction.
+- **The A2UI Protocol v0.9.1 implementation & conformance specification** — every normative requirement of the protocol mapped, file by file, to the code that implements it, with an honest built/pending status map.
+- **TypeScript** throughout the frontend — React for the shell, Lit for the components, Vite to build, Tailwind for styles.
+- **Python and FastAPI** on the backend — the API, the routes, and the surface assembly.
+- **PostgreSQL** — the one database; sessions, conversations, cards, and activity all live in its tables.
+- **Milvus** — the vector store, for memory and for search over the ingested components.
+- **The model provider** — DeepSeek, reached through the single teacher turn.
+- **The slices, one folder per seat** — the shell, `console`, `composer`, `design` (with `chat`, `tools`, `ux`, `review`, `cards`, and `console`), `product`, `governance`, and `development` in the frontend, with the matching routers in `backend/routes/`.
+
+This is the pattern known as Vertical Slice Architecture (VSA): the application is cut vertically, one feature per slice, instead of horizontally across shared layers. It is the reason a defect in one tab can be found and repaired without touching the others, and the reason the interface and its data travel together instead of being assembled from scattered pieces.
 
 ### Overriding the Figma Canvas: Two Readers, One Measured Design
 
@@ -293,7 +304,7 @@ Workspace:      workspace-layout · prompt-section-editor · compiled-output-vie
 | Layer | Technology |
 |-------|-----------|
 | **Frontend** | React 18 + Lit 3.x (hybrid) · Vite · npm · Tailwind · TypeScript |
-| **Backend** | FastAPI · PostgreSQL 15 · Zilliz Cloud (Milvus) · LLM providers (Z.ai GLM primary, DeepSeek) |
+| **Backend** | FastAPI · PostgreSQL 15 · Zilliz Cloud (Milvus) · LLM provider (DeepSeek) |
 | **Components** | Lit Web Components (Shadow DOM) · Figma API spec-driven |
 | **Deploy** | Docker · Northflank (us-central) · Cloudflare Tunnel |
 
@@ -363,7 +374,6 @@ Docker on **Northflank** (`prompt-composer-console`, us-central). Production dep
 ## Documentation
 
 - [`Core-Concept.md`](AGENTS-instructions/Core-Concept.md) — the A2UI operating rules: the architecture facts, the three layers and the component rules
-- [`THE_METHOD.md`](AGENTS-instructions/THE_METHOD.md) — live-verification design engineering: the working doctrine
 - [`THE_ZERO_TRUST_REPAIR.md`](AGENTS-instructions/THE_ZERO_TRUST_REPAIR.md) — the zero-trust repair record, written from measurements
 - [`CHANGELOG.md`](frontend/src/rooms/design/CHANGELOG.md) — the Design room's record: the current work, the audit and the repair plan
 - [`THE_CONVERSATION_CONTRACT.md`](AGENTS-instructions/THE_CONVERSATION_CONTRACT.md) — how the chat and the console behave, as invariants

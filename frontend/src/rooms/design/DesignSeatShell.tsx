@@ -27,6 +27,7 @@
  * not belong to. Switching tabs shows another container; it never empties this one.
  */
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import designSectionBackground from "@/assets/design-section2-bkg.webp";
 import "@/rooms/design/ux/chat";
 /* THE TOOLS TAB'S OWN SEAT — imported here and by nothing else. */
 import "@/rooms/design/tools/tools-chat";
@@ -1078,12 +1079,13 @@ export default function DesignSeatShell({ injected, toolsStanding, toolsVisit, o
           overflow: "hidden",
         }}
       />
-      {/* THE ROOM'S COVER (owner, 2026-10-25, amended 2026-11-12). The wait itself (the ring
-          and the sentence) moved to the shell, which draws it the instant the tab is pressed.
-          The cover paints nothing — no fill and no sheet — so the room's own ground shows
-          through it and no fill flashes during the assembly. It still holds the stage's
-          pointer events until the console lands, so a press cannot reach a half-built
-          surface. */}
+      {/* THE ROOM'S COVER — THE SHEET AND THE DISSOLVE (owner, 2026-10-25). The wait itself
+          (the ring and the sentence) moved to the shell, which draws it the instant the tab is
+          pressed; the sentence keeps its plum because it reads over this light sheet. This
+          cover keeps two jobs: it paints the same sheet the box's ground wears, so the ground
+          never changes, and its 700ms dissolve reveals the interface when the assembler's tree
+          has landed — a fade, never a pop. It draws no ring of its own, so exactly one ring
+          stands. */}
       <div
         aria-hidden={coverDown}
         data-room-cover="design"
@@ -1096,6 +1098,11 @@ export default function DesignSeatShell({ injected, toolsStanding, toolsVisit, o
           alignItems: "center",
           justifyContent: "center",
           gap: 16,
+          backgroundColor: "#582846",
+          backgroundImage: `url(${designSectionBackground})`,
+          backgroundSize: "100% 100%",
+          backgroundRepeat: "no-repeat",
+          backgroundPosition: "top left",
           opacity: coverDown ? 0 : 1,
           transition: "opacity 700ms ease",
           pointerEvents: coverDown ? "none" : "auto",

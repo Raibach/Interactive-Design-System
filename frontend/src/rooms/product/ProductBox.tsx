@@ -18,6 +18,14 @@ import { Suspense, lazy } from 'react';
 import type { ProductRoomContainerProps } from '@/rooms/product/ProductRoomContainer';
 import composerBackground from '@/assets/composer-image-bg.webp';
 
+/* THE GROUND IS DECODED AT BOOT, not on the press (owner, 2026-11-12). On a cold load the
+   browser downloads the ground only when this box mounts, so the room's flat base colour stood
+   alone while the image came down. Decoding it at boot means a press paints the finished ground
+   in the click's own frame. */
+const _groundPreload = new Image();
+_groundPreload.src = composerBackground;
+if (_groundPreload.decode) _groundPreload.decode().catch(() => {});
+
 const ProductRoomContainer = lazy(() =>
   import('@/rooms/product/ProductRoomContainer').then((m) => ({ default: m.ProductRoomContainer })),
 );
@@ -52,8 +60,9 @@ export function ProductBox(props: ProductRoomContainerProps) {
             inset: 0,
             width: '100%',
             height: '100%',
-          objectFit: 'fill',
-        }}
+            objectFit: 'fill',
+            backgroundColor: '#2b2635',
+          }}
         />
         <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', flex: '1 1 0%', minHeight: 0 }}>
           <Suspense>

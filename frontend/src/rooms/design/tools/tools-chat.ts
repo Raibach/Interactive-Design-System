@@ -69,6 +69,7 @@ import '../chat/parts/design-chat-input';
 import '../chat/parts/design-chat-footer';
 import '../chat/parts/design-user-response-bubble';
 import './controls';
+import { toolsSessionId } from './session';
 import historyIcon from '@/assets/figma-chat-history-icon.svg';
 // THE READOUT'S MODEL MARK, handed in by the instance that draws it: the file's own node is
 // #40001124:7096 and its size moved to 20 in the drawing (2026-09-20).
@@ -2293,25 +2294,14 @@ export class ToolsChat extends LitElement {
   }
 
   protected updated(changed: Map<PropertyKey, unknown>): void {
-    /* THE SEAT RESOLVES ITS OWN PACKAGE FROM THE INJECTED DATA (owner, 2026-11-07: the shell is
-       a container and the function lives in this file).
-       TWO SOURCES, IN THIS ORDER. The tools assembly states the row the visit is actually in at
-       `/session/design_session_id` — the tab's own working row, or the kept session or design
-       system a card opened. That is the first answer. The tab packages map is the second: it is
-       how the seat has a home before the tools assembly answers, and it is the tab's own row.
-       A map without a `tools` entry is not a reason to sit idle: the assembly's own id still
-       arrives, and the seat binds to it. */
-    const statedSession = String(
-      (this.dataModel as Record<string, any>)?.session?.design_session_id ?? '',
-    ).trim();
-    const injected = (this as unknown as { designPackages?: Record<string, { packageId?: string }> })
-      .designPackages;
-    const mapSession = String(
-      injected?.tools?.packageId ??
-        (this.dataModel as Record<string, any>)?.console?.design_packages?.tools?.packageId ??
-        '',
-    ).trim();
-    const toolsPackage = statedSession || mapSession;
+    /* THE SEAT RESOLVES ITS OWN PACKAGE FROM ITS OWN ANSWER (owner, 2026-11-07, amended
+       2026-11-12: the seat is sovereign — session.ts holds the contract). ONE SOURCE: the tools
+       assembly states the row the visit is actually in at `/session/design_session_id` — the
+       tab's own working row, or the kept session or design system a card opened. The console's
+       package snapshot is NOT read: a snapshot names the session that is already gone, and
+       borrowing it is how a fresh press opened an old conversation. Until the tools answer
+       arrives the seat stays idle, and that is the honest state. */
+    const toolsPackage = toolsSessionId(this.dataModel);
     if (toolsPackage && toolsPackage !== String(this.sessionId ?? '')) {
       this.sessionId = toolsPackage;
     }

@@ -2,8 +2,8 @@
  * <DevelopmentBox> — THE DEVELOPMENT TAB'S OWN CONTENT AREA.
  *
  * The room used to draw inside the shell's sandbox, with the sandbox's workspace slot painting
- * the lab tile. The box owns the ground now: the same paper tile, repeated at natural size,
- * exactly the values the shell painted. The room root carried by
+ * the lab tile. The box owns the ground now: the same paper tile, repeated at natural size over
+ * the room's dark floor, exactly the values the shell painted. The room root carried by
  * <DevelopmentRoom> stays inside it.
  *
  * THE TOOL IS NOT TOUCHED. The OpenHands application keeps its house patch, its chrome, its
@@ -12,6 +12,14 @@
  * and a ground painted on the panel would travel with the panel while the rail is closed.
  */
 import developmentLabBackground from '@/assets/canvas-development-lab-bkg.webp';
+
+/* THE GROUND IS DECODED AT BOOT, not on the press (owner, 2026-11-12). On a cold load the
+   browser downloads the ground only when this box mounts, so the room's flat base colour stood
+   alone while the image came down. Decoding it at boot means a press paints the finished ground
+   in the click's own frame. */
+const _groundPreload = new Image();
+_groundPreload.src = developmentLabBackground;
+if (_groundPreload.decode) _groundPreload.decode().catch(() => {});
 
 import { Suspense, lazy } from 'react';
 
@@ -34,6 +42,7 @@ export function DevelopmentBox() {
         minHeight: 0,
         minWidth: 0,
         overflow: 'hidden',
+        backgroundColor: '#2b2635',
         /* THE ROOM'S OWN GROUND — the lab tile the sandbox painted, now the room's. A
            graph-paper tile is drawn to REPEAT at natural size, from the top left. */
         backgroundImage: `url(${developmentLabBackground})`,

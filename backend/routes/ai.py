@@ -3636,9 +3636,9 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
                 # A CARD'S SYSTEM OWNS THE CHAT. See above: its row, its thread, its history.
                 design_tools_tab = system_package
             else:
-                design_tools_tab = state.prompt_sessions_api.get_or_create_design_tab(
-                    user_id=uid, tab="tools"
-                )
+                from routes.tools_session import open_tools_working_session
+
+                design_tools_tab = open_tools_working_session(uid)
             if not design_tools_tab:
                 raise HTTPException(
                     status_code=503,

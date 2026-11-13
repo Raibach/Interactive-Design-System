@@ -95,12 +95,11 @@ export class DesignMiddleContainer extends LitElement {
 
       :host {
         display: block;
-        /* THE COLUMN GROWS WITH THE PANEL (owner, 2026-11-09). The host was a fixed 100% with the
-           body clipping what overflowed, which is what turned the output into a scroll box. It is
-           at least the pane's height, and taller when the panel is, so the pane scrolls one
-           document instead of the panel scrolling inside it. */
+        /* THE COLUMN TRACKS ITS CONTENT (owner, 2026-11-12). The host was stretched to at least
+           the pane's full height, so an empty or processing column stood as tall as the room. The
+           column is the height of what it holds now: it grows as the content grows, and the pane
+           is the one scroller when the content is taller than the room. */
         height: auto;
-        min-height: 100%;
         min-width: 0;
         /*
          * THE PANE IS A FLEX CONTAINER, so display:block alone is not enough: a flex child with no
@@ -137,7 +136,6 @@ export class DesignMiddleContainer extends LitElement {
         display: flex;
         flex-direction: column;
         height: auto;
-        min-height: 100%;
         min-width: 0;
         background: rgba(255, 255, 255, 0.5);
       }

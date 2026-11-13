@@ -409,30 +409,24 @@ def design_console(x_user_id: str | None = Header(None, alias="X-User-ID")) -> l
 
     # ── THE TOOLS TAB IS A TAB TOO, AND IT IS RESOLVED HERE LIKE THE OTHER TWO ─────────────────
     #
-    # The map above is read from whatever rows exist, so the Tools tab had no entry whenever its
-    # row was a kept session (a save relabels it) or had been discarded — and the Tools seat, whose
-    # whole identity is that row, had no package to read or send with. The Chat and Console tabs
-    # are resolved on demand below and above for exactly this reason; Tools was the one tab left
-    # to chance. Resolving it here is the same writer, the same one-per-tab guarantee, and the same
-    # shape the console hands every other seat.
+    # The map above is read from whatever rows exist, so the Tools tab has no entry whenever its
+    # row was a kept session (a save relabels it) or had been discarded. The snapshot is a READ
+    # of the Tools tab's own session file — it never creates a visit, and a discarded visit is
+    # absent, not hidden.
+    from routes.tools_session import read_tools_working_session
+
     try:
-        design_tools_tab = state.prompt_sessions_api.get_or_create_design_tab(
-            user_id=x_user_id, tab="tools"
-        )
+        design_tools_tab = read_tools_working_session(x_user_id)
     except Exception as e:  # noqa: BLE001 — a failure to resolve is stated with its cause
         raise HTTPException(
             status_code=503,
             detail=f"DESIGN CONSOLE FAILURE: the Tools tab's package could not be resolved — {e}",
         ) from e
-    if not design_tools_tab:
-        raise HTTPException(
-            status_code=503,
-            detail="DESIGN CONSOLE FAILURE: the Tools tab's package did not resolve (not created).",
-        )
-    design_packages["tools"] = {
-        "packageId": design_tools_tab["packageId"],
-        "conversationId": design_tools_tab["conversationId"],
-    }
+    if design_tools_tab:
+        design_packages["tools"] = {
+            "packageId": design_tools_tab["packageId"],
+            "conversationId": design_tools_tab["conversationId"],
+        }
 
     # ── THE DESIGN SYSTEMS ARE ROWS, AND THEIR CARDS ARE READ LIKE EVERY OTHER CARD ────────────
     #
