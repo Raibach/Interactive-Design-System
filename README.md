@@ -4,7 +4,7 @@
 https://astragalar-santa-unbelligerently.ngrok-free.dev
 Demo pin: (see resume)
 
-> The **A2UI Protocol v0.9.1 implementation & conformance specification** — every normative requirement of the protocol mapped, file by file, to the code that implements it, with an honest built/pending status map.
+> The **A2UI Protocol v0.9.1 implementation & conformance specification** — every normative requirement of the protocol mapped, file by file, to the code that implements it.
 
 The stack, in one line each:
 
