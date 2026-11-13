@@ -648,7 +648,7 @@ def _design_surface_components() -> list[dict[str, Any]]:
     ]
 
 
-def _draft_safe_palette(catalogue: dict[str, Any]) -> list[dict[str, str]]:
+def _draft_safe_palette(catalogue: dict[str, Any]) -> list[dict[str, Any]]:
     """The draft-safe palette: which of THIS catalogue's components may be placed in a draft.
 
     THE MARKER IS THE AUTHORITY, NEVER AN INFERENCE: an entry is placeable when its own
@@ -662,7 +662,7 @@ def _draft_safe_palette(catalogue: dict[str, Any]) -> list[dict[str, str]]:
     is bounded by the same filter, so what the tray offers and what the model may place can
     never disagree. Descriptions ride along when the entry states one (the picker shows them).
     """
-    palette: list[dict[str, str]] = []
+    palette: list[dict[str, Any]] = []
     for name, entry in (catalogue.get("components") or {}).items():
         if not isinstance(entry, dict) or entry.get("draft") is not True:
             continue
@@ -671,8 +671,15 @@ def _draft_safe_palette(catalogue: dict[str, Any]) -> list[dict[str, str]]:
             if isinstance(part, dict) and isinstance(part.get("description"), str) and part["description"]:
                 description = part["description"]
                 break
-        palette.append({"name": name, "description": description})
-    return sorted(palette, key=lambda item: item["name"].lower())
+        row: dict[str, Any] = {"name": name, "description": description}
+        # THE CONTRACT RIDES WITH THE OFFER. The palette is where the model learns what it may
+        # place; an entry that states a contract states it here too, so the requirement is visible
+        # before the first payload rather than only in the refusal after it.
+        accessibility = entry.get("accessibility")
+        if isinstance(accessibility, dict):
+            row["accessibility"] = accessibility
+        palette.append(row)
+    return sorted(palette, key=lambda item: str(item["name"]).lower())
 
 
 def _session_catalog_vocabulary(system: str) -> str:

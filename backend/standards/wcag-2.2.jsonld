@@ -1,0 +1,876 @@
+{
+  "@context": "https://raw.githubusercontent.com/mgifford/w3c-linkedobjects/main/schemas/context.jsonld",
+  "@id": "https://www.w3.org/TR/WCAG22/",
+  "@type": "Standard",
+  "identifier": "WCAG 2.2",
+  "title": "Web Content Accessibility Guidelines (WCAG) 2.2",
+  "version": "2.2",
+  "date": "2023-10-05",
+  "publisher": "W3C",
+  "url": "https://www.w3.org/TR/WCAG22/",
+  "description": "Web Content Accessibility Guidelines (WCAG) 2.2 covers a wide range of recommendations for making Web content more accessible.",
+  "principles": [
+    {
+      "@id": "https://www.w3.org/TR/WCAG22/#perceivable",
+      "@type": "Principle",
+      "identifier": "1",
+      "name": "Perceivable",
+      "description": "Information and user interface components must be presentable to users in ways they can perceive.",
+      "guidelines": [
+        {
+          "@id": "https://www.w3.org/TR/WCAG22/#text-alternatives",
+          "@type": "Guideline",
+          "identifier": "1.1",
+          "name": "Text Alternatives",
+          "description": "Provide text alternatives for any non-text content so that it can be changed into other forms people need, such as large print, braille, speech, symbols or simpler language.",
+          "successCriteria": [
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#non-text-content",
+              "@type": "SuccessCriterion",
+              "identifier": "1.1.1",
+              "name": "Non-text Content",
+              "level": "A",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/non-text-content.html"
+            }
+          ]
+        },
+        {
+          "@id": "https://www.w3.org/TR/WCAG22/#time-based-media",
+          "@type": "Guideline",
+          "identifier": "1.2",
+          "name": "Time-based Media",
+          "description": "Provide alternatives for time-based media.",
+          "successCriteria": [
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#audio-only-and-video-only-prerecorded",
+              "@type": "SuccessCriterion",
+              "identifier": "1.2.1",
+              "name": "Audio-only and Video-only (Prerecorded)",
+              "level": "A",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/audio-only-and-video-only-prerecorded.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#captions-prerecorded",
+              "@type": "SuccessCriterion",
+              "identifier": "1.2.2",
+              "name": "Captions (Prerecorded)",
+              "level": "A",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/captions-prerecorded.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#audio-description-or-media-alternative-prerecorded",
+              "@type": "SuccessCriterion",
+              "identifier": "1.2.3",
+              "name": "Audio Description or Media Alternative (Prerecorded)",
+              "level": "A",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/audio-description-or-media-alternative-prerecorded.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#captions-live",
+              "@type": "SuccessCriterion",
+              "identifier": "1.2.4",
+              "name": "Captions (Live)",
+              "level": "AA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/captions-live.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#audio-description-prerecorded",
+              "@type": "SuccessCriterion",
+              "identifier": "1.2.5",
+              "name": "Audio Description (Prerecorded)",
+              "level": "AA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/audio-description-prerecorded.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#sign-language-prerecorded",
+              "@type": "SuccessCriterion",
+              "identifier": "1.2.6",
+              "name": "Sign Language (Prerecorded)",
+              "level": "AAA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/sign-language-prerecorded.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#extended-audio-description-prerecorded",
+              "@type": "SuccessCriterion",
+              "identifier": "1.2.7",
+              "name": "Extended Audio Description (Prerecorded)",
+              "level": "AAA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/extended-audio-description-prerecorded.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#media-alternative-prerecorded",
+              "@type": "SuccessCriterion",
+              "identifier": "1.2.8",
+              "name": "Media Alternative (Prerecorded)",
+              "level": "AAA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/media-alternative-prerecorded.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#audio-only-live",
+              "@type": "SuccessCriterion",
+              "identifier": "1.2.9",
+              "name": "Audio-only (Live)",
+              "level": "AAA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/audio-only-live.html"
+            }
+          ]
+        },
+        {
+          "@id": "https://www.w3.org/TR/WCAG22/#adaptable",
+          "@type": "Guideline",
+          "identifier": "1.3",
+          "name": "Adaptable",
+          "description": "Create content that can be presented in different ways without losing information or structure.",
+          "successCriteria": [
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#info-and-relationships",
+              "@type": "SuccessCriterion",
+              "identifier": "1.3.1",
+              "name": "Info and Relationships",
+              "level": "A",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/info-and-relationships.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#meaningful-sequence",
+              "@type": "SuccessCriterion",
+              "identifier": "1.3.2",
+              "name": "Meaningful Sequence",
+              "level": "A",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/meaningful-sequence.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#sensory-characteristics",
+              "@type": "SuccessCriterion",
+              "identifier": "1.3.3",
+              "name": "Sensory Characteristics",
+              "level": "A",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/sensory-characteristics.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#orientation",
+              "@type": "SuccessCriterion",
+              "identifier": "1.3.4",
+              "name": "Orientation",
+              "level": "AA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/orientation.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#identify-input-purpose",
+              "@type": "SuccessCriterion",
+              "identifier": "1.3.5",
+              "name": "Identify Input Purpose",
+              "level": "AA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/identify-input-purpose.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#identify-purpose",
+              "@type": "SuccessCriterion",
+              "identifier": "1.3.6",
+              "name": "Identify Purpose",
+              "level": "AAA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/identify-purpose.html"
+            }
+          ]
+        },
+        {
+          "@id": "https://www.w3.org/TR/WCAG22/#distinguishable",
+          "@type": "Guideline",
+          "identifier": "1.4",
+          "name": "Distinguishable",
+          "description": "Make it easier for users to see and hear content including separating foreground from background.",
+          "successCriteria": [
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#use-of-color",
+              "@type": "SuccessCriterion",
+              "identifier": "1.4.1",
+              "name": "Use of Color",
+              "level": "A",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#audio-control",
+              "@type": "SuccessCriterion",
+              "identifier": "1.4.2",
+              "name": "Audio Control",
+              "level": "A",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/audio-control.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#contrast-minimum",
+              "@type": "SuccessCriterion",
+              "identifier": "1.4.3",
+              "name": "Contrast (Minimum)",
+              "level": "AA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#resize-text",
+              "@type": "SuccessCriterion",
+              "identifier": "1.4.4",
+              "name": "Resize Text",
+              "level": "AA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/resize-text.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#images-of-text",
+              "@type": "SuccessCriterion",
+              "identifier": "1.4.5",
+              "name": "Images of Text",
+              "level": "AA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/images-of-text.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#contrast-enhanced",
+              "@type": "SuccessCriterion",
+              "identifier": "1.4.6",
+              "name": "Contrast (Enhanced)",
+              "level": "AAA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/contrast-enhanced.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#low-or-no-background-audio",
+              "@type": "SuccessCriterion",
+              "identifier": "1.4.7",
+              "name": "Low or No Background Audio",
+              "level": "AAA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/low-or-no-background-audio.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#visual-presentation",
+              "@type": "SuccessCriterion",
+              "identifier": "1.4.8",
+              "name": "Visual Presentation",
+              "level": "AAA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/visual-presentation.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#images-of-text-no-exception",
+              "@type": "SuccessCriterion",
+              "identifier": "1.4.9",
+              "name": "Images of Text (No Exception)",
+              "level": "AAA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/images-of-text-no-exception.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#reflow",
+              "@type": "SuccessCriterion",
+              "identifier": "1.4.10",
+              "name": "Reflow",
+              "level": "AA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/reflow.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#non-text-contrast",
+              "@type": "SuccessCriterion",
+              "identifier": "1.4.11",
+              "name": "Non-text Contrast",
+              "level": "AA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#text-spacing",
+              "@type": "SuccessCriterion",
+              "identifier": "1.4.12",
+              "name": "Text Spacing",
+              "level": "AA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/text-spacing.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#content-on-hover-or-focus",
+              "@type": "SuccessCriterion",
+              "identifier": "1.4.13",
+              "name": "Content on Hover or Focus",
+              "level": "AA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/content-on-hover-or-focus.html"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "@id": "https://www.w3.org/TR/WCAG22/#operable",
+      "@type": "Principle",
+      "identifier": "2",
+      "name": "Operable",
+      "description": "User interface components and navigation must be operable.",
+      "guidelines": [
+        {
+          "@id": "https://www.w3.org/TR/WCAG22/#keyboard-accessible",
+          "@type": "Guideline",
+          "identifier": "2.1",
+          "name": "Keyboard Accessible",
+          "description": "Make all functionality available from a keyboard.",
+          "successCriteria": [
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#keyboard",
+              "@type": "SuccessCriterion",
+              "identifier": "2.1.1",
+              "name": "Keyboard",
+              "level": "A",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/keyboard.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#no-keyboard-trap",
+              "@type": "SuccessCriterion",
+              "identifier": "2.1.2",
+              "name": "No Keyboard Trap",
+              "level": "A",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/no-keyboard-trap.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#keyboard-no-exception",
+              "@type": "SuccessCriterion",
+              "identifier": "2.1.3",
+              "name": "Keyboard (No Exception)",
+              "level": "AAA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/keyboard-no-exception.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#character-key-shortcuts",
+              "@type": "SuccessCriterion",
+              "identifier": "2.1.4",
+              "name": "Character Key Shortcuts",
+              "level": "A",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/character-key-shortcuts.html"
+            }
+          ]
+        },
+        {
+          "@id": "https://www.w3.org/TR/WCAG22/#enough-time",
+          "@type": "Guideline",
+          "identifier": "2.2",
+          "name": "Enough Time",
+          "description": "Provide users enough time to read and use content.",
+          "successCriteria": [
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#timing-adjustable",
+              "@type": "SuccessCriterion",
+              "identifier": "2.2.1",
+              "name": "Timing Adjustable",
+              "level": "A",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/timing-adjustable.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#pause-stop-hide",
+              "@type": "SuccessCriterion",
+              "identifier": "2.2.2",
+              "name": "Pause, Stop, Hide",
+              "level": "A",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/pause-stop-hide.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#no-timing",
+              "@type": "SuccessCriterion",
+              "identifier": "2.2.3",
+              "name": "No Timing",
+              "level": "AAA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/no-timing.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#interruptions",
+              "@type": "SuccessCriterion",
+              "identifier": "2.2.4",
+              "name": "Interruptions",
+              "level": "AAA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/interruptions.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#re-authenticating",
+              "@type": "SuccessCriterion",
+              "identifier": "2.2.5",
+              "name": "Re-authenticating",
+              "level": "AAA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/re-authenticating.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#timeouts",
+              "@type": "SuccessCriterion",
+              "identifier": "2.2.6",
+              "name": "Timeouts",
+              "level": "AAA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/timeouts.html"
+            }
+          ]
+        },
+        {
+          "@id": "https://www.w3.org/TR/WCAG22/#seizures-and-physical-reactions",
+          "@type": "Guideline",
+          "identifier": "2.3",
+          "name": "Seizures and Physical Reactions",
+          "description": "Do not design content in a way that is known to cause seizures or physical reactions.",
+          "successCriteria": [
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#three-flashes-or-below-threshold",
+              "@type": "SuccessCriterion",
+              "identifier": "2.3.1",
+              "name": "Three Flashes or Below Threshold",
+              "level": "A",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/three-flashes-or-below-threshold.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#three-flashes",
+              "@type": "SuccessCriterion",
+              "identifier": "2.3.2",
+              "name": "Three Flashes",
+              "level": "AAA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/three-flashes.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#animation-from-interactions",
+              "@type": "SuccessCriterion",
+              "identifier": "2.3.3",
+              "name": "Animation from Interactions",
+              "level": "AAA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/animation-from-interactions.html"
+            }
+          ]
+        },
+        {
+          "@id": "https://www.w3.org/TR/WCAG22/#navigable",
+          "@type": "Guideline",
+          "identifier": "2.4",
+          "name": "Navigable",
+          "description": "Provide ways to help users navigate, find content, and determine where they are.",
+          "successCriteria": [
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#bypass-blocks",
+              "@type": "SuccessCriterion",
+              "identifier": "2.4.1",
+              "name": "Bypass Blocks",
+              "level": "A",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/bypass-blocks.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#page-titled",
+              "@type": "SuccessCriterion",
+              "identifier": "2.4.2",
+              "name": "Page Titled",
+              "level": "A",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/page-titled.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#focus-order",
+              "@type": "SuccessCriterion",
+              "identifier": "2.4.3",
+              "name": "Focus Order",
+              "level": "A",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/focus-order.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#link-purpose-in-context",
+              "@type": "SuccessCriterion",
+              "identifier": "2.4.4",
+              "name": "Link Purpose (In Context)",
+              "level": "A",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/link-purpose-in-context.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#multiple-ways",
+              "@type": "SuccessCriterion",
+              "identifier": "2.4.5",
+              "name": "Multiple Ways",
+              "level": "AA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/multiple-ways.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#headings-and-labels",
+              "@type": "SuccessCriterion",
+              "identifier": "2.4.6",
+              "name": "Headings and Labels",
+              "level": "AA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/headings-and-labels.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#focus-visible",
+              "@type": "SuccessCriterion",
+              "identifier": "2.4.7",
+              "name": "Focus Visible",
+              "level": "AA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/focus-visible.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#location",
+              "@type": "SuccessCriterion",
+              "identifier": "2.4.8",
+              "name": "Location",
+              "level": "AAA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/location.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#link-purpose-link-only",
+              "@type": "SuccessCriterion",
+              "identifier": "2.4.9",
+              "name": "Link Purpose (Link Only)",
+              "level": "AAA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/link-purpose-link-only.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#section-headings",
+              "@type": "SuccessCriterion",
+              "identifier": "2.4.10",
+              "name": "Section Headings",
+              "level": "AAA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/section-headings.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#focus-not-obscured-minimum",
+              "@type": "SuccessCriterion",
+              "identifier": "2.4.11",
+              "name": "Focus Not Obscured (Minimum)",
+              "level": "AA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured-minimum.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#focus-not-obscured-enhanced",
+              "@type": "SuccessCriterion",
+              "identifier": "2.4.12",
+              "name": "Focus Not Obscured (Enhanced)",
+              "level": "AAA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured-enhanced.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#focus-appearance",
+              "@type": "SuccessCriterion",
+              "identifier": "2.4.13",
+              "name": "Focus Appearance",
+              "level": "AAA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/focus-appearance.html"
+            }
+          ]
+        },
+        {
+          "@id": "https://www.w3.org/TR/WCAG22/#input-modalities",
+          "@type": "Guideline",
+          "identifier": "2.5",
+          "name": "Input Modalities",
+          "description": "Make it easier for users to operate functionality through various inputs beyond keyboard.",
+          "successCriteria": [
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#pointer-gestures",
+              "@type": "SuccessCriterion",
+              "identifier": "2.5.1",
+              "name": "Pointer Gestures",
+              "level": "A",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/pointer-gestures.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#pointer-cancellation",
+              "@type": "SuccessCriterion",
+              "identifier": "2.5.2",
+              "name": "Pointer Cancellation",
+              "level": "A",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/pointer-cancellation.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#label-in-name",
+              "@type": "SuccessCriterion",
+              "identifier": "2.5.3",
+              "name": "Label in Name",
+              "level": "A",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/label-in-name.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#motion-actuation",
+              "@type": "SuccessCriterion",
+              "identifier": "2.5.4",
+              "name": "Motion Actuation",
+              "level": "A",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/motion-actuation.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#target-size-enhanced",
+              "@type": "SuccessCriterion",
+              "identifier": "2.5.5",
+              "name": "Target Size (Enhanced)",
+              "level": "AAA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#concurrent-input-mechanisms",
+              "@type": "SuccessCriterion",
+              "identifier": "2.5.6",
+              "name": "Concurrent Input Mechanisms",
+              "level": "AAA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/concurrent-input-mechanisms.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#dragging-movements",
+              "@type": "SuccessCriterion",
+              "identifier": "2.5.7",
+              "name": "Dragging Movements",
+              "level": "AA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/dragging-movements.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#target-size-minimum",
+              "@type": "SuccessCriterion",
+              "identifier": "2.5.8",
+              "name": "Target Size (Minimum)",
+              "level": "AA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "@id": "https://www.w3.org/TR/WCAG22/#understandable",
+      "@type": "Principle",
+      "identifier": "3",
+      "name": "Understandable",
+      "description": "Information and the operation of user interface must be understandable.",
+      "guidelines": [
+        {
+          "@id": "https://www.w3.org/TR/WCAG22/#readable",
+          "@type": "Guideline",
+          "identifier": "3.1",
+          "name": "Readable",
+          "description": "Make text content readable and understandable.",
+          "successCriteria": [
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#language-of-page",
+              "@type": "SuccessCriterion",
+              "identifier": "3.1.1",
+              "name": "Language of Page",
+              "level": "A",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/language-of-page.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#language-of-parts",
+              "@type": "SuccessCriterion",
+              "identifier": "3.1.2",
+              "name": "Language of Parts",
+              "level": "AA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/language-of-parts.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#unusual-words",
+              "@type": "SuccessCriterion",
+              "identifier": "3.1.3",
+              "name": "Unusual Words",
+              "level": "AAA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/unusual-words.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#abbreviations",
+              "@type": "SuccessCriterion",
+              "identifier": "3.1.4",
+              "name": "Abbreviations",
+              "level": "AAA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/abbreviations.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#reading-level",
+              "@type": "SuccessCriterion",
+              "identifier": "3.1.5",
+              "name": "Reading Level",
+              "level": "AAA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/reading-level.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#pronunciation",
+              "@type": "SuccessCriterion",
+              "identifier": "3.1.6",
+              "name": "Pronunciation",
+              "level": "AAA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/pronunciation.html"
+            }
+          ]
+        },
+        {
+          "@id": "https://www.w3.org/TR/WCAG22/#predictable",
+          "@type": "Guideline",
+          "identifier": "3.2",
+          "name": "Predictable",
+          "description": "Make Web pages appear and operate in predictable ways.",
+          "successCriteria": [
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#on-focus",
+              "@type": "SuccessCriterion",
+              "identifier": "3.2.1",
+              "name": "On Focus",
+              "level": "A",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/on-focus.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#on-input",
+              "@type": "SuccessCriterion",
+              "identifier": "3.2.2",
+              "name": "On Input",
+              "level": "A",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/on-input.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#consistent-navigation",
+              "@type": "SuccessCriterion",
+              "identifier": "3.2.3",
+              "name": "Consistent Navigation",
+              "level": "AA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/consistent-navigation.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#consistent-identification",
+              "@type": "SuccessCriterion",
+              "identifier": "3.2.4",
+              "name": "Consistent Identification",
+              "level": "AA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/consistent-identification.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#change-on-request",
+              "@type": "SuccessCriterion",
+              "identifier": "3.2.5",
+              "name": "Change on Request",
+              "level": "AAA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/change-on-request.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#consistent-help",
+              "@type": "SuccessCriterion",
+              "identifier": "3.2.6",
+              "name": "Consistent Help",
+              "level": "A",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/consistent-help.html"
+            }
+          ]
+        },
+        {
+          "@id": "https://www.w3.org/TR/WCAG22/#input-assistance",
+          "@type": "Guideline",
+          "identifier": "3.3",
+          "name": "Input Assistance",
+          "description": "Help users avoid and correct mistakes.",
+          "successCriteria": [
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#error-identification",
+              "@type": "SuccessCriterion",
+              "identifier": "3.3.1",
+              "name": "Error Identification",
+              "level": "A",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/error-identification.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#labels-or-instructions",
+              "@type": "SuccessCriterion",
+              "identifier": "3.3.2",
+              "name": "Labels or Instructions",
+              "level": "A",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/labels-or-instructions.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#error-suggestion",
+              "@type": "SuccessCriterion",
+              "identifier": "3.3.3",
+              "name": "Error Suggestion",
+              "level": "AA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/error-suggestion.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#error-prevention-legal-financial-data",
+              "@type": "SuccessCriterion",
+              "identifier": "3.3.4",
+              "name": "Error Prevention (Legal, Financial, Data)",
+              "level": "AA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/error-prevention-legal-financial-data.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#help",
+              "@type": "SuccessCriterion",
+              "identifier": "3.3.5",
+              "name": "Help",
+              "level": "AAA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/help.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#error-prevention-all",
+              "@type": "SuccessCriterion",
+              "identifier": "3.3.6",
+              "name": "Error Prevention (All)",
+              "level": "AAA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/error-prevention-all.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#redundant-entry",
+              "@type": "SuccessCriterion",
+              "identifier": "3.3.7",
+              "name": "Redundant Entry",
+              "level": "A",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/redundant-entry.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#accessible-authentication-minimum",
+              "@type": "SuccessCriterion",
+              "identifier": "3.3.8",
+              "name": "Accessible Authentication (Minimum)",
+              "level": "AA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/accessible-authentication-minimum.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#accessible-authentication-enhanced",
+              "@type": "SuccessCriterion",
+              "identifier": "3.3.9",
+              "name": "Accessible Authentication (Enhanced)",
+              "level": "AAA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/accessible-authentication-enhanced.html"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "@id": "https://www.w3.org/TR/WCAG22/#robust",
+      "@type": "Principle",
+      "identifier": "4",
+      "name": "Robust",
+      "description": "Content must be robust enough that it can be interpreted by a wide variety of user agents, including assistive technologies.",
+      "guidelines": [
+        {
+          "@id": "https://www.w3.org/TR/WCAG22/#compatible",
+          "@type": "Guideline",
+          "identifier": "4.1",
+          "name": "Compatible",
+          "description": "Maximize compatibility with current and future user agents, including assistive technologies.",
+          "successCriteria": [
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#name-role-value",
+              "@type": "SuccessCriterion",
+              "identifier": "4.1.2",
+              "name": "Name, Role, Value",
+              "level": "A",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html"
+            },
+            {
+              "@id": "https://www.w3.org/TR/WCAG22/#status-messages",
+              "@type": "SuccessCriterion",
+              "identifier": "4.1.3",
+              "name": "Status Messages",
+              "level": "AA",
+              "understanding": "https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "extractedDate": "2026-04-02",
+    "totalSuccessCriteria": 86,
+    "generatedBy": "scripts/generate-wcag.py",
+    "newInVersion": [
+      "2.4.11",
+      "2.4.12",
+      "2.4.13",
+      "2.5.7",
+      "2.5.8",
+      "3.2.6",
+      "3.3.7",
+      "3.3.8",
+      "3.3.9"
+    ],
+    "conformanceLevels": {
+      "A": "Minimum level",
+      "AA": "Recommended level for most content",
+      "AAA": "Enhanced level"
+    }
+  }
+}

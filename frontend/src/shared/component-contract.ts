@@ -27,6 +27,8 @@ export interface ComponentContract {
   events: string[];
   /** The props the entry declares — what a payload may send it. */
   props: string[];
+  /** The accessibility contract the entry carries, or null when it carries none. */
+  accessibility: Record<string, unknown> | null;
 }
 
 /** What the allowlist declares about a tag, or null when it declares nothing. */
@@ -38,6 +40,10 @@ export function contractFor(tag: string): ComponentContract | null {
     description: typeof entry.description === 'string' ? entry.description : '',
     events: Array.isArray(entry.events) ? entry.events.map((e: unknown) => String(e)) : [],
     props: Object.keys(entry.props ?? {}),
+    accessibility:
+      entry.accessibility && typeof entry.accessibility === 'object'
+        ? (entry.accessibility as Record<string, unknown>)
+        : null,
   };
 }
 

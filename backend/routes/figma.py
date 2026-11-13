@@ -43,6 +43,7 @@ from design_parameters import ParameterTypeError, typecheck_module
 # and it imports THIS module only inside functions, which is what keeps the two from cycling.
 from figma_fidelity import fidelity_gate, fidelity_report
 from figma_ingest_gate import check_fidelity, check_stated_keys
+import accessibility_contract
 import figma_facts
 import figma_twopass
 from figma_service import (
@@ -203,6 +204,14 @@ async def ingest_design_system(
             "name": name,
             "props": props,
             "source": str(entry.get("source") or ""),
+            # A DESIGN-SYSTEM PROPOSAL HAS NO FIGMA NODE TO READ, so its accessibility contract
+            # arrives in the archive beside the props. It is carried as stated; the accept route
+            # is what decides whether it is complete enough to become placeable.
+            "accessibility": (
+                entry.get("accessibility")
+                if isinstance(entry.get("accessibility"), dict)
+                else None
+            ),
         })
 
     catalogs = _catalogs_dir()
@@ -226,7 +235,7 @@ async def ingest_design_system(
         properties: dict[str, Any] = {"component": {"const": entry["name"]}}
         for prop in entry["props"]:
             properties[prop["name"]] = {"type": prop["type"]}
-        component_map[entry["name"]] = {
+        definition: dict[str, Any] = {
             "type": "object",
             "allOf": [
                 {"$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"},
@@ -246,6 +255,9 @@ async def ingest_design_system(
             "draft": False,
             "proposed": {"source": entry["source"], "at": stamp},
         }
+        if entry["accessibility"] is not None:
+            definition["accessibility"] = entry["accessibility"]
+        component_map[entry["name"]] = definition
 
     catalog = {
         "title": f"{system_label} (proposed)",
@@ -365,6 +377,14 @@ async def accept_catalog_entry(
                 "proposal this route may accept"
             ),
         )
+    # ── THE SAME CONTRACT THE FIGMA APPROVAL REQUIRES ─────────────────────────────────────────
+    # A proposal from an uploaded design system has no Figma node to read, so its contract must
+    # arrive in the entry itself. An entry with no block, or with an incomplete one, is refused
+    # here and the proposal stays exactly as it was. The refusal names the missing declarations.
+    accessibility = entry.get("accessibility") if isinstance(entry, dict) else None
+    accessibility_verdict = accessibility_contract.gate(accessibility)
+    if not accessibility_verdict["ok"]:
+        raise HTTPException(status_code=503, detail=accessibility_verdict["detail"])
     actor = _resolve_actor(http_request)
     accepted_at = datetime.now().isoformat(timespec="seconds")
     entry["draft"] = True
@@ -1256,13 +1276,20 @@ def _component_contract(node: dict[str, Any]) -> dict[str, Any]:
 
     Derived by the same helpers the generator uses, so what is registered in the
     allowlist and the catalog is what the element actually declares.
+
+    THE ACCESSIBILITY CONTRACT RIDES BESIDE THEM, and it is read the same way: the `A11y:`
+    annotations the file already carries, the role the component type names, and the label the
+    first text layer states. Nothing here measures or draws; the block is a record of what the
+    file declared, and the approval gate reads it before anything is written.
     """
     component_type = _determine_component_type(node)
+    props = _extract_a2ui_properties(node, component_type)
     return {
         "componentType": component_type,
-        "props": _extract_a2ui_properties(node, component_type),
+        "props": props,
         "events": _extract_a2ui_events(node, component_type),
         "actions": _extract_a2ui_actions(node, component_type) or {},
+        "accessibility": accessibility_contract.derive_contract(node, component_type, props),
     }
 
 
@@ -1302,12 +1329,17 @@ def _register_in_allowlist(tag: str, meta: dict[str, Any]) -> str:
     contract = meta.get("contract", {})
     props = contract.get("props", [])
     events = [e.get("name") for e in contract.get("events", []) if e.get("name")]
+    accessibility = contract.get("accessibility") if isinstance(contract, dict) else None
+    if not isinstance(accessibility, dict):
+        accessibility = {}
 
     def ts_type(spec: dict[str, Any]) -> str:
         return {"String": "string", "Boolean": "boolean", "Number": "number"}.get(spec.get("type"), "string")
 
+    required_props = set(accessibility.get("requiredProperties") or [])
     props_lines = "".join(
-        f"      {p['name']}: {{ type: '{ts_type(p)}', optional: true }},\n"
+        f"      {p['name']}: {{ type: '{ts_type(p)}', optional: "
+        f"{'false' if p['name'] in required_props else 'true'} }},\n"
         for p in props
         if p.get("name")
     )
@@ -1320,6 +1352,7 @@ def _register_in_allowlist(tag: str, meta: dict[str, Any]) -> str:
         f"({meta.get('figmaName', '')}). Implemented by <{tag}> in src/components/lit/{tag}.ts.',\n"
         f"    props: {{\n{props_lines}    }},\n"
         f"    events: {json.dumps(events)},\n"
+        f"    accessibility: {json.dumps(accessibility)},\n"
         f"  }},\n"
     )
 
@@ -1382,6 +1415,9 @@ def _register_in_catalog(tag: str, meta: dict[str, Any], pipeline: str = "prompt
         return f"already declared in {pipeline}"
 
     contract = meta.get("contract", {})
+    accessibility = contract.get("accessibility") if isinstance(contract, dict) else None
+    if not isinstance(accessibility, dict):
+        accessibility = {}
     props = {
         "component": {"const": tag},
     }
@@ -1390,6 +1426,14 @@ def _register_in_catalog(tag: str, meta: dict[str, Any], pipeline: str = "prompt
             continue
         json_type = {"String": "string", "Boolean": "boolean", "Number": "number"}.get(p.get("type"), "string")
         props[p["name"]] = {"type": json_type}
+
+    # THE CONTRACT'S REQUIRED PROPERTIES BECOME THE ENTRY'S REQUIRED PROPERTIES. A property the
+    # contract names is required only when the element actually declares it; a requirement the
+    # schema cannot express would refuse every payload for no reason.
+    required = ["component"]
+    for prop in accessibility.get("requiredProperties") or []:
+        if prop in props and prop not in required:
+            required.append(prop)
 
     definition = {
         "type": "object",
@@ -1404,10 +1448,14 @@ def _register_in_catalog(tag: str, meta: dict[str, Any], pipeline: str = "prompt
                     f"src/components/lit/{tag}.ts. Ingested, then approved into the catalogue."
                 ),
                 "properties": props,
-                "required": ["component"],
+                "required": required,
                 "unevaluatedProperties": False,
             },
         ],
+        # THE CONTRACT TRAVELS WITH THE ENTRY. The approval gate refused an incomplete one, so
+        # this block is the record of a declaration that passed. The composition gate reads it
+        # beside the name, and the palette reads it when the component is offered to the model.
+        "accessibility": accessibility,
     }
 
     catalog.setdefault("components", {})[tag] = definition
@@ -6540,6 +6588,16 @@ async def api_figma_ingest_status(job_id: str):
         raise HTTPException(status_code=404, detail="Job not found")
     _keep_preview(job_id)
 
+    # THE CONTRACT IS REPORTED WITH THE RESULT, NOT MEASURED INTO IT. `_process_ingest_job` built
+    # the result from the file alone; this read adds the block `_component_contract` already
+    # derived for the job's metadata, so the preview can name the missing declarations before the
+    # designer presses Approve. Nothing in the measured result is rewritten.
+    contract_meta = (ingest_job_meta.get(job_id) or {}).get("contract") or {}
+    accessibility = contract_meta.get("accessibility") if isinstance(contract_meta, dict) else None
+    result = job.result
+    if isinstance(result, dict) and accessibility:
+        result = {**result, "accessibility": accessibility}
+
     return {
         "jobId": job_id,
         "status": job.status,
@@ -6549,7 +6607,7 @@ async def api_figma_ingest_status(job_id: str):
         # itself; the client shows the last line under its spinner and the whole list on the
         # answer. No step exists that the backend did not actually take.
         "steps": INGEST_STEPS.get(job_id, []),
-        "result": job.result,
+        "result": result,
         "error": job.error,
     }
 
@@ -8255,6 +8313,27 @@ async def api_figma_commit(request: CommitRequest, http_request: Request):
                 "nextStep": "Ingest the design again; the fact table is written by the ingest.",
             },
         )
+    # ── THE ACCESSIBILITY CONTRACT IS A CONDITION OF APPROVAL ──────────────────────────────────
+    # APPROVED IS SHIPPED. The approval is the catalogue's admission boundary, so the contract is
+    # checked here, before the retag, before the write and before every registration. The block
+    # was derived at ingest from the same node, and it is read from the job's own metadata; this
+    # gate does not measure the design again. An incomplete contract refuses with 503 and names
+    # every declaration the file did not make, so the designer knows exactly what to add.
+    approval_contract = (ingest_job_meta.get(request.jobId) or {}).get("contract") or {}
+    accessibility = (
+        approval_contract.get("accessibility")
+        if isinstance(approval_contract, dict)
+        else None
+    )
+    accessibility_verdict = accessibility_contract.gate(accessibility)
+    if not accessibility_verdict["ok"]:
+        _op_step(
+            request.opId,
+            "Stopped at: the accessibility contract — "
+            + ", ".join(accessibility_verdict["missing"])
+            + " not declared. Nothing was written.",
+        )
+        raise HTTPException(status_code=503, detail=accessibility_verdict["detail"])
     not_exact = [
         row for row in facts.get("rows") or []
         if row.get("verdict") in ("differs", "uncomparable", "not-read", "not-drawn")

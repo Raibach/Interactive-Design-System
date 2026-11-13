@@ -7,6 +7,8 @@ from typing import Any
 
 from fastapi import HTTPException
 
+import accessibility_contract
+
 # ── Role-based access stubs ────────────────────────────────────────────
 # NOTE: Role-based access gated via user_is_admin() stub (dev mode allows all)
 ADMIN_ROLES = os.getenv("ADMIN_USER_IDS", "").split(",") if os.getenv("ADMIN_USER_IDS") else []
@@ -294,6 +296,16 @@ def validate_a2ui_components(
             }
             print(f"❌ [A2UI VALIDATION FAILED] {detail}", file=sys.stderr)
             raise HTTPException(status_code=503, detail=detail)
+        # ── THE ACCESSIBILITY CONTRACT FOLLOWS THE COMPONENT INTO THE PAYLOAD ────────────────
+        # An entry that carries the contract must be complete, and every property the contract
+        # marks as required must be present in this instance. An entry with no block is a
+        # pre-contract entry and is left to the name check above; the approval and accept gates
+        # are what keep a new entry from arriving without its block.
+        entry = (catalog.get("components") or {}).get(name)
+        accessibility_detail = accessibility_contract.check_instance(entry, comp, index)
+        if accessibility_detail:
+            print(f"❌ [A2UI VALIDATION FAILED] {accessibility_detail}", file=sys.stderr)
+            raise HTTPException(status_code=503, detail=accessibility_detail)
 
 def user_is_admin(user_id: str) -> bool:
     """Stub: check if user has admin privileges. Replace with DB lookup."""

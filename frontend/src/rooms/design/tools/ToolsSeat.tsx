@@ -892,6 +892,20 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
         const blocking = Array.isArray((result as any)?.fidelity?.blocking)
           ? ((result as any).fidelity.blocking as string[])
           : [];
+        /* THE ACCESSIBILITY CONTRACT IS REPORTED BESIDE THE APPROVAL QUESTION. The server derived
+           it at ingest from the same node, and an incomplete contract is named here, in the chat,
+           because the chat owns the report and the approval. The approval call itself refuses
+           with the same detail, and the catalogue is not written. */
+        const accessibility = (result as any)?.accessibility as
+          | { complete?: boolean; missing?: string[]; summary?: string }
+          | undefined;
+        if (accessibility && accessibility.complete === false) {
+          reportIngestFailure(
+            `${String(accessibility.summary || "Accessibility contract incomplete.")} ` +
+              "Approval will be refused until the missing declarations are added to the Figma layer.",
+            "accessibility",
+          );
+        }
         if (blocking.length) {
           // THE SUMMARY IS ITS OWN MODULE: the counts lead, then the named keys and differences.
           reportFailure(buildIngestSummary(result as Record<string, any>, blocking), "fidelity");
@@ -2279,7 +2293,25 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
           }),
         });
         const data = await res.json().catch(() => null);
-        if (!res.ok) throw new Error(data?.detail || "Approve failed");
+        if (!res.ok) {
+          /* THE SERVER'S DETAIL IS AN OBJECT, AND ITS WORDS ARE THE ANSWER. The approval refusal
+             names what is missing and what to do next; turning that object into a string with
+             `new Error(detail)` would show the designer `[object Object]` and hide every word the
+             gate wrote. The string details keep their text. */
+          const detail = data?.detail;
+          if (typeof detail === "string") throw new Error(detail);
+          const missing = Array.isArray(detail?.missing)
+            ? (detail.missing as unknown[]).map(String)
+            : [];
+          const message = [
+            String(detail?.message || "Approve failed"),
+            missing.length ? `Missing: ${missing.join(", ")}.` : "",
+            String(detail?.nextStep || ""),
+          ]
+            .filter(Boolean)
+            .join(" ");
+          throw new Error(message);
+        }
         const tag = String(preview?.tag ?? "");
         const registration = (data?.registration ?? {}) as Record<string, unknown>;
         const patterns = (registration.patterns ?? {}) as {
