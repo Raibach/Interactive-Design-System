@@ -16,7 +16,7 @@
  * (see the loopback law in appConfig), so nothing reaches a visitor's own computer.
  */
 import { useEffect } from 'react';
-import { designPostHogLanding } from '@/rooms/design/designTool';
+import { designPostHogLanding } from '@design2/surface-design/surface/left-container/design-tool';
 import {
   appConfigReady,
   builderToolUrl,

@@ -1,0 +1,2461 @@
+/**
+ * <design2-figma-layers-view> — the measured layer tree of a design, as plain text.
+ *
+ * WHAT THIS SHOWS. Two levels. THE CATALOGUE: every component it declares, the shape its entry
+ * is written in, what it accepts — and, so the list can be read rather than interrogated, WHAT
+ * DRAWS EACH ONE: the file, the renderer, or nothing. THE DESIGN: for each node that has been
+ * through the ingest, the tree the ingest measured — every layer's name, its type, its node id,
+ * nested the way the design nests them — read from `public/catalog-figma/<pipeline>.json`.
+ * Three files and the element manifest, all read; Figma itself is never asked.
+ *
+ * WHY IT EXISTS. Until now the parent/child structure of a design lived only inside the
+ * model call that measured it and was then discarded. The consequences were invisible by
+ * construction: two layers with the same name in one frame — the two chevron-blue-closed,
+ * 40001185:2170 and 40001185:2163 — could not be seen by anyone, because nothing that
+ * outlived the call held the tree they were both in. Neither the id nor the label of a
+ * duplicate is a thing you can test for in isolation; you have to be able to READ THE
+ * TREE, which is what this element is for.
+ *
+ * SO A REPEATED LAYER NAME IS MARKED, and named as what it is: a second layer in the same
+ * frame carrying a name already used in that frame. That is a statement about the design,
+ * not about this screen — and it is deliberately the only judgement this element makes.
+ *
+ * PLAIN ON PURPOSE. This is a reader, not a design. The owner asked for it unwritten-up so
+ * it can be looked at now and designed later; every row is a line of text and nothing here
+ * needs to survive a redesign. The one thing that must survive is the reading: a row with
+ * no name or no id says so rather than printing an empty gap.
+ *
+ * READ-ONLY. It fetches; it writes nothing. It raises one event — `open-component`, when a row
+ * is clicked — because a tree is a navigation and a row you cannot go anywhere from is a label.
+ *
+ * A2UI Catalog ID: none. This is a reader of the ingest's record and is not assemblable —
+ * do not declare it in any catalog.json.
+ * Framework: Lit 3.x — no decorators, static properties + customElements.define()
+ */
+
+import { LitElement, html, css, nothing } from 'lit';
+import './design2-f-40001207-3559';
+import type { TemplateResult } from 'lit';
+import { loadDrawn, drawnBy, tagFor, type DrawnBy, type DrawnIndex } from '@/shared/component-drawn-by';
+import { contractFor } from '@/shared/component-contract';
+import { nodeIdentity, nodeLocation, describeNodeId } from '@/shared/node-id';
+import carbonMeta from '@/components/lit/carbon-meta.json';
+
+// ── The catalogue this pipeline's components live in ─────────────────────────
+// The level ABOVE a component. A tree that starts at a component cannot say which
+// catalogue that component belongs to. Read the same way <catalog-schema-view> reads it,
+// from the same file, so the two cannot disagree.
+/*
+ * THE ONE CATALOGUE, NAMED IN THE GLOB RATHER THAN DISCOVERED BY IT.
+ *
+ * A glob over the catalogues directory lists the folders at BUILD TIME, so a catalogue deleted
+ * from disk stayed in the pattern the browser already held and every read of it failed with
+ * "Failed to fetch dynamically imported module". Naming the directory removes that whole class:
+ * there is one catalogue, its path is written here, and a deleted folder cannot appear in a list
+ * that does not enumerate folders.
+ */
+/*
+ * THE BUNDLED COPIES, NAMED ONE FILE AT A TIME — never a folder glob. The next-chat brief's rule:
+ * "Do not enumerate the catalogues folder in a module list; name the one file, or a deleted folder
+ * will survive in the browser as 'Failed to fetch dynamically imported module'." Carbon was added
+ * here on 2026-11-02, when a card opened the tool in Carbon and the first read missed: the live
+ * file was not yet available, the bundled fallback knew only the official catalogue, and the view
+ * said "no catalogue named carbon" a moment before it loaded correctly.
+ */
+const CATALOG_MODULES = import.meta.glob([
+  '../A2UI/catalogs/prompt-composer/catalog.json',
+  '../A2UI/catalogs/carbon/catalog.json',
+]);
+
+// ── The Figma layer name behind a generated component ────────────────────────
+// A component the ingest built is NAMED after its node — `f-<node id>` — so its catalogue key
+// reads as an id because it is one. The human name it has is the Figma layer it was drawn
+// from, and the map (registry.json) is where that pairing is recorded: `litComponent` →
+// `figmaName`. Read here so the list can show names without inventing any.
+const MAP_MODULES = import.meta.glob('../registry.json');
+
+/** One component as catalog.json declares it — the name, its shape, and what it accepts. */
+interface DeclaredComponent {
+  name: string;
+  /** "flat", or "allOf(3)" — the two shapes an entry is written in. */
+  shape: string;
+  props: string[];
+  required: string[];
+  /**
+   * True when the entry carries the ingest's proposal marker (`"draft": false`) — an entry of an
+   * INGESTED partition that a person has not accepted yet. False for hand-written system entries
+   * (they carry no marker; they are placeable by declaration, reviewed in git).
+   */
+  proposed: boolean;
+  /**
+   * What it is, in the catalogue's own words, cut to its first sentence (see `descriptionOf`).
+   * The row shows this much; the whole text travels with the click for the metadata panel.
+   */
+  description: string;
+}
+
+/**
+ * WHAT THE COMPONENT IS, IN ONE SENTENCE — the catalogue's description, stopped at its first stop.
+ *
+ * A catalogue `description` is prose written for a reader already inside the entry, so after the
+ * first sentence it turns to the build: "Implemented by <trace-feed> in
+ * src/components/lit/trace-feed.ts", "It is a VIEW and fetches nothing: the app logger and Sentry's
+ * global-scope breadcrumbs are read by lib/trace-source.ts…". The row's description line is the
+ * design's ONE-LINE block, and the owner's rule for this row is that the build's facts are read in
+ * the metadata panel rather than in the tile — so the first sentence is what the row says, and the
+ * rest is not dropped: it goes with the click, where the panel shows the whole of it.
+ *
+ * A description with no full stop is returned whole: cutting a sentence that was never ended would
+ * lose the end of it, and a row that says less than the catalogue does is worse than a long line.
+ */
+function descriptionOf(text: unknown): string {
+  const s = String(text ?? '').trim();
+  const firstStop = s.search(/\.(\s|$)/);
+  return firstStop === -1 ? s : s.slice(0, firstStop + 1);
+}
+
+/**
+ * Read one component entry as the file writes it.
+ *
+ * THE TWO SHAPES ARE NOT THE SAME PLACE. A flat entry keeps its `description`, `properties`
+ * and `required` at the top level; an allOf entry keeps them as the LAST element of `allOf`,
+ * behind two shared $refs. Reading the wrong one for a given entry yields an empty property
+ * list and no complaint — which is how one file gets described two different ways. So the
+ * shape is detected first and the block is read from where that shape says it is.
+ */
+function readComponent(name: string, entry: any): DeclaredComponent {
+  const allOf = Array.isArray(entry?.allOf) ? entry.allOf : null;
+  const block = allOf && allOf.length ? allOf[allOf.length - 1] ?? {} : entry ?? {};
+  const props = Object.keys(block?.properties ?? {});
+  const required = Array.isArray(block?.required) ? block.required : [];
+  return {
+    name,
+    shape: allOf ? `allOf(${allOf.length})` : 'flat',
+    props,
+    required,
+    // The proposal marker lives at the ENTRY's top level (the ingest writes it there) — not in
+    // the block the description came from. A marker that is not exactly false is not a proposal.
+    proposed: entry?.draft === false,
+    description: descriptionOf(block?.description),
+  };
+}
+
+/** The catalogue's own head, as catalog.json declares it. */
+interface CatalogHead {
+  id: string;
+  title: string;
+  catalogId: string;
+  components: number;
+  /** Every name the catalogue allows, in file order. */
+  declared: DeclaredComponent[];
+}
+
+/** A catalogue's head and its declared components, from the file itself. */
+function headFrom(id: string, doc: any): CatalogHead {
+  const components = doc?.components ?? {};
+  return {
+    id,
+    title: String(doc?.title ?? '(untitled)'),
+    catalogId: String(doc?.$id ?? doc?.catalogId ?? ''),
+    components: Object.keys(components).length,
+    declared: Object.entries(components).map(([name, entry]) => readComponent(name, entry)),
+  };
+}
+
+/**
+ * The short mark a row carries for what draws a component.
+ *
+ * The whole sentence is the row's title, so this is only ever the glance: a file, the
+ * renderer, or nothing. `unknown` is deliberately its own word — a manifest that could not be
+ * read must not present as "nothing draws this", because one of those is a reason to delete
+ * the row and the other is a reason to go and look.
+ */
+function markFor(drawn: DrawnBy): string {
+  if (drawn.kind === 'element') return `drawn by ${String(drawn.module).replace(/^src\/components\//, '')}`;
+  if (drawn.kind === 'renderer') return 'drawn by the renderer';
+  if (drawn.kind === 'unknown') return 'could not read';
+  return 'nothing draws this';
+}
+
+/** One measured layer. Keys are exactly what _figma_spec_for_model writes. */
+interface Layer {
+  id?: string;
+  name?: string;
+  type?: string;
+  size?: [number, number];
+  text?: string;
+  /** Set on an INSTANCE: the node id of the component it is an instance of. */
+  componentId?: string;
+  asset?: string;
+  children?: Layer[];
+  /** The rest of what was measured about it — shown when the layer itself is opened. */
+  position?: [number, number];
+  fill?: string;
+  layout?: Record<string, string | number>;
+  type_style?: Record<string, string | number>;
+}
+
+interface NodeRecord {
+  tag?: string;
+  nodeId?: string;
+  /** Written by the approve step. The record exists only for approved components. */
+  approvedAt?: string;
+  layers?: number;
+  tree?: Layer;
+  /**
+   * The artwork the design carried, vendored into this repository at approval.
+   *
+   * Written by the approve step since 2026-09-28. Before that the vectors were used for one
+   * model call and dropped, so a component referenced them at Figma's local server and lost
+   * them when Figma closed. Absent on older records, which is not the same as "the design had
+   * none" — see how the caller reports it.
+   */
+  assets?: Array<{
+    kind?: string;
+    mime?: string;
+    /** Where this repository serves it, e.g. /assets/figma-<hash>.svg. */
+    file?: string | null;
+    bytes?: number;
+    source?: string;
+    note?: string;
+  }>;
+}
+
+interface LayersDocument {
+  pipeline?: string;
+  generatedAt?: string;
+  nodes?: Record<string, NodeRecord>;
+}
+
+/**
+ * What a repeated layer name actually means, which is two different things.
+ *
+ * A name used twice with the SAME componentId is ONE component used twice — the design
+ * reusing a thing it already has, which is correct and is the whole point of a design
+ * system. The two chevron-blue-closed in the System Role frame are exactly this: nodes
+ * 40001185:2170 and 40001185:2163, both `Instance` of 40000922:4875.
+ *
+ * A name used twice WITHOUT that is two layers drawn separately under one name — which is
+ * the thing worth seeing, because nothing downstream can tell them apart.
+ *
+ * So the count alone is not the finding. Reporting "duplicate" for the first case would be
+ * a false alarm on correct work, and this element does not raise false alarms.
+ */
+interface NameUse {
+  count: number;
+  componentIds: Set<string>;
+}
+
+function analyseNames(layer: Layer | undefined, into: Map<string, NameUse> = new Map()): Map<string, NameUse> {
+  for (const child of layer?.children ?? []) analyseNames(child, into);
+  const name = layer?.name;
+  if (!name) return into;
+  const use = into.get(name) ?? { count: 0, componentIds: new Set<string>() };
+  use.count += 1;
+  if (layer?.componentId) use.componentIds.add(layer.componentId);
+  into.set(name, use);
+  return into;
+}
+
+export class FigmaLayersView extends LitElement {
+  static properties = {
+    pipeline: { type: String },
+    /** Show one node's tree instead of every node recorded for the pipeline. */
+    nodeId: { type: String, attribute: 'node-id' },
+    /**
+     * THE TREE THE INGEST JUST MEASURED — the component that was submitted, with every child under
+     * it, drawn at the top of the column.
+     *
+     * A NAME-AND-VALUE TREE, NOT A RECORD. `public/catalog-figma/<pipeline>.json` holds only what
+     * has been APPROVED, so a component that has just been measured is not in it and the column had
+     * nothing to open: the answer carried the layers and the list could not see them. This property
+     * is that bridge. Its shape is the measured tree's own, which is the same shape the record
+     * stores — nothing is converted on the way in.
+     */
+    tree: { type: Object },
+    /** Sit in the flow of a form rather than float over the screen. */
+    inline: { type: Boolean },
+    /** Bumped by the host to force a re-read — after an ingest lands, or a commit. */
+    refresh: { type: Number },
+    /**
+     * TRUE WHILE SOMETHING IS IN FLIGHT — the host's fact, so the column SPINS while the work is
+     * being processed. The owner, 2026-10-03: *"that whole column or maybe a section of that column
+     * could spin — those little spinners are important. They provide feedback to the user that
+     * something's processing in the background."*
+     *
+     * NOTHING BINDS IT TODAY (2026-10-04): its one writer was the add-design-system form's shell
+     * handler, and that form is gone — the path it wrote (`/session/design_system_ingest/busy`) had
+     * no other writer. The prop stays because the spin is wanted the moment an accept flow gives the
+     * column a fact to watch; until then it reads false and nothing turns.
+     */
+    busy: { type: Boolean },
+    /** Bumped by the host to fold the tree back to its opening state — a Reset. */
+    reset: { type: Number },
+    /** The catalogue name of the component the host has open in the preview. */
+    selected: { type: String },
+    /**
+     * THE FILTER, AS A SETTING (owner, 2026-11-02). The search box writes the same field, so a
+     * person typing and an assistant naming a component drive one filter, not two lists.
+     */
+    query: { type: String },
+    open: { type: Boolean },
+    /**
+     * Whether the CATALOGUE HEAD (its name, its component count and its catalogId) is drawn above
+     * the declared rows. TRUE by default — the ingest form's rail has no separate head element and
+     * reads it here.
+     *
+     * THE DESIGN ROOM SETS IT FALSE, and the reason is the owner's first translation (2026-09-30):
+     * *"take the catalog name and give it this container from the lit catalog that I just
+     * added — design2-f-40001207-3559."* In the design that row IS that component, so the room draws the
+     * head with the ingested element, bound from the data model, and the tree must not draw a
+     * second copy of the same three facts underneath it.
+     */
+    showHead: { type: Boolean },
+  };
+
+  declare pipeline: string;
+  declare nodeId: string;
+  declare tree: Layer | undefined;
+  declare inline: boolean;
+  declare refresh: number;
+  declare busy: boolean;
+  declare reset: number;
+  declare selected: string;
+  declare query: string;
+  declare open: boolean;
+  declare showHead: boolean;
+
+  private _state: 'loading' | 'ready' | 'absent' | 'failed' = 'loading';
+  private _reason = '';
+  private _doc: LayersDocument | null = null;
+
+  /** The catalogue above these components, and why it could not be read if it could not. */
+  private _catalog: CatalogHead | null = null;
+  private _catalogError = '';
+
+  /**
+   * EVERY catalogue in the repository — the level above the one being viewed.
+   *
+   * This level is not a container in any file. The catalogues are not nested in anything:
+   * they are three separate documents that happen to live in one folder, and nothing declares
+   * a parent. So this row is drawn as what it is — a list of the catalogues that exist, with
+   * the one being viewed marked — rather than as a node the data says is above them.
+   */
+
+  /** Where the catalogue on screen was read from — a stale answer must not pass for a fresh one. */
+  private _catalogFrom = '';
+
+  /**
+   * Figma layer name by Lit tag, from the map. Used for generated components, whose catalogue
+   * key is an id — a hand-built component is already named with a word, and the map can hold
+   * several Figma origins for one of those (`chat-navigation-bar` has five), so its own key is
+   * the better label and the map is not consulted for it.
+   */
+  private _figmaNames = new Map<string, string>();
+  /** Figma node id by Lit tag, from the same map — what ties a component to its layer record. */
+  private _figmaNodeIds = new Map<string, string>();
+  /**
+   * Node id -> tag, for the components this catalogue DECLARES, so a layer in a measured tree
+   * can be marked as a component the design is already reusing. See `_loadFigmaNames`.
+   */
+  private _componentsByNode = new Map<string, string>();
+  /**
+   * IS ANYTHING USING IT? — the audit's own measurement, per catalogue name.
+   *
+   * DRAWABLE AND USED ARE DIFFERENT QUESTIONS and a tree that answers only the first misleads.
+   * `agent-card` read "nothing draws this" while the console drew that card under a different
+   * tag; a component can equally be drawable and wired to nothing. The audit measures both —
+   * `sent` (a payload the app sends names it) and `renderedIn` (a module's template draws it) —
+   * and writes them into the report this reads.
+   *
+   * Keyed by the catalogue's own name, not by tag, so a component listed under two names can
+   * honestly read differently on its two rows: `TraceFeed` is sent by the app, `trace-feed` is
+   * not, and they are the same element.
+   */
+  private _usage: Record<
+    string,
+    {
+      sent?: string[];
+      renderedIn?: string[];
+      composes?: string[];
+      dispatches?: string[];
+      listens?: string[];
+      behaviourMeasured?: boolean;
+      drawable?: boolean;
+    }
+  > | null = null;
+  /**
+   * The audit's findings, per component — what the dot beside each row is made of.
+   *
+   * The dot is not a new judgement; it is the report's own verdict, collapsed. A reader who
+   * wants the sentences opens the title, and the findings themselves are unchanged where they
+   * live: this only makes them scannable, so a list of fifty can be looked at for trouble
+   * instead of read for it.
+   */
+  private _findings: Record<string, { blocking: string[]; advisory: string[] }> | null = null;
+  /** Where the map was read from — a stale answer must not pass for a fresh one. */
+  private _mapFrom = '';
+  private _figmaNamesError = '';
+
+  /**
+   * WHAT DRAWS EACH DECLARED COMPONENT — so a row can say whether it is there without being
+   * clicked.
+   *
+   * A name is not a file name, and the row used to offer no way to tell a component that draws
+   * from one that draws nothing until you opened it: the answer existed, one click away, on a
+   * different readout. That is not a list anybody can clean up. Null until it has been read,
+   * and `drawnBy` answers `unknown` rather than "nothing draws it" until then — the two are
+   * different claims and only one of them is a reason to delete a row.
+   */
+  private _drawn: DrawnIndex | null = null;
+
+  /**
+   * THE FILTER TYPED ABOVE THE LIST. It narrows what is drawn and changes nothing the catalogue
+   * holds — the owner's word for it: *"that would change what's listed in the data tree it's a
+   * filter."*
+   *
+   * IT MATCHES THE NAME, THE TAG AND THE FIGMA LAYER — the three things a row can be known by. Not
+   * a meaning-based search: there is no index of these components anywhere, so a box that claimed
+   * to understand "the button we use to approve" would be inventing an answer. This says what it
+   * does in the count line under it.
+   */
+  private _query = '';
+
+  /** Whether the operator has toggled the panel, so `inline` can default it open only once. */
+  private _toggled = false;
+
+  /**
+   * Which LAYER rows are rolled up, keyed "<record>/<layer id>".
+   *
+   * A COLLAPSED set, not an open one: the tree opens in full, which is what a reader wants the
+   * first time they meet a design, and what they roll up is what they have already read. An
+   * open-set would have to be pre-filled to show the same thing, and its default would be a
+   * tree that hides everything.
+   */
+  private _collapsed = new Set<string>();
+
+  /**
+   * Which DECLARED components are opened — the opposite default from the layer tree, and
+   * deliberately: this list is the whole allow-list, and every entry opened with its
+   * properties is a wall rather than a tree.
+   */
+  private _expandedDeclared = new Set<string>();
+
+  /** The first `updated` follows connectedCallback's own load — it must not load again. */
+  private _firstUpdate = true;
+
+  constructor() {
+    super();
+    // ONE CATALOGUE (owner, 2026-10-26): *"We only need the official one."* The rail used to offer
+    // four and remember the last choice; the memory is gone with the menu, so nothing on this
+    // machine can put the list back on a catalogue that is no longer offered.
+    this.pipeline = 'prompt-composer';
+    this.nodeId = '';
+    this.tree = undefined;
+    this.inline = false;
+    this.refresh = 0;
+    this.reset = 0;
+    this.selected = '';
+    // As an overlay, closed: an overlay that opens itself over the app is a thing nobody
+    // asked to see. In a form, open: there the tree IS the thing being read.
+    this.open = false;
+    this.showHead = true; // the ingest rail's own behaviour, unchanged
+  }
+
+  /** The re-read attached to focus and visibility. See connectedCallback. */
+  private _onWake: () => void = () => {};
+
+  /**
+   * THE ACCEPT ACT (2026-10-03) — the ingest PROPOSES; a person accepts, and this is where that
+   * press lives. An ingested partition's entry arrives `draft: false`; accepting flips it through
+   * the server (`draft: true`), the single marker the room's palette reads — so the moment the
+   * server answers, the tray offers the component and Grace can name it.
+   *
+   * THE ELEMENT WRITES NOTHING: it announces `catalog-accept {system, name}` and the shell posts
+   * (the division every write in this app keeps). The shell answers with
+   * `catalog-accept-settled {system, name, ok}` and only then is the row marked accepted HERE — a
+   * button that flipped itself on its own press would be claiming a write it never saw land.
+   */
+  private _acceptedThisSession = new Set<string>();
+
+  private _accept(name: string): void {
+    this.dispatchEvent(
+      new CustomEvent('catalog-accept', {
+        bubbles: true,
+        composed: true,
+        detail: { system: this.pipeline, name },
+      }),
+    );
+  }
+
+  private _onAcceptSettled: (event: Event) => void = () => {};
+
+  connectedCallback(): void {
+    super.connectedCallback();
+    if (this.inline && !this._toggled) this.open = true;
+    void this._load();
+
+    // A TAB YOU LOOKED AWAY FROM IS A TAB SHOWING SOMETHING THAT HAS MOVED ON.
+    //
+    // Every tab holds the last thing it read, and a refresh only ever reaches the tab that
+    // performed the action — so with several open, approving in one leaves the rest showing a
+    // count that is no longer true. Twelve tabs, twelve snapshots, five different answers. That
+    // is what it looked like from the outside: readouts that disagreed with the actions.
+    //
+    // Re-reading when the tab is looked at again is what makes what you are LOOKING at current,
+    // which is the only moment it has to be. Cheap, and it needs no polling and no server.
+    this._onWake = () => {
+      if (document.visibilityState === 'visible') void this._load();
+    };
+    window.addEventListener('focus', this._onWake);
+    document.addEventListener('visibilitychange', this._onWake);
+    this._onAcceptSettled = (event: Event) => {
+      const detail = ((event as CustomEvent).detail || {}) as { system?: string; name?: string; ok?: boolean };
+      if (!detail.ok || detail.system !== this.pipeline || !detail.name) return;
+      this._acceptedThisSession.add(String(detail.name));
+      this.requestUpdate();
+    };
+    window.addEventListener('catalog-accept-settled', this._onAcceptSettled);
+  }
+
+  disconnectedCallback(): void {
+    window.removeEventListener('catalog-accept-settled', this._onAcceptSettled);
+    window.removeEventListener('focus', this._onWake);
+    document.removeEventListener('visibilitychange', this._onWake);
+    super.disconnectedCallback();
+  }
+
+  updated(changed: Map<string, unknown>): void {
+    if (this._firstUpdate) {
+      this._firstUpdate = false;
+      return;
+    }
+    if (changed.has('refresh') || changed.has('pipeline')) void this._load();
+    // A RESET FOLDS THE TREE BACK. What is open and what is rolled up are states this element
+    // holds, so the host cannot clear them — it can only ask, which is what this counter is.
+    // A Reset that left rows open and a source pane on screen was a Reset that did not happen:
+    // the two most visible things it was supposed to put away stayed exactly where they were.
+    if (changed.has('reset')) {
+      this._collapsed = new Set();
+      this._expandedDeclared = new Set();
+      this.requestUpdate();
+    }
+    // WHICH ROW IS OPEN IS THE ONE FACT THIS LIST SHOULD FOLLOW, and a mark in a list longer
+    // than its pane is only useful if the list brings it where it can be seen.
+    if (changed.has('selected')) this._revealSelected();
+    /* THE HOST'S FILTER LANDS IN THE ONE THE BOX ALREADY WRITES. */
+    if (changed.has('query')) {
+      this._query = String(this.query ?? '');
+      this.requestUpdate();
+    }
+    // A WRITE REGENERATES THE MANIFEST — every approve and every removal re-runs the element
+    // analyser — so the cached index is stale exactly when the host says something landed.
+    if (changed.has('refresh')) void this._loadDrawn(true);
+  }
+
+  /** Guards against a slow read for one pipeline landing after a faster one for another. */
+  private _loadToken = 0;
+
+  /**
+   * Read the catalogue this pipeline's components live in — the level above them.
+   *
+   * A failure here is REPORTED, never omitted: dropping the top level silently would say
+   * "there is no catalogue above these", which is a different claim from "it could not be
+   * read", and the whole point of this view is that those two are never the same picture.
+   *
+   * AND A READ THAT ANOTHER READ REPLACED IS NOT A FAILURE (owner, 2026-11-02, opening the tool in
+   * Carbon: *"we get that error message and then it seems to load… that error message popped up for
+   * some reason"*). Opening the tab runs this read, and the seat's own rebuild runs it again; the
+   * two race, the older one can fail after the newer one has already answered, and its failure used
+   * to land last — painting the red block over a catalogue that had loaded. Now only the newest
+   * read may write the block's state, and a superseded read returns without a word.
+   */
+  private _catalogToken = 0;
+
+  private async _loadCatalog(): Promise<void> {
+    const token = ++this._catalogToken;
+    try {
+      const doc = await this._readCatalog(this.pipeline);
+      if (token !== this._catalogToken) return; // a newer read owns this block
+      if (!doc) throw new Error(`no catalogue named "${this.pipeline}"`);
+      this._catalog = headFrom(this.pipeline, doc);
+      this._catalogError = '';
+    } catch (error) {
+      if (token !== this._catalogToken) return; // a superseded read never reports
+      this._catalog = null;
+      this._catalogError = error instanceof Error ? error.message : String(error);
+    }
+    this.requestUpdate();
+  }
+
+  /**
+   * Read a catalogue FRESH, rather than through a module import.
+   *
+   * THE IMPORT IS CACHED, AND THAT IS THE BUG THIS EXISTS TO FIX. The declared list was read
+   * from an ES module, so every re-render reused the copy the browser already had: approving a
+   * component changed the file on disk and the list went on showing the old count until the
+   * page was reloaded. A reader that cannot see what was just written is worse than no reader.
+   *
+   * So it FETCHES the file the dev server serves, which is source and therefore current. The
+   * import stays as the fallback for a build, where `/src/` is not a URL — and the fallback is
+   * sound there because a build's bundle is the catalogue as of that build, not a stale cache.
+   */
+  private async _readCatalog(id: string): Promise<any | null> {
+    /*
+     * ASK TWICE BEFORE SAYING IT COULD NOT BE READ. The owner, 2026-11-02, on seeing "The catalogue
+     * above these components could not be read — no catalogue named carbon" a moment before the
+     * list filled: *"we just need to load the design system, right? that error message popped up
+     * for some reason."* A first ask can miss while the file is being served (the dev server
+     * answers something that is not JSON for an instant); the second ask is the same URL and costs
+     * nothing. A catalogue that is genuinely absent still fails BOTH asks and is still reported —
+     * the message is not removed, it stops being raised for a first miss.
+     */
+    for (const attempt of [1, 2]) {
+      try {
+        const res = await fetch(
+          `/src/components/A2UI/catalogs/${encodeURIComponent(id)}/catalog.json`,
+          { cache: 'no-store' }
+        );
+        const type = res.headers.get('content-type') ?? '';
+        if (res.ok && type.includes('json')) {
+          this._catalogFrom = attempt === 1 ? 'the live file' : 'the live file (the second ask)';
+          return await res.json();
+        }
+      } catch {
+        // Not fatal, and not silent either: the bundled copy below is the answer, and the caller
+        // is told which one it got through `_catalogFrom`.
+      }
+    }
+    const key = Object.keys(CATALOG_MODULES).find((p) => p.split('/').slice(-2)[0] === id);
+    if (!key) return null;
+    const mod: any = await CATALOG_MODULES[key]();
+    this._catalogFrom = 'the bundled copy (the live file could not be fetched)';
+    return mod?.default ?? mod;
+  }
+
+  /**
+   * Read the map — the Figma layer name, and the node, behind each tag.
+   *
+   * FETCHED FRESH, AND THAT IS THE FIX RATHER THAN AN OPTIMISATION. This read through the
+   * module import, which the browser CACHES: a component approved in this session was absent
+   * from the copy the page had loaded, so its row drew as `f-40001204-5752` — no layer name,
+   * and no measured layers under it — while the map on disk had held `System_Role` and its
+   * node the whole time. A reader that cannot see what was just written is worse than no
+   * reader. (The catalogue had the same bug and the same fix.)
+   *
+   * The bundled import stays as the fallback for a build, where `/src/` is not a URL and the
+   * bundle is the catalogue as of that build. A failure is REPORTED rather than swallowed: the
+   * list would still draw, but it would draw ids where it says it draws names.
+   */
+  private async _readMap(): Promise<any | null> {
+    try {
+      const res = await fetch('/src/components/registry.json', { cache: 'no-store' });
+      const type = res.headers.get('content-type') ?? '';
+      if (res.ok && type.includes('json')) {
+        this._mapFrom = 'the live file';
+        return await res.json();
+      }
+    } catch {
+      // Not fatal, and not silent either: which copy answered is kept in `_mapFrom`.
+    }
+    const key = Object.keys(MAP_MODULES)[0];
+    if (!key) return null;
+    const mod: any = await MAP_MODULES[key]();
+    this._mapFrom = 'the bundled copy (the live file could not be fetched)';
+    return mod?.default ?? mod;
+  }
+
+  private async _loadFigmaNames(): Promise<void> {
+    try {
+      const doc = await this._readMap();
+      if (!doc) throw new Error('registry.json was not found');
+      const next = new Map<string, string>();
+      const nextNodes = new Map<string, string>();
+      const byNode = new Map<string, string>();
+      const declared = new Set((this._catalog?.declared ?? []).map((c) => c.name));
+      for (const entry of doc?.components ?? []) {
+        const tag = entry?.litComponent;
+        const name = entry?.figmaName;
+        const nodeId = entry?.figmaNodeId;
+        if (typeof tag === 'string' && tag && typeof name === 'string' && name) {
+          next.set(tag, name);
+        }
+        if (typeof tag === 'string' && tag && typeof nodeId === 'string' && nodeId) {
+          nextNodes.set(tag, nodeId);
+          // A NODE IS A COMPONENT ONLY WHEN THE CATALOGUE DECLARES IT, and only then may a
+          // layer be marked as a reuse of one. A name match would cry wolf on the design's
+          // duplicate layer names — the one thing this view must never do.
+          //
+          // KEYED BY COMPONENT, not by the whole id: the map stores whichever instance the
+          // component was ingested from, and every OTHER instance of it in any design must
+          // resolve to that same entry. Keyed by the whole id, a second instance read as "not
+          // a component this catalogue has", which is the opposite of the truth.
+          if (declared.has(tag)) byNode.set(nodeIdentity(nodeId), tag);
+        }
+      }
+      this._figmaNames = next;
+      this._figmaNodeIds = nextNodes;
+      this._componentsByNode = byNode;
+      this._figmaNamesError = '';
+    } catch (error) {
+      this._figmaNames = new Map();
+      this._figmaNodeIds = new Map();
+      this._componentsByNode = new Map();
+      this._figmaNamesError = error instanceof Error ? error.message : String(error);
+    }
+  }
+
+  /**
+   * What to call a component in the list.
+   *
+   * A GENERATED component is named after its node — `f-<node id>` — so it has no word of its
+   * own and the map supplies the Figma layer it came from. A HAND-BUILT component is already
+   * named with a word, and the map can hold several Figma origins for one of those, so it
+   * keeps its own key. When neither yields a name the key is shown: a row with no label at all
+   * would be worse than a row labelled with an id.
+   */
+  private _label(name: string): string {
+    if (!name.startsWith('f-')) return name;
+    return this._figmaNames.get(name) || name;
+  }
+
+  /** Does this row answer the typed words? Its name, its tag, or the Figma layer behind it. */
+  private _matches(name: string): boolean {
+    const query = this._query.trim().toLowerCase();
+    if (!query) return true;
+    return `${name} ${this._label(name)}`.toLowerCase().includes(query);
+  }
+
+  /**
+   * THE SEARCH BOX, ABOVE THE CATALOGUE IT FILTERS.
+   *
+   * Owner, 2026-10-26: *"add a search box for that data table at the top… it's a filter."* It sits
+   * above the catalogue's own block and the rows beneath it, and it says how many rows it is
+   * showing out of how many, so a short list is understood as a filter rather than as a catalogue
+   * that lost its components.
+   */
+  private _renderSearch(): TemplateResult {
+    const query = this._query.trim();
+    const total = this._catalog?.declared.length ?? 0;
+    const shown = query
+      ? (this._catalog?.declared ?? []).filter((comp) => this._matches(comp.name)).length
+      : total;
+    return html`<div class="searchbar">
+      <input
+        type="search"
+        class="searchinput"
+        placeholder="Search this catalogue by name"
+        aria-label="Search this catalogue by name"
+        .value=${this._query}
+        @input=${(event: Event) => {
+          this._query = (event.target as HTMLInputElement).value;
+          this.requestUpdate();
+          /* THE FILTER IS STATE, SO IT IS ANNOUNCED (2026-11-02). The host remembers it with the
+             conversation, so a session reopens showing the rows the person was looking at. A value
+             written BY THE HOST does not fire this: an input event is a person's act. */
+          this.dispatchEvent(new CustomEvent('layers-query', {
+            bubbles: true,
+            composed: true,
+            detail: { query: this._query },
+          }));
+        }}
+      />
+      ${query
+        ? html`<div class="searchcount">
+            ${shown} of ${total} components match “${query}”.
+          </div>`
+        : nothing}
+    </div>`;
+  }
+
+  /**
+   * Read what draws each component — the renderer's own name resolution, and the element
+   * manifest's tag-to-file map. See `_drawn` for why the list cannot be honest without it.
+   */
+  private async _loadDrawn(force = false): Promise<void> {
+    this._drawn = await loadDrawn(force);
+    this.requestUpdate();
+  }
+
+  /**
+   * Read the audit's usage measurement — see `_usage`. A report that is missing or unreadable is
+   * REPORTED: "nothing uses it" and "nobody measured" are different claims, and only one of them
+   * is about the components.
+   */
+  private async _loadUsage(): Promise<void> {
+    try {
+      const res = await fetch(`/api/catalog/audit/${encodeURIComponent(this.pipeline)}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+      const doc = await res.json();
+      this._usage = doc?.usage ?? null;
+      const byComponent: Record<string, { blocking: string[]; advisory: string[] }> = {};
+      for (const finding of doc?.findings ?? []) {
+        const name = String(finding?.component ?? '');
+        if (!name) continue;
+        const bucket = (byComponent[name] ??= { blocking: [], advisory: [] });
+        const what = String(finding?.what ?? '');
+        if (finding?.level === 'blocking') bucket.blocking.push(what);
+        else bucket.advisory.push(what);
+      }
+      this._findings = byComponent;
+    } catch (error) {
+      this._usage = null;
+      this._findings = null;
+      // THE COMPONENTS SAY IT THEMSELVES (owner, 2026-10-25): a failed audit read leaves each
+      // row's own status at "not measured by the audit"; the catalogue carries no banner for it.
+      console.warn('the audit report could not be read, so every row reports not measured:', error);
+    }
+    this.requestUpdate();
+  }
+
+  /**
+   * WHAT THE ELEMENT ACTUALLY DOES — or says that it does nothing.
+   *
+   * The level above this one is what the ENTRY declares; this is what the CODE contains. They
+   * are different facts and the difference is the useful part: an element can be a static
+   * drawing while the design it came from has a dropdown in it, and then the honest answer is
+   * not an empty list — an empty list could equally mean nobody looked. It says "empty", which
+   * is a statement about the element, and names what is missing: nothing wired yet.
+   */
+  private _renderBehaviour(name: string, depth: number): TemplateResult {
+    const entry = this._usage?.[name];
+    if (!entry) return html``;
+    const dispatches = entry.dispatches ?? [];
+    const listens = entry.listens ?? [];
+    if (entry.behaviourMeasured === false) {
+      return html`<div class="lrow" style="--d:${depth}">
+        <span class="lchev"></span>
+        <span class="lname">behaviour</span>
+        <span class="lname quiet">not measured — the renderer draws this one, not a file</span>
+      </div>`;
+    }
+    if (!dispatches.length && !listens.length) {
+      return html`<div class="lrow" style="--d:${depth}">
+        <span class="lchev"></span>
+        <span class="lname">behaviour</span>
+        <span
+          class="lfempty"
+          title="The element dispatches nothing and listens for nothing. Whatever the design shows — a dropdown, a data call — none of it is wired in the element yet."
+          >empty — nothing implemented in the element yet</span
+        >
+      </div>`;
+    }
+    const detail = `dispatches: ${dispatches.join(', ') || 'none'} · listens for: ${listens.join(', ') || 'none'}`;
+    return html`<div class="lrow" style="--d:${depth}">
+      <span class="lchev"></span>
+      <span class="lname">behaviour</span>
+      <span class="lname quiet" title=${detail}
+        >implemented — dispatches ${dispatches.length}, listens for ${listens.length}</span
+      >
+    </div>`;
+  }
+
+  /**
+   * WHAT IT COMPOSES — the catalogue elements this component's own template draws, as children.
+   *
+   * THE THIRD KIND OF CHILD, and the only one most of this catalogue can have. A measured design
+   * needs a Figma node, and a hand-built component has none recorded (`prompt-section-editor`'s
+   * map entry says `figmaNodeId: null`), so no design can ever be measured under it and its row
+   * was childless for good. What it does have is its own template, and every element in it is a
+   * row a reader can open.
+   *
+   * LABELLED APART FROM THE MEASURED TREE ON PURPOSE. One is what the code draws, the other is
+   * what the design drew, and the two disagree exactly when the code is stale — which is the
+   * finding, not a mistake. Drawing them as one list would hide it.
+   */
+  private _renderComposes(name: string, depth: number): TemplateResult {
+    const children = this._usage?.[name]?.composes ?? [];
+    if (!children.length) return html``;
+    return html`
+      <div class="lrow subhead" style="--d:${depth}">
+        <span class="lchev"></span>
+        <span class="lname">composes — the elements its own template draws</span>
+      </div>
+      ${children.map((child) => {
+        const drawn = drawnBy(child, this._drawn);
+        const usage = this._usageMark(child);
+        const health = this._healthMark(child);
+        return html`<div
+          class="lrow opens"
+          style="--d:${depth + 1}"
+          role="button"
+          tabindex="0"
+          title="Open ${this._label(child)} in the preview"
+          @click=${() => this._openComponent(child)}
+          @keydown=${(e: KeyboardEvent) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              this._openComponent(child);
+            }
+          }}
+        >
+          <span class="ldot ${health.tone}" title=${health.title}></span>
+          ${usage?.tone === 'live'
+            ? html`<span class="ldot used" title=${usage.title}></span>`
+            : nothing}
+          <span class="lchev"></span>
+          <span class="lname">${this._label(child)}</span>
+          ${this._label(child) !== child
+            ? html`<span class="ltag" title="the catalogue's own key for it">${child}</span>`
+            : nothing}
+          <span class="ldrawn ${drawn.kind}" title=${drawn.note}>${markFor(drawn)}</span>
+        </div>`;
+      })}
+    `;
+  }
+
+  /**
+   * HOW A COMPONENT STANDS, as one dot: green when the audit finds nothing against it, amber
+   * when it finds only advisories, red when it finds something blocking or when nothing draws
+   * the component at all, grey when nobody has measured it yet.
+   *
+   * GREY IS ITS OWN STATE, and deliberately: a run that did not happen and a clean result must
+   * never look alike — that pair is what this whole application keeps apart.
+   */
+  private _healthMark(name: string): { tone: string; title: string } {
+    const found = this._findings?.[name];
+    const blocking = found?.blocking ?? [];
+    const advisory = found?.advisory ?? [];
+    const drawable = this._usage?.[name]?.drawable;
+    if (blocking.length || drawable === false) {
+      const why = [...blocking];
+      if (drawable === false) why.push('nothing draws it — no file defines its tag');
+      return { tone: 'bad', title: `${name}: ${why.join(' · ')}` };
+    }
+    if (advisory.length) {
+      return { tone: 'warn', title: `${name}: ${advisory.join(' · ')}` };
+    }
+    if (drawable === undefined) {
+      return { tone: 'unknown', title: `${name}: the audit has not measured it yet — this is not a clean result` };
+    }
+    return { tone: 'ok', title: `${name}: the audit finds nothing against it` };
+  }
+
+  /**
+   * Whether anything uses this component, in the audit's terms — or null when it was not
+   * measured, so a row can say nothing rather than claim "not used".
+   */
+  private _usageMark(name: string): { text: string; title: string; tone: string } | null {
+    const entry = this._usage?.[name];
+    if (!entry) return null;
+    const short = (p: string) => p.split('/').pop() || p;
+    const sent = entry.sent ?? [];
+    const renderedIn = entry.renderedIn ?? [];
+    if (sent.length) {
+      return {
+        text: 'sent by the app',
+        title: `In use — named as a component in a payload the app sends, from: ${sent.join(', ')}`,
+        tone: 'live',
+      };
+    }
+    if (renderedIn.length) {
+      return {
+        text: `drawn inside ${short(renderedIn[0])}`,
+        title: `In use — its tag is drawn in the template of: ${renderedIn.join(', ')}`,
+        tone: 'live',
+      };
+    }
+    return {
+      text: 'not in use',
+      title:
+        'Nothing the app sends names it and no template draws it: it is available to compose with, and nothing uses it today.',
+      tone: 'idle',
+    };
+  }
+
+  /**
+   * The Figma layer a component was drawn from, as a chip beside its key: the layer name and
+   * the node id, from the map.
+   *
+   * ASKED BY TAG, NOT BY NAME. The map is keyed by `litComponent`, which is the ELEMENT tag —
+   * so `AgentFlow` misses and `<agent-flow>` hits, which is the same name-is-not-a-tag mistake
+   * that made these rows unreadable in the first place.
+   *
+   * Null when the map holds nothing for it: an origin that is not recorded is said by the
+   * absence of the chip, and a guessed one would be believed.
+   */
+  /**
+   * WHEN THIS COMPONENT LAST CHANGED, for ordering the list.
+   *
+   * Owner, 2026-10-26: *"The list should be organized by last modified."* The approval date is the
+   * only date the record states for a component, so it is the one used; a component with no
+   * recorded approval sorts below every dated one, and the list falls back to its catalogue order
+   * for those. `0` is not a date — it is "no date", and it is placed last on purpose.
+   *
+   * THE FILE'S OWN WRITE TIME WAS TRIED AND REMOVED THE SAME DAY. It is not the component's date
+   * when the program is being worked on: the three rows at the top of the list became
+   * `component-preview`, `design2-figma-layers-view` and `figma-ingest-form` because those files were being
+   * edited, which is not a design change and not something the designer did. A component with no
+   * approval has no date this system recorded, and that is what it says.
+   */
+  private _modifiedFor(name: string): number {
+    const tag = tagFor(name);
+    const node = this._figmaNodeIds.get(tag) || '';
+    const rec = node ? (this._doc?.nodes?.[node] as Record<string, any> | undefined) : undefined;
+    const approved = Date.parse(String(rec?.approvedAt ?? ''));
+    return Number.isNaN(approved) ? 0 : approved;
+  }
+
+  private _originFor(name: string): { text: string; title: string } | null {
+    const tag = tagFor(name);
+    const layer = this._figmaNames.get(tag);
+    const node = this._figmaNodeIds.get(tag);
+    if (!node) return null;
+    const { identity, location } = describeNodeId(node);
+    return {
+      // THE NODE IS WHAT THE CHIP CARRIES, because the layer name IS the row's label now —
+      // repeating it beside itself would be the row saying one thing twice.
+      text: node,
+      // THE TITLE SAYS WHICH HALF IS WHICH, because the two halves mean different things: the
+      // component part under the semicolon is what this row IS, and the occurrence after it is
+      // only where the instance that was ingested happened to sit.
+      title:
+        `From the Figma map: ${layer ? `layer "${layer}"` : 'a layer it does not name'}. ` +
+        `Component ${identity}` +
+        (location ? ` — this was the instance at ${location} (a location, not the component)` : '') +
+        ` · full node ${node}`,
+    };
+  }
+
+  private async _load(): Promise<void> {
+    const token = ++this._loadToken;
+    this._state = 'loading';
+    this._reason = '';
+    this.requestUpdate();
+
+    await this._loadCatalog();
+    await this._loadFigmaNames();
+    await this._loadDrawn();
+    await this._loadUsage();
+
+    try {
+      const res = await fetch(`/catalog-figma/${encodeURIComponent(this.pipeline)}.json`, { cache: 'no-store' });
+      if (token !== this._loadToken) return; // a newer read won
+      const contentType = res.headers.get('content-type') ?? '';
+
+      // ABSENT IS NOT AN ERROR, AND IT IS NOT AN EMPTY TREE. A component's tree is written
+      // when it is approved; before the first approval for a pipeline there is no record at
+      // all, and showing "0 layers" would report "this design has no layers" instead.
+      //
+      // The dev server answers a request for a path that does not exist with the app's own
+      // index.html rather than a 404 — so absence arrives as HTML with a 200. Checking the
+      // content type is what catches that: a JSON file is JSON, and anything else here is
+      // the fallback page standing in for a file that is not there.
+      if (res.status === 404 || !contentType.includes('json')) {
+        this._state = 'absent';
+        this._doc = null;
+        this.requestUpdate();
+        return;
+      }
+
+      if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+      const doc = (await res.json()) as LayersDocument;
+      if (token !== this._loadToken) return; // a newer read won while this one parsed
+      this._doc = doc;
+      this._state = 'ready';
+    } catch (error) {
+      if (token !== this._loadToken) return;
+      this._state = 'failed';
+      this._reason = error instanceof Error ? error.message : String(error);
+      this._doc = null;
+    }
+    this.requestUpdate();
+  }
+
+  private _renderLayer(
+    layer: Layer,
+    names: Map<string, NameUse>,
+    flagged: Set<string>,
+    depth: number,
+    record: string
+  ): TemplateResult {
+    const name = layer?.name || '(no name)';
+    const id = layer?.id || '(no id)';
+    const type = layer?.type || '';
+    const isFlagged = !!layer?.name && flagged.has(layer.name);
+    const use = layer?.name ? names.get(layer.name) : undefined;
+    const isReuse = !!use && use.count > 1 && use.componentIds.size === 1 && !!layer?.componentId;
+    // A LAYER THAT IS A COMPONENT THIS CATALOGUE ALREADY HAS — the design reusing its own design
+    // system, which is the one thing a designer has to be able to see here. An INSTANCE names
+    // the component it is an instance OF; a layer can also BE that component's own node.
+    //
+    // MATCHED BY NODE, NEVER BY NAME. The design repeats layer names deliberately — two
+    // chevron-blue-closed in one frame — so a name match would mark drawings that are not the
+    // component at all, and a mark that cries wolf is not believed when it matters.
+    //
+    // AND MATCHED BY THE COMPONENT PART OF THE NODE (`nodeIdentity`), so an instance sitting in
+    // any location resolves to the component it is an instance of: `I…;…` is the same component
+    // as the reference before the semicolon, and the occurrence — the numbers that tell one
+    // instance from another — is exactly what must NOT be compared here.
+    const asComponent =
+      this._componentsByNode.get(nodeIdentity(layer?.componentId)) ||
+      this._componentsByNode.get(nodeIdentity(layer?.id)) ||
+      '';
+
+    const children = layer?.children ?? [];
+    const hasChildren = children.length > 0;
+    // Keyed by the record it is drawn under, so the same layer id appearing in two recorded
+    // trees does not open and close in both at once.
+    const key = `${record}/${id}`;
+    const isOpen = !this._collapsed.has(key);
+
+    return html`
+      <div
+        class="lrow ${isFlagged ? 'dup' : ''} ${hasChildren ? 'branch' : ''} opens"
+        style="--d:${depth}"
+        role="button"
+        tabindex="0"
+        title=${asComponent
+          ? `Open ${asComponent} in the preview`
+          : `Open ${name} — the layer itself, as it was measured`}
+        @click=${(e: Event) => {
+          e.stopPropagation();
+          if (asComponent) this._openComponent(asComponent);
+          else this._openLayer(layer, record, '');
+        }}
+        @keydown=${(e: KeyboardEvent) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            e.stopPropagation();
+            if (asComponent) this._openComponent(asComponent);
+            else this._openLayer(layer, record, '');
+          }
+        }}
+      >
+        ${/* THE CHEVRON IS THE ACCORDION, AND THE ROW IS THE THING YOU LOAD.
+              The whole row used to toggle, so nothing in the design's tree could be selected —
+              and the one part that looks like a control did nothing on its own. A chevron
+              expands; anything that is a component in the catalogue opens in the preview. A
+              layer that is neither has nothing to open, so its body is not a control at all and
+              the chevron keeps the whole job. */ ''}
+        <span
+          class="lchev ${hasChildren ? 'clicky' : ''}"
+          role=${hasChildren ? 'button' : nothing}
+          tabindex=${hasChildren ? '0' : nothing}
+          aria-label=${hasChildren ? (isOpen ? 'collapse' : 'expand') : nothing}
+          @click=${hasChildren
+            ? (e: Event) => {
+                e.stopPropagation();
+                this._toggleLayer(key);
+              }
+            : nothing}
+          @keydown=${hasChildren
+            ? (e: KeyboardEvent) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  this._toggleLayer(key);
+                }
+              }
+            : nothing}
+          >${hasChildren ? (isOpen ? '▾' : '▸') : ''}</span
+        >
+        <span class="lname">${name}</span>
+        ${asComponent
+          ? html`<span
+              class="lcatalog"
+              title="this is a component the catalogue already has, reused in this design"
+              >in the catalogue: ${asComponent}</span
+            >`
+          : nothing}
+        <span class="ltype">${type}</span>
+        ${layer?.componentId
+          ? html`<span
+              class="lcomp"
+              title="this layer is an instance of that component — the reference before the semicolon says WHICH component, the part after it only says where this instance sits"
+              >↳ ${nodeIdentity(layer.componentId)}</span
+            >`
+          : nothing}
+        ${layer?.componentId && nodeLocation(layer.componentId)
+          ? html`<span
+              class="lloc"
+              title="the occurrence — the location of this instance (the numbers after the colon), not part of the component's identity"
+              >at ${nodeLocation(layer.componentId)}</span
+            >`
+          : nothing}
+        ${isReuse ? html`<span class="lreuse">one of ${use!.count}</span>` : nothing}
+        ${layer?.text ? html`<span class="ltext">"${layer.text}"</span>` : nothing}
+      </div>
+      ${/* A LAYER THAT IS ONE OF OURS CARRIES ITS FUNCTIONS, one level down: this is where a
+            designer sees what the thing they are reusing actually does. */ ''}
+      ${asComponent ? this._renderFunctions(asComponent, depth + 1) : nothing}
+      ${hasChildren && isOpen
+        ? children.map((c) => this._renderLayer(c, names, flagged, depth + 1, record))
+        : nothing}
+    `;
+  }
+
+  /**
+   * The measured layers of one record, and what is worth saying about them — WITHOUT the
+   * record's own header. Split out because this belongs in two places: under the component it
+   * belongs to (which is where a reader looks for it), and under a record whose component is
+   * not in this catalogue at all.
+   *
+   * `depth` is the indent the tree starts at, so it can sit inside a component's expansion
+   * rather than at the left edge.
+   */
+  private _renderLayerTree(rec: NodeRecord, depth: number): TemplateResult {
+    const names = analyseNames(rec.tree);
+
+    // THE ROOT OF A RECORD'S TREE IS THE NODE THAT WAS INGESTED — the component itself. Every
+    // caller here already draws that node in the row above (its layer name, its tag, its node
+    // id — that row IS the node), so drawing the tree from its root printed the component
+    // twice, one line apart: the same name, the same id, the same frame, and a reader left
+    // working out whether those two are one thing or a duplicate. The children are what the
+    // row has not said yet.
+    //
+    // A node with nothing inside it is the exception: then it is all there is to show, and a
+    // blank space under a header reads as a read that failed.
+    const inside = rec.tree?.children ?? [];
+    const layers = inside.length ? inside : rec.tree ? [rec.tree] : [];
+
+    // Flagged: a name used more than once where the uses are NOT all instances of a single
+    // component — i.e. separate drawings under one name.
+    const flagged = new Set(
+      [...names.entries()]
+        .filter(([, use]) => use.count > 1 && use.componentIds.size !== 1)
+        .map(([name]) => name)
+    );
+
+    // Reuse: a name used more than once where every use IS an instance of one component.
+    const reuse = [...names.entries()].filter(
+      ([, use]) => use.count > 1 && use.componentIds.size === 1
+    );
+
+    return html`
+      ${reuse.length
+        ? html`<div class="reusen">
+            ${reuse.length} name${reuse.length === 1 ? '' : 's'} used more than once where every use is an
+            instance of one component:
+            ${reuse.map(
+              ([name, use]) => html`<code>${name}</code> ×${use.count} of
+                <code>${[...use.componentIds][0]}</code>`
+            )}
+            — the design reusing a component it already has. Correct; marked so it is not
+            mistaken for a fault.
+          </div>`
+        : nothing}
+
+      ${flagged.size
+        ? html`<div class="dupn">
+            ${flagged.size} layer name${flagged.size === 1 ? '' : 's'} drawn more than once
+            <em>without</em> a shared component:
+            ${[...flagged].map((name) => html`<code>${name}</code>`)} — marked below. These are
+            separate drawings under one name, and nothing downstream can tell them apart.
+          </div>`
+        : nothing}
+
+      ${rec.tree
+        ? layers.map((l) => this._renderLayer(l, names, flagged, depth, rec.nodeId || rec.tag || ''))
+        : html`<div class="lrow" style="--d:${depth}">(no tree recorded)</div>`}
+    `;
+  }
+
+  private _renderNode(nodeId: string, rec: NodeRecord): TemplateResult {
+    return html`
+      <div class="node">
+        <div class="nhead">
+          <span class="ntag">${rec.tag || '(no tag)'}</span>
+          ${/* The tree below no longer draws its root, so a record's own layer name and text are
+                kept here — this header is the only place they are said. */ ''}
+          ${rec.tree?.name ? html`<span class="lname">${rec.tree.name}</span>` : nothing}
+          <span class="nid">${nodeId}</span>
+          ${rec.tree?.text ? html`<span class="ltext">"${rec.tree.text}"</span>` : nothing}
+          <span class="nmeta">${rec.layers ?? 0} layers · approved ${rec.approvedAt || 'at an unrecorded time'}</span>
+        </div>
+        ${this._renderLayerTree(rec, 0)}
+      </div>
+    `;
+  }
+
+  /**
+   * The measured layers of one declared component, inside that component's own row.
+   *
+   * THIS IS WHY THE TWO TREES WERE MERGED. A component is two facts at once — what the
+   * catalogue declares it accepts, and the design it was drawn from — and they were drawn in
+   * two separate sections, so expanding a component showed only its properties while its
+   * layers sat below with nothing tying them to it. One component, one row, both facts.
+   */
+  private _renderMeasuredFor(tag: string): TemplateResult {
+    const nodeId = this._figmaNodeIds.get(tag);
+    const rec = nodeId ? this._doc?.nodes?.[nodeId] : undefined;
+
+    if (rec) {
+      return html`
+        <div class="lrow subhead" style="--d:1">
+          <span class="lchev"></span>
+          <span class="lname">measured from Figma — node ${nodeId} · ${rec.layers ?? 0} layers</span>
+          ${/* THE ROOT IS NOT DRAWN BELOW (see _renderLayerTree), so the two facts it can carry
+                that the row above does not already state are kept here rather than dropped. */ ''}
+          ${rec.tree?.type ? html`<span class="ltype">${rec.tree.type}</span>` : nothing}
+          ${rec.tree?.text ? html`<span class="ltext">"${rec.tree.text}"</span>` : nothing}
+        </div>
+        ${this._renderLayerTree(rec, 1)}
+      `;
+    }
+
+    // A READ THAT FAILED IS NOT AN ABSENT RECORD, and this is the one place the two would
+    // otherwise collapse into the same sentence: a failed read leaves no record in hand, so
+    // saying nothing below would claim a design has no layers when the truth is that nobody
+    // could look.
+    if (this._state === 'failed') {
+      return html`<div class="lrow" style="--d:1">
+        <span class="lchev"></span>
+        <span class="lname quiet">its layers could not be read: ${this._reason}</span>
+      </div>`;
+    }
+
+    // NO LINE FOR A COMPONENT WITH NO RECORD. There was one — "layers not recorded yet" — and it
+    // was true, but it sat exactly where the children belong and said a negative every time the
+    // row was opened, which reads as the list being broken rather than as a design not having
+    // been approved yet. A component with no measured design simply shows what it declares.
+    return html``;
+  }
+
+  private _toggleLayer(key: string): void {
+    if (this._collapsed.has(key)) this._collapsed.delete(key);
+    else this._collapsed.add(key);
+    this.requestUpdate();
+  }
+
+  /** Bring the row for the open component into view — see `updated`. */
+  private _revealSelected(): void {
+    const row = this.renderRoot.querySelector('.lrow.on');
+    if (row) row.scrollIntoView({ block: 'nearest' });
+  }
+
+  /**
+   * Tell the host to open this component in its preview.
+   *
+   * THE TREE IS A NAVIGATION — the most ordinary one there is. It lists what the catalogue
+   * holds, one row per component, and clicking a row is how you get to that component. A tree
+   * whose rows only expand is a list of names you cannot go anywhere from.
+   *
+   * The chevron keeps the expanding, with its own handler and `stopPropagation`, so one click
+   * does one thing: the row goes there, the chevron opens it up. Both were the row before.
+   */
+  private _openComponent(
+    tag: string,
+    facts: Array<{ label: string; value: string }> = [],
+    description = ''
+  ): void {
+    // THE PRESSED ROW MARKS ITSELF AT ONCE (owner, 2026-10-25): the mark used to depend on the
+    // host writing the selection back through the model, and the person saw nothing when that
+    // round trip was slow or missed. The list marks the row it was told to open, right here.
+    this.selected = tag;
+    /*
+     * CARBON'S OWN METADATA TRAVELS WITH THE CHOICE (owner, 2026-10-25): the package's manifest
+     * knows each element's attributes and properties. They are added when the map has them, and
+     * when it has none the panel is simply left with the facts it already had.
+     */
+    let carried = facts;
+    const meta = (carbonMeta as Record<string, { attributes?: string[]; properties?: string[] }>)[tag];
+    if (meta) {
+      if (meta.attributes && meta.attributes.length) {
+        carried = [...carried, { label: 'Attributes', value: meta.attributes.join(', ') }];
+      }
+      if (meta.properties && meta.properties.length) {
+        carried = [...carried, { label: 'Properties', value: meta.properties.join(', ') }];
+      }
+    }
+    this.dispatchEvent(
+      new CustomEvent('open-component', {
+        // THE ROW'S FACTS TRAVEL WITH THE CLICK (owner, 2026-09-30). A component row shows three
+        // things now — the name, the code and the description — and everything else it used to
+        // carry (the shape, what draws it, whether the app sends it, how many properties it takes,
+        // the audit's verdict, the node it came from) is read in the metadata panel beside the
+        // preview. The tree is where those facts are measured, so the tree is where they come from:
+        // the panel does not re-derive them, and the two can never disagree. A caller with nothing
+        // to add passes none, and the panel keeps whatever else it knows about the tag.
+        detail: { tag, facts: carried, description },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  /**
+   * Record the chevron's own answer, rather than toggling again.
+   *
+   * The tile's chevron is a button that flips ITSELF and reports the result (`chevron-toggle` with
+   * `{open}`). Toggling here as well would flip it a second time — the two states would then
+   * disagree, and the row would draw a chevron pointing the other way from the rows it opened. So
+   * the tree records what it was told.
+   */
+  private _setDeclaredOpen(key: string, open: boolean): void {
+    if (open) this._expandedDeclared.add(key);
+    else this._expandedDeclared.delete(key);
+    this.requestUpdate();
+  }
+
+  /**
+   * THE ROW'S OTHER FACTS, IN THE WORDS THE ROW USED TO WEAR THEM.
+   *
+   * Every value here was a badge on this row a moment ago (the shape, the drawn-by chip, the in-use
+   * chip, the property count, the audit dot's sentence, the Figma node chip). Nothing is newly
+   * derived and nothing is guessed: where the row said nothing — an unmeasured component, a
+   * component the Figma map does not record — the fact says THAT, because a fact left out and a
+   * fact that is fine look the same in a list.
+   */
+  private _rowFacts(
+    comp: DeclaredComponent,
+    drawn: DrawnBy,
+    origin: { text: string; title: string } | null,
+    usage: { text: string; title: string; tone: string } | null,
+    health: { tone: string; title: string }
+  ): Array<{ label: string; value: string }> {
+    const module = String(drawn.module ?? '');
+    return [
+      { label: 'Shape', value: comp.shape },
+      {
+        label: 'Drawn by',
+        value:
+          drawn.kind === 'element'
+            ? module.replace(/^src\/components\//, '')
+            : String(drawn.note || 'nothing draws it'),
+      },
+      { label: 'In use', value: usage ? usage.text : 'not measured by the audit' },
+      {
+        label: 'Properties',
+        value: `${comp.props.length}${comp.required.length ? ` (${comp.required.length} required)` : ''}`,
+      },
+      // The audit's own sentence, without the name it prefixes it with: the panel already shows
+      // which component is open, and a value that repeats the subject is noise in a two-column list.
+      { label: 'Audit', value: health.title.replace(/^[^:]*:\s*/, '') },
+      { label: 'Figma node', value: origin ? origin.text : 'not in the Figma map' },
+    ];
+  }
+
+  /**
+   * Open a LAYER — the design's own node, when it is not a component of the catalogue.
+   *
+   * EVERY ROW IN THIS TREE CAN BE OPENED, or the tree is only half navigable: a designer clicks
+   * `chevron-blue-closed` because it is a thing in the design they want to look at, and a row
+   * that does nothing because "it isn't a component" answers a question they did not ask. What a
+   * layer has is its MEASUREMENT — type, size, position, the layout it imposes, its text, the
+   * component it is an instance of — and that is what the host can show for it. Whether it is
+   * also a component of the catalogue is a separate fact, and it travels with it (`tag` empty
+   * means nothing draws it).
+   */
+  private _openLayer(layer: Layer, record: string, tag: string): void {
+    this.dispatchEvent(
+      new CustomEvent('open-layer', {
+        detail: {
+          record,
+          tag,
+          id: layer?.id ?? '',
+          name: layer?.name ?? '',
+          type: layer?.type ?? '',
+          size: layer?.size ?? null,
+          text: layer?.text ?? '',
+          componentId: layer?.componentId ?? '',
+          fill: layer?.fill ?? '',
+          layout: layer?.layout ?? null,
+          typeStyle: layer?.type_style ?? null,
+          // NO ARTWORK TRAVELS WITH THIS. The node's vendored pictures used to be sent here so the
+          // pane could show a designer the vectors the design carried — which meant the pane drew
+          // whatever the repository was holding rather than the design being previewed, and drew
+          // a removed or superseded version of it back onto the screen. The pane reads nothing
+          // now; see IngestModal's layer view.
+        },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  /**
+   * Open a FUNCTION in the preview: the component's own source, where that behaviour is written.
+   *
+   * A function is not something a tree can show — it has no children and no size. It is written
+   * in a file, so clicking one opens the file, the same way clicking a component row opens its
+   * element. `module` travels with it because the tree has already resolved which file draws
+   * this tag, and the host must not resolve it a second time and possibly differently.
+   */
+  private _openFunction(tag: string, event: string, module: string): void {
+    this.dispatchEvent(
+      new CustomEvent('open-function', {
+        detail: { tag, event, module },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  /**
+   * THE FUNCTIONS LEVEL — what the allowlist says this component does, directly under the
+   * component itself, because that is the item the behaviour is tied to.
+   *
+   * THE ENTRY'S WORDS, NOT A SCAN OF THE CODE. The audit already searches the sources for
+   * `dispatchEvent(...)` and reports where the two disagree — that is a finding, and it is
+   * reported where findings live. What a person auditing a catalogue needs here is what the
+   * entry DECLARES, so that the disagreement is visible at all.
+   *
+   * A component the allowlist does not hold gets that said rather than a blank: an empty level
+   * and an absent entry look identical otherwise, and one of them is a gap worth fixing.
+   */
+  private _renderFunctions(name: string, depth: number): TemplateResult {
+    const tag = tagFor(name);
+    const contract = contractFor(tag);
+    const drawn = drawnBy(name, this._drawn);
+    if (!contract) {
+      return html`<div class="lrow" style="--d:${depth}">
+        <span class="lchev"></span>
+        <span class="lname quiet">no entry in the allowlist — nothing declares what it does</span>
+      </div>`;
+    }
+    return html`
+      <div class="lrow" style="--d:${depth}">
+        <span class="lchev"></span>
+        <span class="lname">functions</span>
+        ${contract.events.length
+          ? contract.events.map(
+              (e) => html`<button
+                type="button"
+                class="lfner"
+                title="Open ${tag}'s source at ${e}"
+                @click=${(ev: Event) => {
+                  ev.stopPropagation();
+                  if (drawn.module) this._openFunction(tag, e, drawn.module);
+                }}
+              >${e}</button>`
+            )
+          : html`<span class="lname quiet">none listed</span>`}
+        ${/* THE FILE ITSELF, still one click away. The entry's DESCRIPTION is in the row's own
+              column now rather than repeated here, but the source is not a description — it is the
+              implementation, and a component with no events listed would otherwise have no way to
+              reach it. */ ''}
+        ${drawn.module
+          ? html`<button
+              type="button"
+              class="lfner"
+              title="Open ${drawn.module} in the preview"
+              @click=${(ev: Event) => {
+                ev.stopPropagation();
+                this._openFunction(tag, '', drawn.module);
+              }}
+            >source</button>`
+          : nothing}
+      </div>
+      ${this._renderBehaviour(name, depth)}
+    `;
+  }
+
+  private _toggleDeclared(key: string): void {
+    if (this._expandedDeclared.has(key)) this._expandedDeclared.delete(key);
+    else this._expandedDeclared.add(key);
+    this.requestUpdate();
+  }
+
+  /**
+   * THE CATALOGUE'S OWN TREE — every component it declares, and what each one accepts.
+   *
+   * This level exists whether or not anything has been ingested into the catalogue. The
+   * measured Figma layers are a record of APPROVED work, so they exist only for components
+   * that have been through an ingest — and a catalogue nobody has ingested into would
+   * otherwise show an empty box, which reads as "there is nothing here" rather than "nothing
+   * has been measured here". Two trees, two files, and each section says which it is.
+   */
+  private _renderDeclared(): TemplateResult {
+    const catalog = this._catalog;
+    // Nothing to declare when the catalogue itself could not be read — the catalogue block
+    // above already says so, and an empty tree here would be a second, quieter claim.
+    if (!catalog) return html``;
+
+    // THE LIST DOES NOT REORDER ITSELF. It used to float the most recently approved component
+    // to the top, out of file order, marked "just added" — which made the list disagree with
+    // what was open in the preview and put a fact about the PAST where a reader looks for the
+    // present. "What did I just add" is answered by the record below; "what am I looking at" is
+    // answered by marking the selected row, which is the only thing this list should move.
+
+    const count = catalog.components;
+    return html`<div class="sect">
+      ${/* THE SUB-HEADER AND THE PARAGRAPH ARE GONE (owner, 2026-09-30: *"you've got a bunch of sub
+            headers. None of that's necessary… This is not a styling exercise."*). The heading said
+            "Declared in this catalogue — N components" and the paragraph explained what a catalogue
+            entry is and what each chip means; above them the catalogue block already carries the
+            name, the count and the catalogId, and the rows below say the rest. What is NOT removed
+            is the failure reports: a read that did not happen is a fact about the list, and this
+            repository reports those rather than drawing a shorter list that looks complete. They are
+            drawn only when something actually failed. */ ''}
+      ${this._figmaNamesError
+        ? html`<div class="setbad">
+            Figma layer names could not be read from the map (${this._figmaNamesError}), so
+            generated components below are shown under their ids.
+          </div>`
+        : nothing}
+
+      ${/* THE UPDATE, MADE VISIBLE. An approve or a removal changes this list, and the change
+            has to be announced rather than just happen — the spinner is what says "the list is
+            being re-read", so an unchanged list afterwards is understood as the answer rather
+            than as nothing having happened. The rows stay on screen underneath while it spins:
+            emptying the list to reload it would make every update a blank. */ ''}
+      ${/* THE COLUMN SPINS WHILE SOMETHING IS BEING PROCESSED — its own re-read, or the host's
+            ingest in flight (see `busy`). The rows stay underneath while it spins: emptying the
+            list would make every update a blank. */ ''}
+      ${this._state === 'loading' || this.busy
+        ? html`<div class="lrow reloading" style="--d:0">
+            <span class="spin" aria-hidden="true"></span>
+            <span class="lname quiet">re-reading the list…</span>
+          </div>`
+        : nothing}
+
+      ${[...catalog.declared]
+        .filter((comp) => this._matches(comp.name))
+        .sort((a, b) => this._modifiedFor(b.name) - this._modifiedFor(a.name))
+        .map((comp) => {
+        const key = `declared/${comp.name}`;
+        const isOpen = this._expandedDeclared.has(key);
+        const isSelected = !!this.selected && comp.name === this.selected;
+        const drawn = drawnBy(comp.name, this._drawn);
+        const origin = this._originFor(comp.name);
+        const usage = this._usageMark(comp.name);
+        const health = this._healthMark(comp.name);
+        /*
+         * ONE DOT, WHERE THE DESIGN PUT IT (owner, 2026-09-30): *"just add the green dot or purple,
+         * or amber not both. the icon status slot indicates its location on the component."*
+         *
+         * There were two dots — the audit's verdict AND the purple in-use mark — and the owner's
+         * answer is one mark in the tile's status well. What it says, in the order that decides
+         * what a person does first: a finding (amber advice, red blocking, or nothing draws it)
+         * outranks everything, because it is the thing to act on; then a component the application
+         * actually uses is worth noticing; then clean. The colours are the tree's own — the same
+         * .ldot tones the two dots used, so nothing new had to be invented for one of them.
+         *
+         * NOTHING IS LOST BY SHOWING ONE. The dot's title carries both sentences — the audit's and
+         * the in-use mark's — so hovering still answers the question the second dot answered, and
+         * the metadata panel carries both in full.
+         */
+        const dotTone =
+          health.tone === 'bad' || health.tone === 'warn'
+            ? health.tone
+            : usage?.tone === 'live'
+              ? 'used'
+              : health.tone;
+        const dotTitle = usage ? `${health.title} · ${usage.title}` : health.title;
+        /*
+         * ── THE LAYER NAME, AND NOTHING ELSE IN THE ROW'S SECOND LINE ──────────────────────────
+         *
+         * Owner, 2026-11-02: *"remove the figma node id from the list name. We only need the layer
+         * name in the component data trees."* The line read the node the component was drawn from,
+         * then the element's own tag, which is generated from that node id and reads the same way.
+         * Both are addresses. The row names the layer; the address lives in the record and in the
+         * preview, where a reader who wants it can find it.
+         */
+        const codeLine = '';
+        /*
+         * AND A DESCRIPTION THE CATALOGUE DOES NOT CARRY IS SAID, NOT LEFT BLANK. Four entries
+         * declare none — the A2UI primitives (`Text`, `Image`, `Card`, `Button`) — and their rows
+         * came up with an empty description line, which reads exactly like a row that failed to
+         * load: *"Some of these don't even load."* The row is not the place to invent a description,
+         * and it is the place to say that this catalogue has none for that component.
+         */
+        const descriptionLine =
+          comp.description || 'No description is declared for this component in this catalogue.';
+        return html`
+          <div
+            class="lrow branch ${isSelected ? 'on' : ''}"
+            style="--d:0"
+            role="button"
+            tabindex="0"
+            title="Open ${this._label(comp.name)} in the preview"
+            @click=${() =>
+              this._openComponent(comp.name, this._rowFacts(comp, drawn, origin, usage, health), comp.description)}
+            @keydown=${(e: KeyboardEvent) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                this._openComponent(comp.name, this._rowFacts(comp, drawn, origin, usage, health), comp.description);
+              }
+            }}
+          >
+            ${/* THE ROW IS THE DESIGN'S OWN TILE. `f-40001207-3497` is the component-node row the
+                  catalogue holds — the one that was ingested for exactly this: a catalogue component
+                  drawn as a row. Its props are the three facts the owner asked this row to carry
+                  (the name, the code, the description), it draws its own chevron, and the dot goes
+                  in the status well it reserves. Nothing about the row is rebuilt here: the tree
+                  supplies the data and answers the two events. */ ''}
+            <f-40001207-3497
+              class="lrow-tile"
+              .name=${this._label(comp.name)}
+              .code=${codeLine}
+              .description=${descriptionLine}
+              .open=${isOpen}
+              @chevron-toggle=${(e: CustomEvent) => {
+                e.stopPropagation();
+                this._setDeclaredOpen(key, !!e.detail?.open);
+              }}
+              ><span slot="status" class="ldot ${dotTone}" title=${dotTitle}></span
+            ></f-40001207-3497>
+          </div>
+          ${/* A PROPOSED COMPONENT IS NOT PLACEABLE YET, AND THE ROW SAYS SO. The ingest writes
+                every entry draft: false — "an authorized person accepts each one" — and this line
+                is the person's control. The flip happens on the SERVER first; this row changes
+                only when the shell reports the write landed (`catalog-accept-settled`). */ ''}
+          ${comp.proposed
+            ? html`<div class="lrow" style="--d:1">
+                <span class="lchev"></span>
+                <span class="lname quiet">Proposed — not placeable yet</span>
+                ${this._acceptedThisSession.has(comp.name)
+                  ? html`<span class="lreuse">accepted</span>`
+                  : html`<button
+                      class="laccept"
+                      type="button"
+                      title="Accept this component — it becomes placeable in the rooms"
+                      @click=${(e: Event) => {
+                        e.stopPropagation();
+                        this._accept(comp.name);
+                      }}
+                    >Accept</button>`}
+              </div>`
+            : nothing}
+          ${isOpen
+            ? html`
+                ${/* THE FUNCTIONS COME FIRST: what it does is what a person is auditing for, and
+                      the declaration below it is the machine's contract. */ ''}
+                ${this._renderFunctions(comp.name, 1)}
+                ${comp.props.map(
+                  (p) => html`<div class="lrow" style="--d:1">
+                    <span class="lchev"></span>
+                    <span class="lname">${p}</span>
+                    ${comp.required.includes(p) ? html`<span class="lreuse">required</span>` : nothing}
+                  </div>`
+                )}
+                ${this._renderComposes(comp.name, 1)}
+                ${this._renderMeasuredFor(tagFor(comp.name))}
+              `
+            : nothing}
+        `;
+      })}
+      ${this._query.trim() && !catalog.declared.some((comp) => this._matches(comp.name))
+        ? html`<div class="empty">
+            Nothing in this catalogue matches “${this._query.trim()}”. The catalogue still holds
+            ${count} components; the search box only narrows what is shown.
+          </div>`
+        : nothing}
+    </div>`;
+  }
+
+  /**
+   * What a node id means, said in the row's own title.
+   *
+   * The two halves are different facts and the row shows them as one string, so the title is
+   * where the split is stated: the component part is what this layer IS, and the occurrence is
+   * only the location the instance sits in. A reader who takes the whole string for the
+  /**
+   * THE MEASURED LAYERS — the designs actually approved into this catalogue.
+   *
+   * Distinct from the declared list above and labelled as such: that section is what the
+   * catalogue SAYS it allows, this one is what has been through an ingest and written down. A
+   * catalogue with nothing ingested into it is not empty — it is a catalogue whose designs have
+   * not been measured — and this says exactly that rather than showing a blank.
+   */
+  private _renderRecord(): TemplateResult {
+    const doc = this._doc;
+    const recorded = Object.keys(doc?.nodes ?? {});
+    const declared = new Set((this._catalog?.declared ?? []).map((c) => c.name));
+    // ONLY WHAT THE CATALOGUE DOES NOT ACCOUNT FOR. Every other record is drawn inside its own
+    // component's row above — that is where a reader looks for a component's layers, and
+    // keeping a second copy of them down here was two places for one fact to disagree.
+    //
+    // AND NOT WHAT WAS REMOVED. The record keeps the approval (who approved what, and when) and
+    // it keeps the removal beside it (`removed[<node>]`), because a design that was measured,
+    // approved and then deleted by hand is a fact about this catalogue and belongs in its
+    // history. The FRONT is not where history is read: a component the owner deleted showing up
+    // under a heading about what this catalogue holds reads as a claim that it is still here,
+    // and the removal is not this screen's to remember. (Owner, 2026-09-29: *"There should be a
+    // record of me deleting it — user removal… There's no point to show that on the front."*)
+    const removed = new Set(Object.keys((doc as { removed?: Record<string, unknown> })?.removed ?? {}));
+    const orphans = recorded.filter(
+      (id) =>
+        !removed.has(id) &&
+        !declared.has(doc?.nodes?.[id]?.tag || id) &&
+        this._matches(doc?.nodes?.[id]?.tag || id)
+    );
+
+    if (this._state === 'loading') {
+      return html`<div class="sect"><div class="secthead">The layer record</div>
+        <div class="empty">Reading it…</div>
+      </div>`;
+    }
+    if (this._state === 'failed') {
+      return html`<div class="sect"><div class="secthead">The layer record</div>
+        <div class="empty bad">
+          It could not be read: ${this._reason}. No component above has its layers until it can
+          be — this is not "none of them do".
+        </div>
+      </div>`;
+    }
+    if (!orphans.length) return html``;
+
+    const count = orphans.length;
+    return html`<div class="sect">
+      <div class="secthead">Recorded, not in this catalogue — ${count}</div>
+      <div class="sectnote">
+        these designs were measured and approved, and they are not declared here now. They are
+        kept because a record the catalogue cannot account for is still a fact about what
+        happened. A design that was removed is not among them: the removal is written into the
+        same record (who, when, why) and is history rather than a row here.
+      </div>
+      ${orphans.map((id) => this._renderNode(id, doc!.nodes![id]))}
+    </div>`;
+  }
+
+  /**
+   * The catalogue, as its own file declares it — the level these components sit under.
+   *
+   * It is drawn from catalog.json, not from the layer record, because the catalogue is the
+   * authority on its own name and its own id. Two sources, two facts: the catalogue says what
+   * it is, the layer record says what has been approved into it.
+   */
+  private _renderCatalog(): TemplateResult {
+    if (!this._catalog) {
+      /*
+       * NOT READ YET IS NOT THE SAME AS A FAILED READ (owner, 2026-10-25: "a read warning appear
+       * before the DS components load ... it is red color and it is only when loading the first
+       * time"). The block used to paint its red failure state whenever no catalogue was held —
+       * including the frames of the very first read — so every cold entry flashed an error that
+       * was gone before it could be read. With no error recorded, the read is simply still in
+       * flight and the block says so in grey; the red state is reserved for a read that failed.
+       */
+      if (!this._catalogError) {
+        return html`<div class="cat">
+          <div class="catmeta">Reading the catalogue…</div>
+        </div>`;
+      }
+      return html`<div class="cat bad">
+        <div class="cattitle">The catalogue above these components could not be read.</div>
+        <div class="catmeta">${this._catalogError}</div>
+      </div>`;
+    }
+    /*
+     * THE HEAD IS THE INGESTED ELEMENT, DRAWN FROM HERE — and that is the only way the order the
+     * owner asked for exists (2026-09-30: *"Those tabs should be above what you just added"*).
+     *
+     * The tabs, the head and the rows are three parts of ONE column, and the tabs are drawn by this
+     * element; a head emitted as a SEPARATE sibling in the slot could only ever come before the tabs
+     * or after every row. Drawn HERE, the column reads tabs, head, rows — the ingest form's own
+     * order — and the head is still the component the owner ingested from Figma rather than markup
+     * written in code, which is what he asked for first. This is the recorded-nesting pattern the
+     * catalogue already uses for ConsoleCardGrid and agent-card-element: a component instantiating
+     * its own sub-piece from its template.
+     */
+    const head = html`<design2-f-40001207-3559
+      .name=${this._catalog.title}
+      .count=${`${this._catalog.components} components`}
+      .catalogId=${this._catalog.catalogId}
+    ></design2-f-40001207-3559>`;
+    return html`<div class="cat">${head}</div>`;
+  }
+
+  /**
+   * THE COMPONENT THAT WAS JUST MEASURED, WITH ITS CHILDREN — drawn above the catalogue.
+   *
+   * The record below is the APPROVED catalogue; a component that has only been measured is not in
+   * it, so before this the column had no row to open and no arrow to press. The root is drawn as a
+   * row (so it carries its own expander), and `_renderLayer` nests the children under it exactly
+   * as it does for a recorded node.
+   */
+  private _renderIngested(): TemplateResult {
+    const root = this.tree as Layer | undefined;
+    if (!root) return html``;
+    const names = analyseNames(root);
+    const flagged = new Set<string>();
+    return html`<div class="sect">
+      <div class="secthead">The design you just ingested, and its children</div>
+      ${this._renderLayer(root, names, flagged, 0, String((root as any).id ?? ''))}
+    </div>`;
+  }
+
+  render() {
+    const doc = this._doc;
+    // A form reads the node it just ingested; the overlay reads everything recorded. (The fold
+    // header that used to count these is gone — see the note in the template.)
+    const recorded = Object.keys(doc?.nodes ?? {});
+
+    return html`
+      <div class="wrap ${this.open ? 'open' : ''} ${this.inline ? 'inline' : ''}">
+        ${/* THE HEADER BUTTON — THE DROPDOWN — IS GONE (owner, 2026-09-30: *"Get rid of the drop-down
+              Figma layers, prompt composer, drop-down… that's not necessary."*). It was a fold
+              control whose title repeated the catalogue's name, whose state line read "N nodes", and
+              whose chevron collapsed everything under it. In this column there is one catalogue and
+              one tree, so the control had nothing to choose between and its three facts were
+              restated below it by the catalogue block and by the rows. The BODY IS ALWAYS DRAWN now,
+              which is what "the tabs move up" means: the tabs are the first thing in the column,
+              directly under the search form. Nothing else about the element changed — this is
+              content removed, not a restyle. */ ''}
+
+        <div class="body">
+          ${/*
+            THE ORDER THE OWNER ASKED FOR (2026-10-26): the search box first, then the catalogue's
+            own block, then the catalogues it can switch to. *"the search should be above it… and
+            that should be under this image."* The chips were above the catalogue's name, where they
+            read as filters of a list that was already named below them; under the name they read as
+            what they are, the other catalogues in this repository.
+          */ ''}
+          ${this._renderSearch()}
+          ${this.showHead ? this._renderCatalog() : nothing}
+          ${/*
+            THE INGESTED DESIGN'S TREE IS NOT DRAWN HERE. The column is the catalogue: the
+            components that exist. A design that was just measured is a preview — an ephemeral
+            draft that the middle column draws — and its layer tree is preview data, not a
+            catalogue entry. Drawing it here mixed the preview with the catalogue and the approval
+            queue. `_renderIngested` is kept, but nothing calls it from this column.
+          */ ''}
+          ${this._renderDeclared()}
+          ${this._renderRecord()}
+        </div>
+      </div>
+    `;
+  }
+
+  static styles = css`
+    /* THE ACCEPT CONTROL (2026-10-03) — a proposed entry's one act, beside the row it belongs
+       to. Small and quiet on purpose: the rail's tiles keep their own look, and this is not a
+       restyle of anything. Colors carry fallbacks so nothing here invents a token. */
+    .laccept {
+      margin-left: 8px;
+      padding: 3px 10px;
+      border: 1px solid var(--ds-navy, #234354);
+      border-radius: var(--ds-radius, 6px);
+      background: transparent;
+      color: var(--ds-navy, #234354);
+      font: inherit;
+      font-size: var(--ds-fs-xs, 11px);
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .laccept:hover { background: rgba(35, 67, 84, 0.08); }
+    :host {
+      /* A column, so the one part meant to grow, .body, can. Harmless to the overlay, whose
+         .wrap is fixed-positioned and therefore out of this flow. */
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    }
+    .wrap {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      z-index: 80;
+      width: 520px;
+      max-width: calc(100vw - 32px);
+      background: #ffffff;
+      border: 1px solid #cbd5d9;
+      border-radius: 8px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.22);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .wrap.open { max-height: calc(100vh - 64px); }
+
+    /* In the flow of a form, rather than floating over the screen: it takes the height its
+       host gives it and scrolls its own body, so it fills the column instead of stopping at
+       an arbitrary cap and leaving dead space under it. */
+    .wrap.inline {
+      position: static;
+      right: auto;
+      bottom: auto;
+      width: auto;
+      max-width: none;
+      box-shadow: none;
+      /* Grows into whatever height the host was given. A height of 100% here would need the
+         host to have a resolved height, which a flex item does not promise; taking the space
+         as a flex item does not depend on that. */
+      flex: 1;
+      min-height: 0;
+    }
+    .wrap.inline.open { max-height: none; }
+
+    .head {
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 8px 12px;
+      background: #f2f7f8;
+      border: none;
+      border-bottom: 1px solid #e3e8ea;
+      cursor: pointer;
+      text-align: left;
+    }
+    .htitle { font-size: 12px; font-weight: 700; color: #171717; }
+    .hstate { font-size: 11px; color: #2793a3; margin-left: auto; }
+
+    /* The read in progress. A record that is being fetched must not look like one that came
+       back empty — that is why there is a spinner here and not just the word "reading". */
+    .spin {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      margin-right: 5px;
+      vertical-align: -1px;
+      border: 2px solid #cbe6e3;
+      border-top-color: #1facc2;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .spin { animation-duration: 2.4s; }
+    }
+    .chev { font-size: 10px; color: #9aa6ad; }
+
+    .body {
+      /* The one part that grows: the header keeps its height, the tree takes the rest and
+         scrolls inside itself. */
+      flex: 1;
+      min-height: 0;
+      padding: 8px 0 12px;
+      overflow: auto;
+    }
+    .empty { padding: 10px 12px; font-size: 12px; line-height: 1.5; color: #5b666e; }
+    .empty.bad { color: #a3331f; }
+    .empty code { font-family: 'IBM Plex Mono', Menlo, monospace; }
+
+    /* ── A SECTION OF THE TREE, and which file it came from ─────────────── */
+    .sect { margin-bottom: 10px; }
+    .secthead {
+      padding: 3px 12px 1px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      color: #2793a3;
+    }
+    .sectnote {
+      padding: 0 12px 5px;
+      font-size: 10.5px;
+      line-height: 1.5;
+      color: #8a9499;
+      max-width: 90ch;
+    }
+    .sectnote code {
+      font-family: 'IBM Plex Mono', 'IBM Plex Mono', Menlo, monospace;
+      background: #eef1f3;
+      border-radius: 3px;
+      padding: 0 3px;
+    }
+    .shape {
+      flex-shrink: 0;
+      font-size: 10px;
+      color: #2793a3;
+      background: #eef7f8;
+      border-radius: 4px;
+      padding: 0 5px;
+    }
+
+    /* ── WHAT DRAWS IT, AND WHERE IT CAME FROM ──────────────────────────────
+       Two chips, two questions, both answered on the row. .lorigin is provenance — the Figma
+       layer and node the map records. .ldrawn is existence — a file, the renderer, or nothing.
+       They are separate because they are separate facts: the map says nothing about whether a
+       component can be drawn, which is exactly how 33 drawable rows came to look like missing
+       files. */
+    .lorigin {
+      flex-shrink: 0;
+      font-size: 10px;
+      color: #46535b;
+      background: #f2f4f5;
+      border-radius: 4px;
+      padding: 0 5px;
+      max-width: 24ch;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    /* THE CATALOGUE'S OWN KEY — f-40001204-5752 beside the layer a designer knows it as. */
+    .ltag {
+      flex-shrink: 0;
+      font-family: 'IBM Plex Mono', 'IBM Plex Mono', Menlo, monospace;
+      font-size: 10px;
+      color: #171717;
+      background: #eef1f3;
+      border-radius: 4px;
+      padding: 0 5px;
+    }
+    /* A LAYER THE CATALOGUE ALREADY DRAWS. Green, like every other "this exists" mark here,
+       because that is the fact it carries: the design is reusing it, not redrawing it. */
+    .lcatalog {
+      flex-shrink: 0;
+      font-size: 10px;
+      color: #2f7d36;
+      background: #eaf6ea;
+      border-radius: 4px;
+      padding: 0 5px;
+      white-space: nowrap;
+    }
+
+    /* THE ONE OPEN IN THE PREVIEW — the only mark in this list about the PRESENT: which row the
+       middle pane is showing. A bar rather than a border, so it costs the row no width and every
+       line under it keeps its alignment. MADE PLAIN (owner, 2026-10-25: "I can't really see the
+       selection process. It's so light"): a visible tint and a heavier gold bar. */
+    .lrow.on {
+      background: #e6efe0;
+      box-shadow: inset 4px 0 0 0 #b07d12;
+      border-radius: 6px;
+    }
+    .lrow.on .lname { color: #17456b; font-weight: 700; }
+    .lonmark {
+      flex-shrink: 0;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #1f5f8b;
+      background: #dbe9f6;
+      border-radius: 4px;
+      padding: 0 5px;
+      white-space: nowrap;
+    }
+
+    /* ── THE FUNCTIONS LEVEL — what a component says it does ─────────────────
+       A different kind of fact from everything above it: not where a component came from, but
+       what it is for. So it is drawn in its own colour rather than in the teal used for
+       structure and the green used for existence. Each event is a button because clicking one
+       opens the code that writes it — a function has no children to expand. */
+    .lfner {
+      flex-shrink: 0;
+      font-family: inherit;
+      font-size: 10px;
+      color: #6b3fa0;
+      background: #f2eaf9;
+      border: none;
+      border-radius: 4px;
+      padding: 0 5px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .lfner:hover { background: #e4d4f2; }
+    /* A FUNCTION THAT IS DESIGNED AND NOT BUILT. Dashed, because it marks a place something is
+       expected and nothing is there yet — not a fault and not a fact, a placeholder. */
+    .lfempty {
+      flex-shrink: 0;
+      font-size: 10px;
+      color: #8a5b12;
+      background: #fdf3e0;
+      border: 1px dashed #e0b96a;
+      border-radius: 4px;
+      padding: 0 5px;
+    }
+    .ldrawn {
+      flex-shrink: 0;
+      font-size: 10px;
+      border-radius: 4px;
+      padding: 0 5px;
+      max-width: 34ch;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .ldrawn.element { color: #2f7d36; background: #eaf6ea; }
+    .ldrawn.renderer { color: #27707f; background: #eef7f8; }
+    /* NOT THERE — the only mark here that is a reason to act, so it is the only one drawn as a
+       warning rather than as an annotation. */
+    .ldrawn.none { color: #a3331f; background: #fde8e4; }
+    /* OR NOBODY COULD LOOK. Never the same claim as "nothing draws this". */
+    .ldrawn.unknown { color: #8a5b12; background: #fdf3e0; font-style: italic; }
+
+    /* ── IS ANYTHING USING IT? — a different question from whether it can be drawn ──────────
+       Blue rather than green: green above says the component EXISTS, this says something
+       depends on it. "not in use" is quiet grey on purpose — a component can be perfectly
+       good and simply not wired yet, and a warning colour would call that a fault. */
+    .luse {
+      flex-shrink: 0;
+      font-size: 10px;
+      border-radius: 4px;
+      padding: 0 5px;
+      max-width: 34ch;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .luse.live { color: #1f5f8b; background: #e8f2fa; }
+    .luse.idle { color: #8a9499; background: #f2f4f5; }
+
+    /* ── THE SEARCH BOX — above the catalogue it narrows ─────────────────── */
+    .searchbar { margin: 0 6px 8px; }
+    .searchinput {
+      width: 100%;
+      box-sizing: border-box;
+      font: inherit;
+      font-size: 12px;
+      color: #171717;
+      padding: 5px 8px;
+      border: 1px solid #cbd8dc;
+      border-radius: 5px;
+      background: #ffffff;
+    }
+    .searchinput::placeholder { color: #8a9499; }
+    .searchinput:focus { outline: 2px solid #1facc2; outline-offset: 1px; }
+    .searchcount { margin-top: 4px; font-size: 10.5px; color: #5b666e; }
+
+    /* A READ FAILURE IN THE LIST, named rather than drawn as a shorter list. */
+    .setbad { margin-top: 5px; font-size: 10.5px; color: #a3331f; }
+
+    /* ── THE CATALOGUE — the level above the components ─────────────────── */
+    .cat {
+      margin: 0 6px 8px;
+      padding: 7px 9px;
+      background: #f2f7f8;
+      border-left: 3px solid #1facc2;
+      border-radius: 4px;
+    }
+    .cat.bad { background: #fde8e4; border-left-color: #a3331f; }
+    .cattitle { font-size: 12.5px; font-weight: 700; color: #171717; }
+    .cat.bad .cattitle { color: #a3331f; }
+    .catmeta {
+      margin-top: 3px;
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 10.5px;
+      color: #5b666e;
+    }
+    .catcount { font-weight: 700; color: #2793a3; }
+    .catmeta code {
+      font-family: 'IBM Plex Mono', 'IBM Plex Mono', Menlo, monospace;
+      font-size: 10px;
+      color: #6b767d;
+      word-break: break-all;
+    }
+
+    .node { border-top: 1px solid #eef1f3; padding-top: 6px; }
+    .node:first-child { border-top: none; }
+
+    .nhead {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      padding: 2px 12px 4px;
+      flex-wrap: wrap;
+    }
+    .ntag { font-size: 12px; font-weight: 700; color: #171717; }
+    .nid {
+      font-family: 'IBM Plex Mono', Menlo, monospace;
+      font-size: 11px;
+      color: #2793a3;
+    }
+    .nmeta { font-size: 11px; color: #8a9499; margin-left: auto; }
+
+    .dupn {
+      margin: 2px 12px 6px;
+      padding: 6px 8px;
+      background: #fdf3e0;
+      border-radius: 5px;
+      font-size: 11px;
+      line-height: 1.5;
+      color: #8a5b12;
+    }
+    .dupn code {
+      font-family: 'IBM Plex Mono', Menlo, monospace;
+      background: #fff8e3;
+      border-radius: 3px;
+      padding: 0 3px;
+    }
+
+    .lrow {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      padding: 1px 12px 1px calc(12px + var(--d) * 14px);
+      /*
+       * THE DEFAULT FACE, NOT THE CODE FACE (owner, 2026-11-02: *"Apply the default font to the
+       * component lists for the design systems."*). The row was set in IBM Plex Mono, so every
+       * component's name and description in the list read as code. Inherit takes the face this
+       * view's host declares — IBM Plex Sans — so the list follows the application's default and
+       * changes with it if that default ever changes. The small key pill beside a name keeps its
+       * own monospace: that one IS an identifier.
+       */
+      font-family: inherit;
+      font-size: 11.5px;
+      line-height: 1.6;
+      white-space: nowrap;
+    }
+    /*
+     * THE COMPONENT ROW'S TILE — the design's own node row, element f-40001207-3497, filling the row.
+     *
+     * IT CARRIES ITS OWN TYPE AND GEOMETRY, so the row around it stops being a line of text: the
+     * inherited monospace font and the row's baseline alignment belong to the badges that used to
+     * be here, and neither should reach into a catalogue element. An align-self of center is what
+     * seats a 40px band in a row laid out on a text baseline, and a min-width of zero is what lets
+     * the name and the description truncate inside it instead of pushing the row wider than the
+     * column.
+     */
+    .lrow-tile {
+      flex: 1 1 auto;
+      min-width: 0;
+      align-self: center;
+      /*
+       * THE ROW'S WORDS IN THE APPLICATION'S FACE (owner, 2026-11-02: *"Apply the default font to
+       * the component lists for the design systems."*). The tile is the design's own row and its
+       * type is the design's — Inter — which the component keeps as its default. This list is an
+       * application surface, not the design, so it names the face it wants and the tile uses it;
+       * the design's face is still what every other reader of that tile gets.
+       */
+      --catalog-row-font: 'IBM Plex Sans', system-ui, sans-serif;
+    }
+    /*
+     * AND THE CATALOGUE'S OWN NAME, IN THE SAME FACE. The head is a second design element
+     * (design2-f-40001207-3559) with its own inline Inter on the name, so the row's rule could not reach
+     * it — reported on the screen after the rows had changed ("so the font did not apply to the
+     * name of the DS"). The property is inherited into that element's shadow tree, and the head's
+     * companion assigns it to its spans.
+     */
+    design2-f-40001207-3559 {
+      --catalog-row-font: 'IBM Plex Sans', system-ui, sans-serif;
+    }
+    /* THE ROW'S OWN COLOR SHOWS THROUGH (owner, 2026-10-25: "There's a white fill. That's not
+       allowing you to see the color that you've added."): the tile painted its own white card,
+       and it covers the row's tint and its selected bar. In the catalogue's declared rows the
+       tile is transparent; the row carries the ground. */
+    .lrow.branch .lrow-tile { background: transparent; }
+    .lrow.dup { background: #fffdf3; }
+
+    /* The line that introduces a component's measured layers — a heading inside its expansion,       so the two halves of one component read as two halves rather than as more properties. */
+    .lrow.subhead {
+      margin-top: 3px;
+      color: #2793a3;
+    }
+    .lrow.subhead .lname {
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    /* A line that is standing in for something absent — dimmer than a fact, so it does not
+       read as one. */
+    .lname.quiet { color: #8a9499; font-style: italic; }
+
+    /* The re-read, on its own line above the rows and using the same spinner as the header. */
+    .lrow.reloading { padding-top: 3px; padding-bottom: 3px; align-items: center; }
+
+    /* A row with children is a tile you can roll up. A leaf is not — it has nothing under
+       it to hide, so it gets no chevron and no pointer. */
+    .lrow.branch { cursor: pointer; }
+    .lrow.branch:hover { background: #f2f7f8; }
+    .lrow.branch:focus-visible {
+      outline: 2px solid #1facc2;
+      outline-offset: -2px;
+    }
+    /* A ROW THAT OPENS SOMETHING. Kept visually distinct from .branch so the two controls never
+       look like one: the chevron is a small target you expand with, the row is the thing you
+       open. Only these rows take the pointer; a layer with no component behind it is not a
+       button and must not pretend to be one. */
+    .lrow.opens { cursor: pointer; }
+    .lrow.opens:hover .lname { color: #17456b; text-decoration: underline dotted #b9c2c7; }
+    .lrow.opens:focus-visible {
+      outline: 2px solid #1f5f8b;
+      outline-offset: -2px;
+    }
+    .lchev.clicky { cursor: pointer; }
+    .lchev.clicky:hover { color: #1f5f8b; }
+    .lchev:focus-visible { outline: 1px solid #1facc2; outline-offset: 1px; }
+
+    /* ── THE TWO DOTS, LEFT OF THE CHEVRON ──────────────────────────────────
+       The first is the audit's verdict: green clean, amber advisories only, red blocking or
+       undrawable, grey unmeasured. The second is purple and present ONLY when it is true — the
+       application's own interface uses this component today. Both are small round marks you
+       read at a glance; the sentence behind each one is its title, and neither invents a
+       judgement the report does not already make. */
+    .ldot {
+      flex-shrink: 0;
+      align-self: center;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #cbd5d9;
+    }
+    .ldot.ok { background: #42a34a; }
+    .ldot.warn { background: #d99b1f; }
+    .ldot.bad { background: #c0392b; }
+    /* NOT MEASURED. Never green and never red: nobody looked, which is its own answer. */
+    .ldot.unknown { background: #cbd5d9; }
+    .ldot.used { background: #7a3ea3; }
+    .lchev {
+      flex-shrink: 0;
+      width: 10px;
+      color: #9aa6ad;
+      font-size: 9px;
+    }
+    .lname { color: #171717; }
+    .lrow.dup .lname { color: #a3331f; font-weight: 700; }
+    .ltype { color: #9aa6ad; font-size: 10px; }
+    .lcomp {
+      font-size: 10px;
+      color: #2793a3;
+      background: #eef7f8;
+      border-radius: 3px;
+      padding: 0 4px;
+      white-space: nowrap;
+    }
+    .lreuse {
+      font-size: 10px;
+      color: #5b666e;
+      background: #eef1f3;
+      border-radius: 3px;
+      padding: 0 4px;
+      white-space: nowrap;
+    }
+    /* The occurrence: drawn beside the component reference, and quieter than it, because it
+       says where an instance sits and never what the component is. */
+    .lloc {
+      font-size: 10px;
+      color: #8a949b;
+      background: #f4f6f7;
+      border-radius: 3px;
+      padding: 0 4px;
+      white-space: nowrap;
+    }
+    .ltext { color: #2793a3; }
+
+    .reusen {
+      margin: 2px 12px 6px;
+      padding: 6px 8px;
+      background: #eef7f8;
+      border-radius: 5px;
+      font-size: 11px;
+      line-height: 1.5;
+      color: #27707f;
+    }
+    .reusen code {
+      font-family: 'IBM Plex Mono', Menlo, monospace;
+      background: #dceff2;
+      border-radius: 3px;
+      padding: 0 3px;
+    }
+  `;
+}
+
+// ── Register custom element ──────────────────────────────────────────────────
+if (!customElements.get('design2-figma-layers-view')) customElements.define('design2-figma-layers-view', FigmaLayersView);
+
+// ── JSX type declaration for React/TypeScript consumers ─────────────────────
+declare global {
+  interface HTMLElementTagNameMap {
+    'design2-figma-layers-view': FigmaLayersView;
+  }
+}
+
+declare module 'react' {
+  namespace JSX {
+    interface IntrinsicElements {
+      'design2-figma-layers-view': React.DetailedHTMLProps<
+        React.HTMLAttributes<FigmaLayersView> & {
+          pipeline?: string;
+          'node-id'?: string;
+          /**
+           * Lit declares this as `{ type: Boolean }`. React 19 sets the matching *property*
+           * on the element, so a real boolean is correct here — never the string "false",
+           * which Lit's boolean converter would read as true.
+           */
+          inline?: '' | boolean;
+          refresh?: number;
+          reset?: number;
+          selected?: string;
+          ref?: React.Ref<FigmaLayersView>;
+        },
+        FigmaLayersView
+      >;
+    }
+  }
+}

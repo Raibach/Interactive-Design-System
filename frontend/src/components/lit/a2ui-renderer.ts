@@ -364,17 +364,26 @@ export class A2UIRenderer extends LitElement {
     // is; updateDataModel says what it says. Property-only, no attribute: it is a
     // structure, and serialising it through an attribute would be lossy.
     dataModel: { type: Object },
+    /*
+     * THE CHOSEN SYSTEM'S OWN REGISTRY TABLE. Step 5 of `resolveTag` consults the partition's
+     * `registry.json` — fetched data, loaded by `loadSystemRegistry` — and that table is the wall
+     * that keeps one seat's names out of another's. The renderer has to say which system's table
+     * it is drawing for; empty means none, and the app's own tables answer as they always have.
+     */
+    system: { type: String },
   };
 
   declare components: A2UIComponent[];
   declare rootId: string;
   declare dataModel: Record<string, unknown>;
+  declare system: string;
 
   constructor() {
     super();
     this.components = [];
     this.rootId = 'root';
     this.dataModel = {};
+    this.system = '';
   }
 
   /** Errors from the pass being rendered. Rebuilt every render, never accumulated. */
@@ -476,7 +485,7 @@ export class A2UIRenderer extends LitElement {
       this._report(id, comp.component, `Depth exceeded 64 at "${id}" — refusing to recurse further.`);
       return;
     }
-    const tag = resolveTag(comp.component);
+    const tag = resolveTag(comp.component, this.system);
     if (!tag) {
       this._report(
         id,
@@ -523,7 +532,7 @@ export class A2UIRenderer extends LitElement {
     path: string[],
     slot: string | null = null,
   ): TemplateResult {
-    const tag = resolveTag(comp.component);
+    const tag = resolveTag(comp.component, this.system);
     // Resolved is not the same as defined: a name can map to a tag that no
     // element registers, and that tag draws an empty box with nothing to explain
     // it. _validate has already reported it; the same error block is drawn here
@@ -741,6 +750,7 @@ declare module 'react' {
       'a2ui-renderer': React.DetailedHTMLProps<
         React.HTMLAttributes<A2UIRenderer> & {
           'root-id'?: string;
+          system?: string;
           ref?: React.Ref<A2UIRenderer>;
         },
         A2UIRenderer

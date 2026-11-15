@@ -1,0 +1,30 @@
+{
+  "system": "surface-design",
+  "components": {
+    "chat-panel": "design2-chat",
+    "chat-tab": "design2-chat-tab",
+    "chat-navigation-bar": "design2-chat-navigation-bar",
+    "chat-header": "design2-chat-header",
+    "chat-messages": "design2-chat-messages",
+    "chat-action-bar": "design2-chat-action-bar",
+    "chat-input": "design2-chat-input",
+    "prompt-textarea": "design2-prompt-textarea",
+    "chat-plugin-tray": "design2-chat-plugin-tray",
+    "output-header": "design2-output-header",
+    "chat-fold": "design2-chat-fold",
+    "sessions-feed": "design2-sessions-feed",
+    "error-banner": "design2-error-banner",
+    "small-dropdown": "design2-small-dropdown",
+    "user-response-bubble": "design2-response-bubble",
+    "chat-product-tools": "design2-chat-product-tools",
+    "chat-product-thread": "design2-chat-product-thread",
+    "work-status": "design2-work-status",
+    "design-workspace": "design2-workspace",
+    "ConsoleCardGrid": "design2-console-card-grid",
+    "chat-repair-actions": "design2-repair-actions",
+    "design-left-footer": "design2-left-footer",
+    "figma-ingest-form": "design2-figma-ingest-form",
+    "figma-layers-view": "design2-figma-layers-view",
+    "ToolsTab": "design2-tools-tab"
+  }
+}
