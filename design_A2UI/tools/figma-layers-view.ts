@@ -63,8 +63,8 @@ import carbonMeta from '@/components/lit/carbon-meta.json';
  * said "no catalogue named carbon" a moment before it loaded correctly.
  */
 const CATALOG_MODULES = import.meta.glob([
-  '../A2UI/catalogs/prompt-composer/catalog.json',
-  '../A2UI/catalogs/carbon/catalog.json',
+  '../../frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json',
+  '../../frontend/src/components/A2UI/catalogs/carbon/catalog.json',
 ]);
 
 // ── The Figma layer name behind a generated component ────────────────────────
@@ -72,7 +72,7 @@ const CATALOG_MODULES = import.meta.glob([
 // reads as an id because it is one. The human name it has is the Figma layer it was drawn
 // from, and the map (registry.json) is where that pairing is recorded: `litComponent` →
 // `figmaName`. Read here so the list can show names without inventing any.
-const MAP_MODULES = import.meta.glob('../registry.json');
+const MAP_MODULES = import.meta.glob('../../frontend/src/components/registry.json');
 
 /** One component as catalog.json declares it — the name, its shape, and what it accepts. */
 interface DeclaredComponent {
