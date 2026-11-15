@@ -53,9 +53,20 @@ async function openOrCreate(host: any, session: string): Promise<void> {
       return;
     }
     const bound = String(host.conversationId ?? '');
-    if (bound && rows.some((row: any) => String(row.id) === bound)) return;
-    host._moveSeatTo(String(rows[0].id), { tab: rows[0].tab || 'chat' });
-    pointPackageAt({ sessionId: session, userId: host._userId() }, String(rows[0].id)).catch((err: unknown) => {
+    const boundRow = bound ? rows.find((row: any) => String(row.id) === bound) : undefined;
+    const withMessages = rows.filter((row: any) => Number(row.messageCount ?? 0) > 0);
+    /*
+     * THE DEFAULT IS A CONVERSATION WITH SOMETHING IN IT. A row created by an earlier bad load is
+     * empty; opening it draws a blank thread, which reads as the chat never loading. When the bound
+     * row is empty and another row has turns, the row with turns is the default; a bound row with
+     * turns is kept, and a package with no turns at all keeps its newest.
+     */
+    const target = (boundRow && Number(boundRow.messageCount ?? 0) > 0)
+      ? boundRow
+      : (withMessages[0] ?? boundRow ?? rows[0]);
+    if (boundRow && String(target.id) === bound) return;
+    host._moveSeatTo(String(target.id), { tab: target.tab || 'chat' });
+    pointPackageAt({ sessionId: session, userId: host._userId() }, String(target.id)).catch((err: unknown) => {
       host._listNote = `This package could not be pointed at its last chat: ${String((err as Error)?.message ?? err)}`;
       host.requestUpdate();
     });

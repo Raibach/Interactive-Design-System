@@ -1,22 +1,17 @@
 /**
  * THE SEAT'S VIEW — the column's frame, its strip, the rail, the five boxes and the foot, as one
- * template.
+ * template, restored from the archived room's own render so the drawing matches it exactly.
  *
- * The template is the seat's own text, moved from `design-chat-seat.ts` without a rule changed.
- * It reads the seat it is handed; it holds no state and starts no work. The five boxes and their
- * marks are `chat/parts/`; the four that draw through a place module (`railView`, `trayView`,
- * `inputView`, `conversationsView`, `threadView`) are called from here, in the order the drawing
- * puts them on screen.
+ * The template is the room's text, moved: the element names are the seat's `design2-*` names and
+ * the seat is read through the host it is handed. It holds no state and starts no work.
  */
 import { html, nothing } from 'lit';
-import { railView } from '@design2/surface-design/surface/rail/view';
-import { trayView } from '../tray/view';
-import { inputView } from '../input/view';
-import { conversationsView } from '../conversations/view';
-import { threadView, type ThreadHost } from '../thread/view';
+import logoAsset from '@/components/lit/assets/chat-logo-carbon.svg';
+import historyIcon from '@/assets/figma-chat-history-icon.svg';
 
-/** The seat, as this view reads it. Typed as the seat: the template's reach is the seat's own. */
+/** The seat, as this view reads it. */
 export function seatView(host: any) {
+
     /*
      * A SEAT MARKED `productRoom` HAS NO OTHER FACE (owner, 2026-10-06: *"no fallbacks in this
      * application … I would rather it just be a blank page than have a fallback."*). Until the
@@ -78,18 +73,20 @@ export function seatView(host: any) {
       ${seated
         ? nothing
         : html`
-            ${railView({
-              activeTab: host.activeTab,
-              railOwnedByHost: host.railOwnedByHost,
-              allowedTabs: host.allowedTabs || 'chat,tools,approvals,ux,settings',
-              tabLabels: host.tabLabels,
-              disabledTabs: host.disabledTabs,
-              collapsed: host.collapsed,
-              unread: host._unread,
-              approvalWaiting: host._approvalWaiting,
-              onTabChange: host._onTabChange,
-              onCollapseToggle: host._onCollapseToggle,
-            })}
+            <design2-chat-navigation-bar
+              active-tab=${host.activeTab}
+              ?rail-owned-by-host=${host.railOwnedByHost}
+              allowed-tabs=${host.allowedTabs || 'chat,tools,approvals,ux,settings'}
+              tab-labels=${host.tabLabels}
+              disabled-tabs=${host.disabledTabs}
+              ?collapsed=${host.collapsed}
+              ?unread=${host._unread}
+              ?approval-waiting=${host._approvalWaiting}
+              @tab-change=${host._onTabChange}
+              @collapse-toggle=${host._onCollapseToggle}
+            >
+              <img slot="logo" src=${logoAsset} width="50" height="50" alt="Grace" />
+            </design2-chat-navigation-bar>
             <div class="panel tab-${host.activeTab || 'none'} ${host.collapsed ? 'collapsed' : ''}">
               <!-- The listener sits on the WRAPPER so it hears conversation-select
                    from the Conversations dropdown below and from the thread. -->
@@ -160,18 +157,54 @@ export function seatView(host: any) {
                      tab showing its own view shows THE VIEW, nothing appended. Every
                      other tab and every other room: unchanged. -->
                 ${host._outputWindows.includes('conversations')
-                  ? conversationsView({
-                      statusText: (() => {
-                        const n = host.activeTab === 'approvals' ? 0 : (host._conversationRows?.length ?? 0);
-                        return `${n} ${n === 1 ? 'Conversation' : 'Conversations'}`;
-                      })(),
-                      open: host._conversationsOpen,
-                      note: host._listNote,
-                      rows: host._conversationRowsForList(),
-                      onToggle: host._toggleConversations,
-                      onKey: host._onConversationsKey,
-                      onNew: () => host._startNewConversation(),
-                    })
+                  ? html`<design2-chat-header
+                  data-slot="conversations"
+                  status-text=${(() => {
+                    const n = host.activeTab === 'approvals' ? 0 : (host._conversationRows?.length ?? 0);
+                    // The drawing's copy is "23 Conversations"; one of them is one conversation.
+                    return `${n} ${n === 1 ? 'Conversation' : 'Conversations'}`;
+                  })()}
+                  role="button"
+                  tabindex="0"
+                  aria-expanded=${host._conversationsOpen ? 'true' : 'false'}
+                  aria-label="Show this package's conversations"
+                  icon=${historyIcon}
+                  icon-node="40001123:6745"
+                  icon-size="22"
+                  block-node="40001119:6317"
+                  bar-node="40001119:6318"
+                  text-node="40001123:6744"
+                  grip-node="40001126:2014"
+                  grip-row-node="40001126:2015"
+                  grip-dots="40001126:2016,40001126:2017,40001126:2018,40001126:2019,40001126:2020"
+                  dm-sans
+                  ?open=${host._conversationsOpen}
+                  @click=${host._toggleConversations}
+                  @keydown=${host._onConversationsKey}
+                >
+                  <!-- THE NEW-CONVERSATION MARK, BESIDE THE BAR'S OWN (owner, 2026-11-03: *"The
+                       tools has a new chat button … that new chat button should also be on the
+                       chat conversations"*). It starts the same conversation the seat's own
+                       start path starts; the press stops at the button so the bar does not
+                       also fold the card. -->
+                  <button
+                    slot="bar-actions"
+                    class="conv-new"
+                    type="button"
+                    title="New conversation"
+                    aria-label="New conversation"
+                    @click=${(e: Event) => {
+                      e.stopPropagation();
+                      host._startNewConversation();
+                    }}
+                  >+</button>
+                  <!-- THE LIST IS ALWAYS INSIDE THE CARD (owner, 2026-10-31: *"you can't hide the
+                       conversations when I expand it, they have to expand with the drag"*). A press
+                       on the bar and a pull on the dots both resize the card; neither takes the
+                       rows away. -->
+                  <ul class="conversation-list">${host._conversationRowsForList()}</ul>
+                  ${host._listNote ? html`<p class="conv-note" role="status">${host._listNote}</p>` : nothing}
+                </design2-chat-header>`
                   : nothing}
                 <!-- THE DROPDOWN IS OUT OF THE TOP; ITS CAPABILITY IS NOT. See the
                      _conversationsTopSlot field above: v.4b draws no selector here, and the
@@ -225,23 +258,142 @@ export function seatView(host: any) {
                      the response inside it. The scroller and every view that was in the
                      output area before are inside it, unchanged: the thread, the trace
                      fold, the view slot, the content-header slot. -->
-                ${threadView(host as unknown as ThreadHost)}
+                <design2-chat-header card data-slot="session" .hasResults=${host._hasResultTurns}>
+                  <div class="content-scroll" @scroll=${host._onOutputScroll}>
+                    <div class="content-header"><slot name="content-header"></slot></div>
+                  ${host._showsThread
+                    ? html`${host._chatTopView()
+                        ? html`<div class="chat-top">
+                            <slot name="view" @slotchange=${host._onSlotChange}></slot>
+                          </div>`
+                        : nothing}
+                      ${host.activeTab === 'approvals' && host._inspectionReports.length
+                        ? html`<div class="fold-wrap">
+                            <design2-chat-fold
+                              label="Inspections"
+                              count=${`${host._inspectionReports.length} filed`}
+                              ?open=${host._approvalsOpen}
+                              @fold-toggle=${(e: CustomEvent<{ open: boolean }>) => { host._approvalsOpen = e.detail.open; host.requestUpdate(); }}
+                            >
+                              <div class="inspection-reports">
+                                ${host._inspectionReports.map(
+                                  (r) => html`<article class="inspection-report">
+                                    ${String(r.content || '')
+                                      .split('\n')
+                                      .map((line) => {
+                                        const t = line.trim();
+                                        if (!t) return nothing;
+                                        const cls = t.startsWith('‼')
+                                          ? 'line-attention'
+                                          : t.startsWith('✓')
+                                            ? 'line-ok'
+                                            : t.startsWith('INSPECTION')
+                                              ? 'line-head'
+                                              : 'line-body';
+                                        return html`<div class=${cls}>${t}</div>`;
+                                      })}
+                                  </article>`,
+                                )}
+                              </div>
+                            </design2-chat-fold>
+                          </div>`
+                        : nothing}
+                      ${host._historyError
+                        ? html`<p class="conversation-none" role="alert">${host._historyError}</p>`
+                        : nothing}
+                      ${host.productTools
+                        ? html`<design2-chat-product-thread
+                            .messages=${host._thread}
+                            ?running=${host.productRunning}
+                            .runStartedAt=${host.productRunStartedAt || 0}
+                            .expectedMinutes=${host.productExpectedMinutes || 0}
+                          ></design2-chat-product-thread>`
+                        : html`<design2-chat-messages
+                            .messages=${host._thread}
+                            .sending=${host._workActive}
+                            .stage=${host._workStage}
+                            .spentActions=${[...host._spent]}
+                            .spentTurn=${host._spentTurn}
+                            .doneActions=${host._stepsDone()}
+                          ></design2-chat-messages>`}`
+                    : host.activeTab === 'trace' && !host._tabClaimant('trace')
+                      ? html`<div class="fold-wrap">
+                          <design2-chat-fold
+                            label="Trace"
+                            ?open=${host._traceOpen}
+                            @fold-toggle=${(e: CustomEvent<{ open: boolean }>) => { host._traceOpen = e.detail.open; host.requestUpdate(); }}
+                          >
+                            <slot name="view" @slotchange=${host._onSlotChange}></slot>
+                            ${host._viewSlotted()
+                              ? nothing
+                              : html`<div class="view-waiting" role="status">
+                                  ${host._emptyViewLine()}
+                                </div>`}
+                          </design2-chat-fold>
+                        </div>`
+                      : host.activeTab === 'sessions'
+                        ? html`<div class="sessions-out">
+                            <design2-sessions-feed
+                              .queryRows=${host._laneRows}
+                              .receipt=${host._laneReceipt}
+                              .laneError=${host._laneError}
+                              ?laneBusy=${host._laneBusy}
+                              @sessions-lane-clear=${host._onSessionsLaneClear}
+                            ></design2-sessions-feed>
+                          </div>`
+                      : html`<div class="view-slot tab-${host.activeTab || 'none'}">
+                          <slot name="view" @slotchange=${host._onSlotChange}></slot>
+                          ${host._viewSlotted()
+                            ? nothing
+                            : html`<div class="view-waiting" role="status">
+                                ${host._emptyViewLine()}
+                              </div>`}
+                        </div>`}
+                  </div>
+                  <!-- THE DRAWN SCROLLBAR, INSIDE THE CARD. It is a SIBLING of the scroller
+                       and a child of the card, so it holds the card's right edge while the
+                       conversation travels under it — the card owns position: relative for
+                       it (see chat-header). Nothing at all when the content fits
+                       (_railVisible false); a 4px thumb over the card when it does not —
+                       _syncScrollThumb holds its length and offset. -->
+                  ${host._showScrollBar && host._railVisible
+                    ? html`<div class="scroll-rail">
+                        <div
+                          class="scroll-thumb"
+                          role="scrollbar"
+                          aria-orientation="vertical"
+                          aria-label="Scroll the chat"
+                          aria-valuemin="0"
+                          aria-valuemax=${host._scrollMax}
+                          aria-valuenow=${host._scrollPos}
+                          style=${`height: ${host._thumbH}px; top: ${host._thumbTop}px`}
+                          @mousedown=${host._onThumbDown}
+                        ></div>
+                      </div>`
+                    : nothing}
+                </design2-chat-header>
               </div>
               <div class="chat-input-wrapper">
-                ${inputView({
-                  modelLabel: host.modelLabel ?? 'Models',
-                  trailing: host._seatIsConsole === false ? 'console' : 'agent',
-                  composerPackage: host.composerPackageId ?? '',
-                  busy: host._sending,
-                  hasText: host._draft.trim().length > 0,
-                  inputHeight: host.inputHeight,
-                  onSend: host._onSendCommand,
-                  onStop: host._onStopCommand,
-                  onMessageSent: host._onMessageSent,
-                  onComposerKey: host._onComposerKey,
-                  onDraftInput: host._onDraftInput,
-                  onProductPaste: host._onProductPaste,
-                })}
+                <design2-chat-action-bar
+                  model-label=${host.modelLabel ?? 'Models'}
+                  trailing=${host._seatIsConsole === false ? 'console' : 'agent'}
+                  composer-package=${host.composerPackageId ?? ''}
+                  ?busy=${host._sending}
+                  ?has-text=${host._draft.trim().length > 0}
+                  @send-input-to-model=${host._onSendCommand}
+                  @stop-model-thinking=${host._onStopCommand}
+                ></design2-chat-action-bar>
+                <design2-chat-input
+                  .height=${host.inputHeight}
+                  @message-sent=${host._onMessageSent}
+                  @keydown=${host._onComposerKey}
+                >
+                  <design2-prompt-textarea
+                    placeholder="chat input"
+                    @value-input=${host._onDraftInput}
+                    @paste=${host._onProductPaste}
+                  ></design2-prompt-textarea>
+                </design2-chat-input>
                 <!-- THE TRAY IS v.4b's FOOT. The navy <design2-chat-footer> that stood here is
                      REPLACED: the drawing does not draw it, and the owner's ruling is that
                      the drawing is the truth — "If the design doesn't draw it, then it's
@@ -254,16 +406,20 @@ export function seatView(host: any) {
                      down."). The flag is the product room's binding alone — every other
                      seat keeps the tray (its five marks retired 2026-10-14; label and
                      credit alone — see its header). See <design2-chat-product-tools>. -->
-                ${trayView({
-                  productTools: host.productTools,
-                  figmaConnected: host.productFigmaConnected,
-                  githubConnected: host.productGithubConnected,
-                  visualEditActive: host.productVisualEditActive,
-                  onProductAttach: (e) => host._forwardProductAttach(e.detail.files),
-                  onProductTool: (e) => host._forwardProductTool(e.detail.tool),
-                })}
+                ${host.productTools
+                  ? html`<design2-chat-product-tools
+                      .figmaConnected=${host.productFigmaConnected}
+                      .githubConnected=${host.productGithubConnected}
+                      .visualEditActive=${host.productVisualEditActive}
+                      @product-attach=${(e: CustomEvent<{ files: File[] }>) =>
+                        host._forwardProductAttach(e.detail.files)}
+                      @product-tool=${(e: CustomEvent<{ tool: string }>) =>
+                        host._forwardProductTool(e.detail.tool)}
+                    ></design2-chat-product-tools>`
+                  : html`<design2-chat-plugin-tray></design2-chat-plugin-tray>`}
               </div>
             </div>
           `}
     `;
+  
 }
