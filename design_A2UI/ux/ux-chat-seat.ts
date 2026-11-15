@@ -86,6 +86,11 @@ import {
 } from './input/actions';
 import { sessionsLaneClearAction, type SessionsLaneHost } from './thread/actions/sessions-lane-clear';
 import './parts/design-sessions-feed';
+/* THE PAGE'S OWN FOUR ELEMENTS — the view names their tags, so their modules are imported here. */
+import './chat/context-chip';
+import './chat/discussion-panel';
+import './chat/notebook-panel';
+import './chat/product-chip';
 import './parts/design-prompt-textarea';
 import logoAsset from '@/components/lit/assets/chat-logo-carbon.svg';
 // The app's own logger. A turn warning from the server is written here as well as drawn in
