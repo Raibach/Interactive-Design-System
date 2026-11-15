@@ -126,7 +126,7 @@ export const toolsChatStyles = css`
        panel, flush against the edge of the box that clips it, and the panel paints
        over it. Until the rail is the panel's sibling inside a right-column
        container, any fix from inside this element is a workaround. */
-    design2-chat-navigation-bar { flex-shrink: 0; will-change: transform; }
+    design2-tools-chat-navigation-bar { flex-shrink: 0; will-change: transform; }
     /* The panel FILLS its column and snaps to the edges of the browser window.
        contain: layout paint scopes its internals so a window drag-resize
        doesn't invalidate the whole surface every frame. */
@@ -225,7 +225,7 @@ export const toolsChatStyles = css`
        instance that leads (the readout passes variant="lead") rather than left in a custom
        property: the value check compares what it can read, and a var() was a value neither it
        nor a reader could hold against the file. */
-    .chat-output-wrapper > design2-chat-header:first-child { --block-pad-top: 16px; }
+    .chat-output-wrapper > design2-tools-chat-header:first-child { --block-pad-top: 16px; }
     /* THE CARD IS BOUNDED BY THE REGION, AND THAT IS WHAT MAKES THE THREAD SCROLL.
        It GROWS to fill what the bars leave (a short thread still fills the region, the
        design's own view) and it SHRINKS no further than the region allows — flex 1 1 auto
@@ -235,8 +235,8 @@ export const toolsChatStyles = css`
        conversation could not be rolled at all (owner, 2026-09-19: "still cannot scroll, it's
        weird"). The note that used to stand here — that allowing shrink would stop the region
        scrolling — was true while the REGION was the scroller, which it no longer is. */
-    design2-chat-header[card] { flex: 1 1 auto; min-height: 0; }
-    design2-small-dropdown { flex-shrink: 0; }
+    design2-tools-chat-header[card] { flex: 1 1 auto; min-height: 0; }
+    design2-tools-small-dropdown { flex-shrink: 0; }
     /* "chat-output-slot-area" #40001085:1521 — column, padding 10px 20px, gap 10px,
        vertical HUG. The HUG is why the Conversations row is as tall as the dropdown
        and no taller; only the two below it are drawn to fill.
@@ -411,7 +411,7 @@ export const toolsChatStyles = css`
       font-style: italic;
       opacity: 0.7;
     }
-    design2-chat-messages { flex: 1 1 auto; min-height: 0; display: flex; }
+    design2-tools-chat-messages { flex: 1 1 auto; min-height: 0; display: flex; }
     /* The host's slot above the content. It takes what its content asks for and
        NOTHING when it is empty — no height, no border, no gap. This is what keeps the
        new slot cost-free for every assembly that does not fill it. */
@@ -500,7 +500,7 @@ export const toolsChatStyles = css`
       height: 100%;
       min-height: 0;
     }
-    .sessions-out design2-sessions-feed { flex: 1 1 auto; min-height: 0; }
+    .sessions-out design2-tools-sessions-feed { flex: 1 1 auto; min-height: 0; }
     /* THE EVALS TAB'S VIEW — the same pair as the two above, for the tab whose view is the
        evaluators index (owner, 2026-10-17: *"you just take the exact information and stick
        it into the chat output — we'll design it later"*). */
@@ -592,10 +592,10 @@ export const toolsChatStyles = css`
     @keyframes view-spin {
       to { transform: rotate(360deg); }
     }
-    design2-chat-action-bar { flex-shrink: 0; }
-    design2-chat-input { flex-shrink: 0; }
-    design2-chat-footer { flex-shrink: 0; }
-    design2-chat-plugin-tray { flex-shrink: 0; }
+    design2-tools-chat-action-bar { flex-shrink: 0; }
+    design2-tools-chat-input { flex-shrink: 0; }
+    design2-tools-chat-footer { flex-shrink: 0; }
+    design2-tools-chat-plugin-tray { flex-shrink: 0; }
     /* A seat handed over by the host fills the column. The empty modifier is display:none rather
        than a zero-height box on purpose: an empty flex child with flex-grow would take the space
        the element's own pieces are supposed to have. */
@@ -670,7 +670,7 @@ export const toolsChatStyles = css`
        expands it, it reveals the conversation list."*). The list is a child of the header now, so
        the card's own body draws it. Its 65px cap belonged to the old outside band; inside the card
        the container's height is the space. */
-    design2-chat-header .conversation-list {
+    design2-tools-chat-header .conversation-list {
       /* THE LIST FILLS THE CARD AND SCROLLS INSIDE IT (owner, 2026-10-31): the card may be dragged
          all the way down, and the list takes the space it is given. */
       max-height: none;
@@ -679,7 +679,7 @@ export const toolsChatStyles = css`
       overflow: hidden;
       scrollbar-width: none;
     }
-    design2-chat-header .conversation-list::-webkit-scrollbar { width: 0; height: 0; }
+    design2-tools-chat-header .conversation-list::-webkit-scrollbar { width: 0; height: 0; }
     /* THE NEW-CONVERSATION CONTROL, BESIDE THE BAR'S OWN MARK (owner, 2026-10-31). One square
        mark, the bar's own tones, and it never takes the readout's width. */
     .conv-new {
