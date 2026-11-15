@@ -19,15 +19,52 @@
  * Part of the <chat-panel> composition. Not a catalog entry on its own.
  */
 import { LitElement, html, css, nothing } from 'lit';
-import { actionLinkStyles } from '../thread/cards';
-import { turnView } from '../thread/cards/turns';
+import { unsafeHTML } from 'lit/directives/unsafe-html.js';
+import { stripControlTags } from '@/shared/plainText';
+import { renderMarkdown } from '@/shared/richText';
+import { HER_ANSWERS, BUILD_WIREFRAME, EDIT_NODE } from '@/shared/actionLink';
 import { resultsAreTheReading } from '@/shared/chatScroll';
-import '../thread/cards/work-status';
+import { figureStyles, figures } from '@/shared/figures';
+// The user's turn is the design's own row, not a styled div — v.4b draws it as
+// "user-response-bubble" #40001119:6352 and this element draws that element.
+import './design-user-response-bubble';
 
-import type { ChatMessage, ChatConversation } from '../thread/cards/types';
-export type { ChatMessage, ChatConversation };
+export interface ChatMessage {
+  role?: string;
+  content?: string;
+  /**
+   * WHICH THING ON THE CANVAS THIS TURN IS ABOUT, when it is about one. A turn that
+   * carries it wears a note saying so, answers a click, and lights up when that node is
+   * selected — the two views pointing at the same fact (AGENTIC_EDITOR/09, the loop).
+   * Absent on turns that are not about a node, which is most conversation.
+   */
+  nodeId?: string;
+  /** The small note above a linked turn: what part of the flow it is. */
+  label?: string;
+  /**
+   * AN ALERT, NOT A REMARK. A turn that STOPS the person — a held run that will not go until
+   * something is fixed — is not the same kind of thing as a sentence in a conversation, and it
+   * may not wear the same weight. The owner, 2026-09-23: "you can't serve alert messages with
+   * the same visual weight as every other message."
+   *
+   * It travels WITH the turn rather than being decided here by matching words in it: the seat
+   * that knows why it is an alert is the one that says so.
+   */
+  alert?: boolean;
+  /**
+   * A RUN'S RESULT, NOT CHAT. A turn the run produced — what the tools brought back, and the
+   * answer — is drawn as the output it is: rich text (markdown, rendered), at its own 14px
+   * size, so it reads differently from the conversation around it. The mark travels from the
+   * message's metadata (kind 'tool-answer' / 'run-result', read by the seat) or from the host's
+   * own dispatch; this element never guesses it from the words.
+   */
+  result?: boolean;
+}
 
-/* THE TURN TYPES LIVE IN chat/thread/cards/types.ts. */
+export interface ChatConversation {
+  id?: string;
+  title?: string;
+}
 
 export class ChatMessages extends LitElement {
   static properties = {
@@ -96,9 +133,68 @@ export class ChatMessages extends LitElement {
     this.doneActions = [];
   }
 
-  /* THE WORK CARD'S CLOCK LIVES IN chat/thread/cards/work-status.ts. */
+  /**
+   * THE WORK CARD'S CLOCK — a behavioural port of AI Elements' <Reasoning> (MIT; the React
+   * sources are vendored at frontend/ai-elements/ — see the note there for why the seat, which
+   * is a Lit element with a shadow root, carries the port rather than the React original).
+   * Their behaviour, kept 1:1: opens while the work is in flight, remembers the duration when
+   * it ends, collapses to "Worked for Ns" a beat later, and reopens on a click. The seat hands
+   * the two facts (`sending` = in flight, `stage` = which kind); the clock lives here.
+   */
+  private _workStart = 0;
+  private _workMs: number | null = null;
+  private _workOpen = false;
+  private _workSeen: string[] = [];
+  private _workCollapseTimer: number | null = null;
 
-  static styles = [actionLinkStyles, css`
+  willUpdate(changed: Map<string, unknown>): void {
+    if (changed.has('sending')) {
+      const wasSending = Boolean(changed.get('sending'));
+      if (this.sending && !wasSending) {
+        this._workStart = Date.now();
+        this._workMs = null;
+        this._workOpen = true;
+        this._workSeen = [];
+        if (this._workCollapseTimer) {
+          clearTimeout(this._workCollapseTimer);
+          this._workCollapseTimer = null;
+        }
+      } else if (!this.sending && wasSending) {
+        this._workMs = Date.now() - this._workStart;
+        if (this.stage === 'building' && !this._workSeen.includes('Built the page')) {
+          this._workSeen = [...this._workSeen, 'Built the page'];
+        }
+        if (this._workCollapseTimer) clearTimeout(this._workCollapseTimer);
+        this._workCollapseTimer = window.setTimeout(() => {
+          this._workCollapseTimer = null;
+          this._workOpen = false;
+          this.requestUpdate();
+        }, 1000) as unknown as number;
+      }
+    }
+    if (changed.has('stage') && this.sending && this.stage === 'building') {
+      if (!this._workSeen.includes('Answered your message')) {
+        this._workSeen = [...this._workSeen, 'Answered your message'];
+      }
+    }
+  }
+
+  private _toggleWork = (): void => {
+    this._workOpen = !this._workOpen;
+    if (this._workOpen && this._workCollapseTimer) {
+      clearTimeout(this._workCollapseTimer);
+      this._workCollapseTimer = null;
+    }
+    this.requestUpdate();
+  };
+
+  private _workLabel(): string {
+    if (this.sending) return this.stage === 'building' ? 'Building the page…' : 'Thinking…';
+    const secs = Math.max(1, Math.round((this._workMs ?? 0) / 1000));
+    return `Worked for ${secs}s`;
+  }
+
+  static styles = [figureStyles, css`
     :host { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
     /* IT DOES NOT SCROLL. The column does — see chat-panel's .content-scroll — so this
        thread is as tall as its turns and the one scrollbar belongs to the column. An
@@ -260,7 +356,42 @@ export class ChatMessages extends LitElement {
        and still marks when its node is selected, and that is the turn's behaviour,
        not the bubble's. */
     .turn.user { background: transparent; padding: 0; }
-    /* THE ACTION LINKS' STYLES LIVE IN chat/thread/cards/action-links.ts. */
+    /* THE CHAT'S BUTTONS — the wire format's action links, drawn with the same wash the user's
+       turn uses (owner, 2026-09-19: "use that for all your buttons inside of the chat"),
+       never the Conversations dropdown. */
+    .turn .action {
+      font: inherit;
+      color: inherit;
+      background: var(--chat-user-bg, #eef2f7);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 6px;
+      padding: 3px 10px;
+      margin: 2px 4px 2px 0;
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+    .turn .action:hover { background: rgba(255, 255, 255, 0.16); }
+    /* A BUTTON THAT HAS BEEN PRESSED IS SPENT — it says so, and it stops answering.
+       The row is a LIST OF THINGS TO DO, and this is what makes that legible: one press and
+       the pressed one reads done while the others stay live and pressable.
+       HOW IT READS, and why: the fill goes (it is no longer offering anything), the ink is
+       held at the card's own colour rather than greyed — a spent button is still a label the
+       person may want to re-read, and this file already has the note about what grey does to
+       contrast on this surface (see the empty-thread rule below: #6c757d measured 2.62:1,
+       a fail). What marks it is the check, the absence of fill, and the default cursor.
+       NOT struck through: the words are the work that was done, not a mistake. */
+    .turn .action.spent {
+      background: transparent;
+      border-color: rgba(23, 23, 23, 0.12);
+      color: inherit;
+      cursor: default;
+      padding-left: 4px;
+    }
+    .turn .action.spent::before { content: '\\2713\\00a0'; }
+    .turn .action.spent:hover { background: transparent; }
+    /* A button that is not pressable must not invite a press with a pointing hand, and it
+       must not be reachable by keyboard as though it were still an answer. */
+    .turn .action.spent:disabled { pointer-events: none; }
     .empty {
       /* Nunito, per the owner's face ruling — see .thread above. */
       font-family: 'IBM Plex Sans', system-ui, sans-serif;
@@ -269,14 +400,64 @@ export class ChatMessages extends LitElement {
       line-height: 20px;
       color: #171717;
     }
-    /* THE WORK CARD'S STYLES LIVE IN chat/thread/cards/work-status.ts. */
+    /* THE WORK CARD — the seat's port of AI Elements' <Reasoning> (MIT): a shimmering label
+       while her turn is in flight, a collapsed "Worked for Ns" a beat after it ends, click to
+       reopen the stage trail. The colours are this app's own — the port is behavioural, not
+       cosmetic, because the React original cannot style itself inside this element's shadow
+       root (see frontend/ai-elements/README.md for the activation plan for the React sources). */
+    .work {
+      align-self: flex-start;
+      margin: 4px 0 10px;
+      max-width: 100%;
+    }
+    .work-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: none;
+      border: 0;
+      padding: 4px 2px;
+      cursor: pointer;
+      color: #6d6d6d;
+      font: inherit;
+      font-size: 13px;
+    }
+    .work-icon { width: 15px; height: 15px; flex: 0 0 auto; }
+    .work-chevron { width: 14px; height: 14px; transition: transform 150ms ease; }
+    .work-chevron.open { transform: rotate(180deg); }
+    .work-label.shimmer {
+      /* TWO LAYERS, like the original: the moving highlight OVER a solid base of the text
+         colour — without the base the label is invisible except during the highlight's pass
+         (caught by the drive, 2026-10-03: the still showed a blank label). */
+      background-image: linear-gradient(90deg, rgba(109, 109, 109, 0) 38%, #171717 50%, rgba(109, 109, 109, 0) 62%), linear-gradient(#6d6d6d, #6d6d6d);
+      background-size: 250% 100%, 100% 100%;
+      background-repeat: no-repeat;
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      animation: work-shimmer 1.6s linear infinite;
+    }
+    @keyframes work-shimmer {
+      from { background-position: 100% center; }
+      to { background-position: 0% center; }
+    }
+    .work-body {
+      padding: 2px 2px 6px 23px;
+      color: #6d6d6d;
+      font-size: 12.5px;
+      line-height: 18px;
+    }
+    .work-line + .work-line { margin-top: 2px; }
     /* No conversation selector here. The design puts it in the output area as
        <small-dropdown label="Conversations"> (chat-output-slot-area #40001085:1521),
        so this element is the thread and nothing else. */
   `,
   ];
 
-  /* The turn's role lives in chat/thread/cards/turns.ts. */
+  private _roleOf(m: ChatMessage): string {
+    const raw = String(m.role ?? (m as { type?: string }).type ?? 'assistant');
+    return raw === 'user' || raw === 'question' ? 'user' : 'assistant';
+  }
 
   /** The message count the view was last seated against — see `seatConversation` below. */
   private _seatCount = -1;
@@ -362,9 +543,85 @@ export class ChatMessages extends LitElement {
     return null;
   }
 
-  /* The rich-text renderer lives in chat/thread/cards/turns.ts. */
+  /**
+   * A HOST MESSAGE'S LINES AS STRUCTURE — headers, bold, bullets, numbered steps, and a fenced
+   * block for the raw error. The text is interpolated as values, never as HTML.
+   */
+  private _richText(text: string): unknown {
+    const out: unknown[] = [];
+    let list: 'ul' | 'ol' | null = null;
+    let items: unknown[] = [];
+    let fence: string[] | null = null;
+    const flush = () => {
+      if (!list) return;
+      out.push(list === 'ol' ? html`<ol>${items}</ol>` : html`<ul>${items}</ul>`);
+      list = null;
+      items = [];
+    };
+    const inline = (line: string): unknown[] =>
+      line.split(/(\*\*[^*]+\*\*)/g).map((part) => {
+        const bold = part.match(/^\*\*([^*]+)\*\*$/);
+        return bold ? html`<strong>${bold[1]}</strong>` : part;
+      });
+    for (const line of String(text ?? '').split('\n')) {
+      if (line.trim().startsWith('```')) {
+        if (fence) {
+          out.push(html`<pre class="raw">${fence.join('\n')}</pre>`);
+          fence = null;
+        } else {
+          flush();
+          fence = [];
+        }
+        continue;
+      }
+      if (fence) {
+        fence.push(line);
+        continue;
+      }
+      const bullet = line.match(/^\s*[-•]\s+(.*)$/);
+      if (bullet) {
+        if (list !== 'ul') { flush(); list = 'ul'; }
+        items.push(html`<li>${inline(bullet[1])}</li>`);
+        continue;
+      }
+      const numbered = line.match(/^\s*\d+\.\s+(.*)$/);
+      if (numbered) {
+        if (list !== 'ol') { flush(); list = 'ol'; }
+        items.push(html`<li>${inline(numbered[1])}</li>`);
+        continue;
+      }
+      flush();
+      if (!line.trim()) {
+        out.push(html`<div class="gap"></div>`);
+        continue;
+      }
+      const header = line.match(/^#{1,3}\s+(.*)$/) || line.match(/^\*\*([^*]+)\*\*$/);
+      if (header) {
+        out.push(html`<div class="hd">${inline(header[1])}</div>`);
+        continue;
+      }
+      out.push(html`<div class="line">${inline(line)}</div>`);
+    }
+    flush();
+    if (fence) out.push(html`<pre class="raw">${fence.join('\n')}</pre>`);
+    return out;
+  }
 
-  /* The segment parser lives in chat/thread/cards/action-links.ts. */
+  /**
+   * GRACE'S WORDS AS A PERSON PRINTS THEM — and the buttons those words carry. The control
+   * tags come out (pipeline instructions, see shared/plainText), the markers stay so the
+   * renderer can give the lines their structure, and every `[label](action:…)` link becomes
+   * a button. The user's own words are left exactly as typed; those are theirs.
+   */
+  private _segmentsOf(m: ChatMessage): Array<{ text?: string; label?: string; action?: string }> {
+    const isAssistant = this._roleOf(m) === 'assistant';
+    const raw = String(m.content ?? '');
+    const shown = isAssistant ? stripControlTags(raw) : raw;
+    return shown.split(/(\[.*?\]\(action:[^)]+\))/g).map((part) => {
+      const match = part.match(/^\[(.*?)\]\(action:([^)]+)\)$/);
+      return match ? { label: match[1], action: match[2] } : { text: part };
+    });
+  }
 
   /** An action button answers through the seat: the action goes back as a message — the
       same wire the retired seat's buttons sent (`[action]`). */
@@ -434,7 +691,62 @@ export class ChatMessages extends LitElement {
     }
   }
 
-  /* The button template lives in chat/thread/cards/action-links.ts. */
+  /**
+   * ONE BUTTON OF HER OFFER — pressed or still waiting.
+   *
+   * `disabled` on a spent one, so it cannot be pressed twice: what the app does for the ones it
+   * handles itself would happen again (a second insertion of the same tool, a second write),
+   * and for the ones that go back to her it would spend a model call to repeat an answer. The
+   * label stays on screen either way, because the record of what was offered is part of the
+   * conversation.
+   */
+  private _actionButton(label: unknown, action: unknown, turn: string) {
+    const a = String(action);
+    /*
+     * TWO WAYS A BUTTON IS DONE, AND THEY COVER TWO DIFFERENT KINDS OF BUTTON.
+     *
+     * THE PROMPT SAYS SO, for anything that changes it: a seat that was filled, a tool that was
+     * inserted, a description that was written. That survives a reload because the prompt does,
+     * and it is derived rather than remembered — see shared/buttonState.
+     *
+     * THE PERSON PRESSED IT, for the ones the prompt cannot prove: "Check the Figma node" changes
+     * nothing a reader can see, so no amount of reading the prompt will ever mark it. The press
+     * is the only evidence there is.
+     *
+     * AND A PRESS LASTS FOR THE PACKAGE, NOT FOR THE TURN — which is the whole of this fix. The
+     * mark was turn-scoped, so she could re-offer the same item in her next reply and it came
+     * back LIVE, over and over: the owner, 2026-09-23, "she's still not fixing things and then
+     * making that fixed item inactive … it seems to keep it." Her two answer words are the
+     * exception, because `[Confirm]` in a later turn is a different question and must not arrive
+     * already answered — those are named (HER_ANSWERS) and stay turn-scoped.
+     *
+     * AND `build-wireframe` IS THE SECOND EXCEPTION (2026-10-03 evening, measured the day the
+     * product room's build landed) — because under the package-wide rule a single press kills
+     * the room's whole loop. A repair is done once (the fix is in the prompt forever), but a
+     * BUILD answers THIS plan, and the product room's reality is build-again: *"no I don't like
+     * that button. Can you make it bigger? Can you move it to the side?"* is the NEXT build.
+     * Measured: the first press marked the action, and her refusal reply's fresh `[Build that]`
+     * — a real, different offer — arrived disabled. So the turn-scoped test applies to her
+     * answers AND to a build: the pressed button keeps its ✓ for its own turn, and each new
+     * plan arrives live.
+     *
+     * AND `edit-node` IS THE THIRD (2026-10-03 late) for the identical reason: a scoped edit
+     * answers THIS instruction about THIS tile — *"can you make it bigger?"* is the next edit —
+     * so each fresh offer must arrive live too.
+     */
+    const turnScoped = HER_ANSWERS.includes(a) || a === BUILD_WIREFRAME || a === EDIT_NODE;
+    const spent =
+      this.doneActions.includes(a) ||
+      (turnScoped
+        ? turn !== '' && this.spentTurn === turn && this.spentActions.includes(a)
+        : this.spentActions.includes(a));
+    return html`<button
+      class="action ${spent ? 'spent' : ''}"
+      data-action=${action}
+      ?disabled=${spent}
+      @click=${(e: Event) => this._onActionSend(e, String(action), turn)}
+    >${label}</button>`;
+  }
 
   /**
    * A TURN THAT IS ABOUT A NODE ANSWERS A CLICK — the other half of the link.
@@ -456,16 +768,39 @@ export class ChatMessages extends LitElement {
     return html`
       <div class="thread" role="log" aria-live="polite">
         ${turns.length
-          ? turns.map((m) => turnView(m, {
-              doneActions: this.doneActions,
-              spentActions: this.spentActions,
-              spentTurn: this.spentTurn,
-              highlightNodeId: this.highlightNodeId,
-              onSend: this._onActionSend,
-              onTurnClick: this._onTurnClick,
-            }))
+          ? turns.map((m) => html`<div class="turn ${this._roleOf(m)} ${m.alert ? 'alert' : ''} ${m.result ? 'result' : ''} ${m.nodeId ? 'linked' : ''} ${m.nodeId && m.nodeId === this.highlightNodeId ? 'hl' : ''}" data-node-id=${m.nodeId ?? nothing} title=${m.nodeId ? 'The note on the canvas this is about — click to point at it' : nothing} @click=${() => this._onTurnClick(m)}>${m.label ? html`<div class="note">${m.label}</div>` : nothing}${this._roleOf(m) === 'user' ? html`<user-response-bubble .text=${String(m.content ?? '')}></user-response-bubble>` : (m.result ? html`<div class="body markdown-body">${unsafeHTML(renderMarkdown(String(m.content ?? '')))}</div>` : html`<div class="body">${this._segmentsOf(m).map((seg) => (seg.action !== undefined ? this._actionButton(seg.label, seg.action, String(m.content ?? '')) : this._richText(seg.text ?? '')))}</div>`)}</div>`)
           : nothing}
-        <design2-work-status .sending=${this.sending} .stage=${this.stage}></design2-work-status>
+        ${this.sending || this._workMs !== null
+          ? html`
+              <div class="work" role="status">
+                <button
+                  class="work-head"
+                  type="button"
+                  aria-expanded=${this._workOpen ? 'true' : 'false'}
+                  @click=${this._toggleWork}
+                >
+                  <svg class="work-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 18V5"/>
+                    <path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/>
+                    <path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/>
+                    <path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/>
+                    <path d="M18 18a4 4 0 0 0 2-7.464"/>
+                    <path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/>
+                    <path d="M6 18a4 4 0 0 1-2-7.464"/>
+                    <path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/>
+                  </svg>
+                  <span class="work-label ${this.sending ? 'shimmer' : ''}">${figures(this._workLabel())}</span>
+                  <svg class="work-chevron ${this._workOpen ? 'open' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="m6 9 6 6 6-6"/>
+                  </svg>
+                </button>
+                ${this._workOpen
+                  ? html`<div class="work-body">
+                      ${(this._workSeen.length ? this._workSeen : ['Waiting for her reply']).map((line) => html`<div class="work-line">${line}</div>`)}
+                    </div>`
+                  : nothing}
+              </div>`
+          : nothing}
       </div>
     `;
   }
