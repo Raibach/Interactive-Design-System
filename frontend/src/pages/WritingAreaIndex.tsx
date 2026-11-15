@@ -16,7 +16,11 @@ import { SentryErrorBoundary } from "@/components/SentryErrorBoundary";
 import { warmLabGrounds } from "@/canvas/pageHelpers";
 import { ProductBox } from "@/rooms/product/ProductBox";
 import { ConsoleBox } from "@/rooms/console/ConsoleBox";
-import { DesignBox } from "@/rooms/design/DesignBox";
+import { DesignBox as Design2SurfaceBox } from "@design2/surface-design/DesignBox";
+import { DESIGN2_TAB } from "@design2/surface-design/tab";
+/* THE LIVING DESIGN ROOM IS NO LONGER IMPORTED (2026-11-15). The Design tab mounts the seat in
+   `design_A2UI/`; the room under `frontend/src/rooms/design` is the fallback and is reached by
+   nothing in the shell. */
 import { ComposerBox } from "@/rooms/composer/ComposerBox";
 import { GovernanceBox } from "@/rooms/governance/GovernanceBox";
 import type { ProductOpenAction } from "@/rooms/product/productSurface";
@@ -28,6 +32,15 @@ import { uxCapture } from "@/shared/uxCapture";
 import { AI_STANDBY_MESSAGE, ASSEMBLY_TIMEOUT_MS } from "@/shared/assembly";
 import { markArrival } from "@/shared/arrival";
 import type { FailureReport } from "@/shared/error-registry";
+
+/*
+ * THE DESIGN A2UI TAB LOADS THE DESIGN ASSEMBLY'S COPY (owner, 2026-11-15). The copy that the
+ * Design tab itself runs, in `design_A2UI/surface-design/`, draws this tab. Nothing of it is
+ * copied into the application: the application renders the component that lives in the folder.
+ */
+function Design2Box() {
+  return <Design2SurfaceBox />;
+}
 
 /*
  * THE SHELL DRAWS EACH ROOM'S WAIT (owner, 2026-10-25). Each spinner below is a copy of the one
@@ -64,6 +77,8 @@ const ROOM_SPINNERS: Record<string, RoomSpinner> = {
     sentence: 'Standing up the design workspace\u2026',
     sentenceColor: '#582846',
   },
+  /* THIS TAB'S OWN WAIT, COMPOSED FROM THE SEAT (RULES.md): the seat carries its sentence. */
+  design2: DESIGN2_TAB.spinner,
   product: {
     ringBorder: '3px solid rgba(240, 179, 35, 0.25)',
     ringColor: 'rgb(240, 179, 35)',
@@ -180,9 +195,21 @@ export default function Index(_props: WritingAreaIndexProps) {
   const [readyRooms, setReadyRooms] = useState<Record<string, boolean>>({});
   const [fadingRooms, setFadingRooms] = useState<Record<string, boolean>>({});
   const roomReadyRef = useRef<Record<string, boolean>>({});
+  /* THE TAB THAT IS STANDING, for the ready report below. Both Design tabs mount the one seat,
+     and that seat announces its own id; the report belongs to the tab that was pressed. */
+  const activeTabRef = useRef(headerTab);
+  activeTabRef.current = headerTab;
   useEffect(() => {
     const onRoomReady = (event: Event) => {
-      const room = String(((event as CustomEvent).detail || {}).room || '');
+      let room = String(((event as CustomEvent).detail || {}).room || '');
+      /*
+       * THE DESIGN TAB'S SEAT ANNOUNCES `design2`. The Design tab mounts the same surface, and
+       * the seat has one id, so its report is matched to the standing tab: `design2` ends the
+       * Design tab's ring while Design is the standing tab, and each tab's readiness is reset
+       * on its own leave. Without this the Design tab's ring would stand forever over a room
+       * that had already drawn.
+       */
+      if (room === 'design2' && activeTabRef.current === 'design') room = 'design';
       if (!room || roomReadyRef.current[room]) return;
       roomReadyRef.current[room] = true;
       setReadyRooms((prev) => ({ ...prev, [room]: true }));
@@ -671,11 +698,13 @@ export default function Index(_props: WritingAreaIndexProps) {
               />
             )}
             {/*
-              THE DESIGN BOX REPLACES THE SANDBOX (2026-10-24). The room owns its sheet, its
-              room root and its lazy room; the shell mounts one component and no design ground,
-              renderer or tree.
+              THE DESIGN TAB MOUNTS THE SEAT (2026-11-15). The living room under
+              `frontend/src/rooms/design` is the fallback and is imported by nothing here; both
+              the Design tab and the Design A2UI tab draw the folder's own surface, under the
+              seat's own element names.
             */}
-            {headerTab === 'design' && <DesignBox />}
+            {headerTab === 'design' && <Design2SurfaceBox />}
+            {headerTab === 'design2' && <Design2Box />}
             {/*
               THE DEVELOPMENT BOX REPLACES THE SANDBOX (2026-10-24). The box owns the lab tile
               and the room; the key keeps React from recycling the node as the next room's box.

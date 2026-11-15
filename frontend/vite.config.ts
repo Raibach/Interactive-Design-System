@@ -24,6 +24,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "@design2": path.resolve(__dirname, "../design_A2UI"),
     },
     // The owner, 2026-09-21: the local site is served from source, so Vite resolved
     // Lit's DEVELOPMENT build and every load printed "Lit is in dev mode. Not

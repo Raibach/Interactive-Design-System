@@ -90,12 +90,11 @@ import "@/components/lit/trace-feed";
 // the room can mount it when the Evals tab is selected; nothing global reaches into any seat,
 // and the index it draws is imported by that file itself.
 import "@/components/lit/evals-chat-panel";
-// AND DESIGN'S OWN RENDERER AND CHAT — the room's element for drawing a surface
-// (<design-renderer>) and the room's chat that a tab binds to its engine and prompting system
-// (<design-chat>). Both are Design's files, not the composer's; registered here for the same
-// reason as every element above.
-import "@/rooms/design/design-renderer";
-import "@/rooms/design/chat/design-chat";
+// THE DESIGN ROOM'S RENDERER AND CHAT ARE NOT REGISTERED HERE (2026-11-15). They were
+// `<design-renderer>` and `<design-chat>`, both `rooms/design` files. The Design A2UI seat now
+// registers its own elements from its own folder (`design_A2UI/surface-design/`), and the living
+// room, when it mounts, imports its own renderer and chat. A page-wide registration of the room's
+// elements is exactly the shared-name collision the seat's own names exist to prevent.
 // THE TOOLS TAB'S OWN PIECES ARE NOT REGISTERED HERE ANY MORE (2026-10-21). `tools-tab` imports
 // `figma-layers-view` and `figma-ingest-form`, and this file rides the boot chunk — so 55 kB of
 // Figma tree (measured 1.08 s through the tunnel) was downloaded before the console could paint,

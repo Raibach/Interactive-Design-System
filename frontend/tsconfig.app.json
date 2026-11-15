@@ -15,6 +15,7 @@
     "verbatimModuleSyntax": false,
     "moduleDetection": "force",
     "noEmit": true,
+    "rootDir": "..",
     "jsx": "react-jsx",
 
     /* Module interop */
@@ -24,7 +25,8 @@
     /* Path aliases */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@design2/*": ["../design_A2UI/*"]
     },
 
     /* Linting */
@@ -38,7 +40,9 @@
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",
-    "src/**/*.d.ts"
+    "src/**/*.d.ts",
+    "../design_A2UI/**/*.ts",
+    "../design_A2UI/**/*.tsx"
   ],
   "exclude": [
     "src/**/*.stories.ts",

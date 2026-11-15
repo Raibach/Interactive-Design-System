@@ -11,7 +11,7 @@ import { useCallback, useEffect } from 'react';
 import { isDemoMode } from '@/shared/appConfig';
 import { promptService } from '@/services/promptService';
 import type { ProductOpenAction } from '@/rooms/product/productSurface';
-import { rememberToolOpen } from '@/rooms/design/pendingOpen';
+import { rememberToolOpen } from '@design2/surface-design/pendingOpen';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
