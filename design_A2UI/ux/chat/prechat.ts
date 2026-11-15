@@ -344,6 +344,11 @@ export class PostHogPrechat extends LitElement {
       gap: 10px;
       padding: 6px 4px 16px;
     }
+    /* THE WELCOME SITS IN THE MIDDLE OF THE OUTPUT AREA. The two auto margins take the free
+       space above and below it evenly, and they collapse to nothing when the content is
+       taller than the area, so a short slot still starts at the top and scrolls. */
+    .wrap > :first-child { margin-top: auto; }
+    .wrap > :last-child { margin-bottom: auto; }
     .mark {
       width: 30px;
       height: 30px;

@@ -627,7 +627,6 @@ export const designChatStyles = css`
        than a zero-height box on purpose: an empty flex child with flex-grow would take the space
        the element's own pieces are supposed to have. */
     .seat { flex: 1 1 auto; min-height: 0; min-width: 0; display: flex; }
-    /* THE COLUMN KEEPS ITS SPACE WHEN IT IS EMPTY — an empty seat still fills the column. */
-    .seat.empty { display: flex; }
+    .seat.empty { display: none; }
     ::slotted(*) { flex: 1 1 auto; min-width: 0; min-height: 0; }
 `;

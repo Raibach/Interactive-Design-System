@@ -216,7 +216,7 @@ export const uxChatStyles = css`
        instance that leads (the readout passes variant="lead") rather than left in a custom
        property: the value check compares what it can read, and a var() was a value neither it
        nor a reader could hold against the file. */
-    .chat-output-wrapper > design2-chat-header:first-child { --block-pad-top: 16px; }
+    .chat-output-wrapper > design2-ux-chat-header:first-child { --block-pad-top: 16px; }
     /* THE CARD IS BOUNDED BY THE REGION, AND THAT IS WHAT MAKES THE THREAD SCROLL.
        It GROWS to fill what the bars leave (a short thread still fills the region, the
        design's own view) and it SHRINKS no further than the region allows — flex 1 1 auto
@@ -226,7 +226,7 @@ export const uxChatStyles = css`
        conversation could not be rolled at all (owner, 2026-09-19: "still cannot scroll, it's
        weird"). The note that used to stand here — that allowing shrink would stop the region
        scrolling — was true while the REGION was the scroller, which it no longer is. */
-    design2-chat-header[card] { flex: 1 1 auto; min-height: 0; }
+    design2-ux-chat-header[card] { flex: 1 1 auto; min-height: 0; }
     design2-small-dropdown { flex-shrink: 0; }
     /* "chat-output-slot-area" #40001085:1521 — column, padding 10px 20px, gap 10px,
        vertical HUG. The HUG is why the Conversations row is as tall as the dropdown
@@ -627,7 +627,6 @@ export const uxChatStyles = css`
        than a zero-height box on purpose: an empty flex child with flex-grow would take the space
        the element's own pieces are supposed to have. */
     .seat { flex: 1 1 auto; min-height: 0; min-width: 0; display: flex; }
-    /* THE COLUMN KEEPS ITS SPACE WHEN IT IS EMPTY — an empty seat still fills the column. */
-    .seat.empty { display: flex; }
+    .seat.empty { display: none; }
     ::slotted(*) { flex: 1 1 auto; min-width: 0; min-height: 0; }
 `;
