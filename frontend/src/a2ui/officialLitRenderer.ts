@@ -10,15 +10,18 @@
  * so the elements survive.
  */
 import {A2uiSurface} from '@a2ui/lit/v0_9';
-import {MessageProcessor} from '@a2ui/web_core/v0_9';
+import {MessageProcessor, type Catalog} from '@a2ui/web_core/v0_9';
+import {normalizeLegacyChildren} from '@/shared/a2uiChildren';
 import {createOfficialLitCatalog, LIT_APP_TAGS} from './officialLitBridge';
+import {createOfficialLitComposerCatalog} from './officialLitComposerBridge';
 
 const VERSION = 'v0.9.1';
 
 export class OfficialLitRenderer extends HTMLElement {
   private surfaceEl: A2uiSurface | null = null;
   private processor: MessageProcessor | null = null;
-  private readonly catalog = createOfficialLitCatalog();
+  private _system = 'surface-design';
+  private catalog: Catalog<any, any> | null = null;
 
   private _surfaceId = '';
   private _components: unknown[] = [];
@@ -36,6 +39,9 @@ export class OfficialLitRenderer extends HTMLElement {
 
   connectedCallback(): void {
     this._connected = true;
+    if (!this.style.display) {
+      this.style.cssText = 'display:block;width:100%;height:100%;min-height:0;flex:1 1 auto;min-width:0;';
+    }
     if (!this.surfaceEl) {
       if (!customElements.get('a2ui-surface')) {
         customElements.define('a2ui-surface', A2uiSurface);
@@ -43,8 +49,8 @@ export class OfficialLitRenderer extends HTMLElement {
       this.surfaceEl = document.createElement('a2ui-surface') as A2uiSurface;
       this.surfaceEl.style.cssText = 'display:block;width:100%;height:100%;min-height:0;';
       this.shadowRoot!.appendChild(this.surfaceEl);
-      this.processor = new MessageProcessor([this.catalog]);
     }
+    this.processor = new MessageProcessor([this.ensureCatalog()]);
     this._treeDirty = true;
     this.schedule();
   }
@@ -69,13 +75,22 @@ export class OfficialLitRenderer extends HTMLElement {
     return this._surfaceId;
   }
 
-  /** The catalogue is the design room's; the shell still sets this property. */
-  set system(_value: string) {
-    /* The official surface resolves through the bridged design catalogue only. */
+  /** The catalogue the surface resolves through: the design room's or the prompt-composer one. */
+  set system(value: string) {
+    const next = String(value || 'surface-design');
+    if (next === this._system) return;
+    this._system = next;
+    this.catalog = null;
+    if (this._connected) {
+      this.processor = new MessageProcessor([this.ensureCatalog()]);
+      if (this.surfaceEl) this.surfaceEl.surface = undefined;
+      this._treeDirty = true;
+      this.schedule();
+    }
   }
 
   get system(): string {
-    return 'surface-design';
+    return this._system;
   }
 
   set components(value: unknown[]) {
@@ -99,6 +114,15 @@ export class OfficialLitRenderer extends HTMLElement {
 
   get updateComplete(): Promise<void> {
     return this._updateComplete;
+  }
+
+  private ensureCatalog(): Catalog<any, any> {
+    if (!this.catalog) {
+      this.catalog = this._system === 'prompt-composer'
+        ? createOfficialLitComposerCatalog()
+        : createOfficialLitCatalog();
+    }
+    return this.catalog;
   }
 
   private schedule(): void {
@@ -127,6 +151,7 @@ export class OfficialLitRenderer extends HTMLElement {
       finish();
       return;
     }
+    const catalog = this.ensureCatalog();
 
     try {
       const surfaceId = this._surfaceId || 'main';
@@ -134,15 +159,19 @@ export class OfficialLitRenderer extends HTMLElement {
       const messages: Array<Record<string, unknown>> = [];
 
       if (this._treeDirty) {
+        const components = this._components.map((component) => ({
+          ...(component as Record<string, any>),
+        }));
+        normalizeLegacyChildren(components);
         if (exists) messages.push({version: VERSION, deleteSurface: {surfaceId}});
         messages.push({
           version: VERSION,
-          createSurface: {surfaceId, catalogId: this.catalog.id},
+          createSurface: {surfaceId, catalogId: catalog.id},
         });
-        if (this._components.length > 0) {
+        if (components.length > 0) {
           messages.push({
             version: VERSION,
-            updateComponents: {surfaceId, components: this._components},
+            updateComponents: {surfaceId, components},
           });
         }
       }
@@ -206,4 +235,24 @@ export class OfficialLitRenderer extends HTMLElement {
 
 if (!customElements.get('a2ui-official-lit-renderer')) {
   customElements.define('a2ui-official-lit-renderer', OfficialLitRenderer);
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'a2ui-official-lit-renderer': OfficialLitRenderer;
+  }
+}
+
+declare module 'react' {
+  namespace JSX {
+    interface IntrinsicElements {
+      'a2ui-official-lit-renderer': React.DetailedHTMLProps<
+        React.HTMLAttributes<OfficialLitRenderer> & {
+          system?: string;
+          ref?: React.Ref<OfficialLitRenderer>;
+        },
+        OfficialLitRenderer
+      >;
+    }
+  }
 }

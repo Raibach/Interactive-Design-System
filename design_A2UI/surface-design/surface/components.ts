@@ -24,6 +24,7 @@
  * honest way to change the rows; A2UI.md states this amended rule.
  */
 import { posthogToolUrl } from '@/shared/appConfig';
+import { normalizeLegacyChildren } from '@/shared/a2uiChildren';
 import { toolsSessionId } from '@design2/tools/session';
 import { DESIGN_POSTHOG_LANDING_PATH } from './left-container/design-tool';
 import './frame/workspace';
@@ -388,49 +389,9 @@ export function buildSurfaceTree(input: SurfaceTreeInput): SurfaceTree {
     });
   }
 
-  /*
-   * THE LEGACY OBJECT FORM BECOMES THE STANDARD CHILD LIST BEFORE THE TREE LEAVES THIS FILE.
-   *
-   * The door and the tab rows still carry some containers with `children` keyed by region. That
-   * was this renderer's own extension; A2UI v0.9.1's `ChildList` is an array, and the region each
-   * child stands in is a separate `placements` map with one `ComponentId` per region. The official
-   * validator refuses the object form by name, and it is right to. So every such object is
-   * converted here: one child in a region becomes that child in the array plus its placement; a
-   * region holding several becomes a standard `Column` container in the array, with the several
-   * children under it.
-   */
-  const legacyChildren = components.filter(
-    (entry) =>
-      entry?.children
-      && !Array.isArray(entry.children)
-      && typeof entry.children === 'object'
-      && typeof (entry.children as Record<string, unknown>).componentId !== 'string'
-      && typeof (entry.children as Record<string, unknown>).path !== 'string',
-  );
-  for (const entry of legacyChildren) {
-    const raw = entry.children as Record<string, unknown>;
-    const ids: string[] = [];
-    const regions: Record<string, string> = {};
-    for (const [region, value] of Object.entries(raw)) {
-      const list = (Array.isArray(value) ? value : [value])
-        .filter((id): id is string => typeof id === 'string' && id !== String(entry.id))
-        .filter((id) => components.some((row) => String(row?.id) === id));
-      if (list.length === 0) continue;
-      if (list.length === 1) {
-        ids.push(list[0]);
-        regions[region] = list[0];
-        continue;
-      }
-      const stackId = `${String(entry.id)}-${region}-stack`;
-      if (!components.some((row) => String(row?.id) === stackId)) {
-        components.push({ id: stackId, component: 'Column', children: list });
-      }
-      ids.push(stackId);
-      regions[region] = stackId;
-    }
-    entry.children = ids;
-    entry.placements = regions;
-  }
+  /* The old region-keyed child maps become the standard array + placements before the tree
+     leaves this file. The same conversion runs in the official Lit drop-in for every room. */
+  normalizeLegacyChildren(components);
 
   /*
    * A REGION NAMES A COMPONENT THE TREE CARRIES. The array and its placements are composed here,

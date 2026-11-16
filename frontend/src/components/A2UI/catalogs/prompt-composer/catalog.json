@@ -816,7 +816,14 @@
               "const": "ConsoleCardGrid"
             },
             "items": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
+              "oneOf": [
+                {
+                  "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList"
+                },
+                {
+                  "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DataBinding"
+                }
+              ],
               "description": "Data-bound list of agent cards. Object form: {\"path\": \"/cards\", \"componentId\": \"agent-card-template\"}."
             }
           },
@@ -1151,6 +1158,34 @@
         },
         "id": {
           "type": "string"
+        },
+        "isThirdOpen": {
+          "type": "boolean"
+        },
+        "chatOverlaysContent": {
+          "type": "boolean"
+        },
+        "placements": {
+          "type": "object",
+          "description": "The region each child stands in: the frame's own named slots.",
+          "properties": {
+            "left": {
+              "type": "string"
+            },
+            "middle": {
+              "type": "string"
+            },
+            "right": {
+              "type": "string"
+            },
+            "left-header": {
+              "type": "string"
+            },
+            "left-footer": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
         }
       },
       "required": [
@@ -1177,6 +1212,34 @@
         },
         "id": {
           "type": "string"
+        },
+        "isThirdOpen": {
+          "type": "boolean"
+        },
+        "chatOverlaysContent": {
+          "type": "boolean"
+        },
+        "placements": {
+          "type": "object",
+          "description": "The region each child stands in: the frame's own named slots.",
+          "properties": {
+            "left": {
+              "type": "string"
+            },
+            "middle": {
+              "type": "string"
+            },
+            "right": {
+              "type": "string"
+            },
+            "left-header": {
+              "type": "string"
+            },
+            "left-footer": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
         }
       },
       "required": [
@@ -1211,7 +1274,14 @@
           "const": "compiled-output-viewer"
         },
         "content": {
-          "type": "object"
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DataBinding"
+            }
+          ]
         },
         "id": {
           "type": "string"
@@ -1369,8 +1439,17 @@
           "type": "string"
         },
         "children": {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList"
+        },
+        "placements": {
           "type": "object",
-          "description": "NAMED slots. The one the Console fills is \"view\", with the repair rows: {view: \"repair-view\"}."
+          "description": "The region each child stands in: the seat's view slot.",
+          "properties": {
+            "view": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
         }
       },
       "required": [
