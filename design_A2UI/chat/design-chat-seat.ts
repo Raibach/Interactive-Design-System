@@ -118,6 +118,7 @@ import './parts/design-chat-input';
 import './parts/design-chat-footer';
 import './parts/design-user-response-bubble';
 import './parts/design-chat-action-bar';
+import './left/repair-actions';
 import historyIcon from '@/assets/figma-chat-history-icon.svg';
 // THE READOUT'S MODEL MARK, handed in by the instance that draws it: the file's own node is
 // #40001124:7096 and its size moved to 20 in the drawing (2026-09-20).
@@ -1723,12 +1724,13 @@ export class DesignChatSeat extends LitElement {
   }
 
   protected updated(changed: Map<PropertyKey, unknown>): void {
-    /* THE PAGE READS THE SESSION THE ROOM HANDS IT (owner, 2026-11-07). The room's shell gives
-       the Chat seat the Console package, the UX seat its own package, and the Approve seat none.
-       This block only fills a session when no host stated one; it never takes a seat's session
-       away from it. The Chat seat's conversation file reads that package's own list — the
-       Console's threads and no other tab's. */
-    if (this.dataModel || this.designPackages) {
+    /* THE PAGE READS THE SESSION AND THE CONVERSATION THE ROOM HANDS IT (owner, 2026-11-07;
+       amended 2026-11-16). The surface states one pair per tab — the package row and that
+       package's own conversation — and this block is the FALLBACK for a host that states
+       neither. When the room owns the rail (`railOwnedByHost`, set by the surface's tree), the
+       room is the only writer: overriding it here is how Home was moved onto the separate
+       `chat` package and handed the thread of a tab it was not standing on. */
+    if ((this.dataModel || this.designPackages) && !this.railOwnedByHost) {
       const packages =
         (this.designPackages as Record<string, any> | undefined) ??
         ((this.dataModel as Record<string, any>)?.console?.design_packages ?? {});
@@ -2326,6 +2328,41 @@ export class DesignChatSeat extends LitElement {
         'A person has just opened the EVALUATORS area — the quality-signal place of this system. '
         + 'Introduce it in no more than three short sentences, then ask whether they would like more '
         + 'details. Nothing more — no lists, no depth. Offer no buttons.',
+        { silent: true },
+      );
+      return;
+    }
+    /*
+     * THE APPROVE TAB'S INTRODUCTION (owner, 2026-11-16). *"fix the approval queue so that it
+     * loads like the home or console … I wanted to always introduce the section, talk about
+     * what's on the console, what's pending approval."* Same mechanism as the console's own
+     * hello below: a person has landed, the thread is empty, and she is told what this screen is
+     * — with the counts the model carries, so her words name the cards actually waiting. Her
+     * reply is written into the conversation, so a later load reads her own words back; delete
+     * the tab's conversations and the next arrival introduces the gate again.
+     */
+    if (this.activeTab === 'approvals') {
+      if (!empty) return;
+      /* HER INTRODUCTION IS A TURN IN THIS TAB'S CONVERSATION, so it waits for that conversation.
+         Sent before the surface's `/surface/conversation_id` lands, the server answers it and —
+         correctly — does not write it down, because a place with no conversation yet has nowhere
+         to put it; measured 2026-11-16: the reply was on screen and the thread held nothing. */
+      if (!this.conversationId) return;
+      const model = (this.dataModel ?? {}) as Record<string, any>;
+      const waiting = Array.isArray(model.approval_cards) ? (model.approval_cards as Record<string, any>[]) : [];
+      const total = Array.isArray(model.cards) ? (model.cards as unknown[]).length : 0;
+      const waitingLine = waiting.length === 0
+        ? 'No cards are pending approval right now.'
+        : `${waiting.length} card${waiting.length === 1 ? ' is' : 's are'} pending approval.`;
+      void this._send(
+        'A person has just landed on the APPROVE tab — the approval queue of the Design room. '
+        + `THIS LOAD'S FACTS, from the surface: the Design console holds ${total} cards in all; `
+        + `${waitingLine} `
+        + 'Say this in your own words, in two or three short sentences: this is the approval '
+        + 'queue; the console holds the room\'s cards and some of them are pending approval; you '
+        + 'can list the pending ones here if they would like, and you can work through them '
+        + 'together. Do NOT introduce yourself by name. Do NOT list the cards now — offer to. Do '
+        + 'not describe the rest of the room, and offer no buttons.',
         { silent: true },
       );
       return;

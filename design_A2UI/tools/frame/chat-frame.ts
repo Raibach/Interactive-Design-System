@@ -550,7 +550,7 @@ export interface ChatFrameHost extends HTMLElement {
    * `_viewSlotted`'s own.
    */
   export function anyForeignViewAssigned(this: ChatFrameHost): boolean {
-    const known = new Set(['trace-feed', 'eval-feed', 'chat-repair-actions']);
+    const known = new Set(['trace-feed', 'eval-feed', 'design2-repair-actions']);
     /* A TAB VIEW IS NOT FURNITURE. A room's rail-tab view declares `view-tab` on itself
        and draws in the hole under its own tab (the `view-tab` rules in the styles); this
        door feeds the chat-top strip ABOVE the thread and must not see those — admitting
@@ -593,7 +593,7 @@ export interface ChatFrameHost extends HTMLElement {
       case 'trace': return 'trace-feed';
       case 'eval': return 'eval-feed';
       case 'repair':
-      case 'approvals': return 'chat-repair-actions';
+      case 'approvals': return 'design2-repair-actions';
       default: return null;
     }
   }

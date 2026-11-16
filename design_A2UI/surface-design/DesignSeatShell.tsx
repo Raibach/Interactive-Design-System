@@ -26,7 +26,7 @@
  * package AND to one tab (THE_CONVERSATION_CONTRACT §1) — and no id is handed to a tab it does
  * not belong to. Switching tabs shows another container; it never empties this one.
  */
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import designSectionBackground from "@/assets/design-section2-bkg.webp";
 /* THE SHEET'S BASE COLOUR IS THE BOX'S OWN FACT. The seat's cover paints the same sheet the box
    does, so it wears the same base under it. */
@@ -47,27 +47,39 @@ import "@design2/chat/design-chat";
    page and defeat the split. */
 /* THE REVIEWER'S SURFACE (owner, 2026-11-02): the sessions sent for review, in the right column. */
 import "@design2/approve/review-view";
+/* ── THE SHARED FURNITURE IS REGISTERED BY THE ROOM (owner's ruling, 2026-11-16) ──────────────
+ *
+ * A seat draws the shared furniture BY TAG and imports none of it. Until now those tags existed
+ * only as a side effect of the Chat seat's element being imported here, so any tab that drew them
+ * while that import moved lost its drawing with no message — an unknown custom element renders
+ * nothing. The room registers what the room's tabs may draw, once, here.
+ */
+import "@design2/surface-design/surface/rail/navigation-bar";
+import "@design2/chat/readout/output-header";
+import "@design2/chat/parts/design-chat-header";
+import "@design2/chat/parts/design-chat-messages";
+import "@design2/chat/parts/design-chat-action-bar";
+import "@design2/chat/parts/design-chat-input";
+import "@design2/chat/parts/design-chat-plugin-tray";
+import "@design2/chat/parts/design-prompt-textarea";
 /* THE SAME FOOTER UI AS THE FIGMA TOOL — its save is wired to the UX session, not to Tools. */
 import "@design2/surface-design/surface/left-container/footer";
 import { apiFetch } from "@/shared/apiFetch";
 import { API_BASE } from "@/shared/apiHelper";
 
-import type { Tree } from "./surface/load";
+import type { SurfaceRenderer } from "./surface/load";
 /* THE SURFACE'S OWN THREE MODULES — the tree, the data and the load. */
 import { buildSurfaceTree } from "./surface/components";
-import { createSurfaceRenderer, drawSurface, loadSurfaceRegistry } from "./surface/load";
-import { surfaceDataModel } from "./surface/data";
+import { createSurfaceRenderer, drawSurface, loadSurfaceRegistry, readConversationTurns } from "./surface/load";
 import type { Content } from "@design2/tools/content";
 import { useDesignConsole } from "@design2/surface-design/surface/middle-container/use-design-console";
 import { useCardDelete } from "@design2/surface-design/surface/left-container/use-card-delete";
-import {
-  ensureLeftColumn,
-  placeLeftColumn,
-  useDesignRowSelection,
-  type DesignLeft,
-} from "@design2/surface-design/surface/left-container/left-column";
+import { useDesignRowSelection } from "@design2/surface-design/surface/left-container/left-column";
 
 export const DESIGN_ROOM_TABS = "chat,tools,executions,ux,settings";
+
+/** THE RAIL'S OWN TABS. A `tab-change` from anything else (the top navigation) is not ours. */
+const RAIL_TABS = new Set([...DESIGN_ROOM_TABS.split(","), "approvals"]);
 
 /** The tab that owns the controls. Owner, 2026-10-25: *"a footer for tools"*. */
 const TOOLS_TAB = "tools";
@@ -77,6 +89,9 @@ const CHAT_TAB = "chat";
 
 /** The UX tab — its own seat, drawn by its own file, not a view inside another tab's seat. */
 const UX_TAB = "ux";
+
+/** The Approve tab — the gate. It draws the room's one chat today; its own seat is not built. */
+const APPROVALS_TAB = "approvals";
 
 /**
  * THE QUESTION ABOUT A SESSION THE PERSON IS LEAVING, ASKED AS A REAL QUESTION.
@@ -104,36 +119,42 @@ function askLeaveQuestion(message: string): Promise<LeaveAnswer> {
   });
 }
 
-/** A tab's own chat build, as the shell places it (a view inside the seat's view slot). */
-type SeatView = HTMLElement & {
-  sessionId?: string;
-  conversationId?: string;
-  instructions?: string;
-  section?: string;
-};
-
 /** THE CONTRACT EVERY TAB'S CHAT ANSWERS. A tab has its own element; this is all the
  *  shell is allowed to assume about it, so no tab is typed as another tab's seat. */
 type SeatChat = HTMLElement & {
   activeTab?: string;
   collapsed?: boolean;
+  sessionId?: string;
+  conversationId?: string;
+  loadDefaultConversation?: () => void;
+  hasPersonTurn?: () => boolean;
+  hasScreenChange?: () => boolean;
 };
 
-/** One tab's container: its own drawing surface, its own chat, its own left column. */
+/** One tab's standing record: the one surface and the identity of the last tree it drew. */
 type Seat = {
   tab: string;
   /* THE VISIT THIS PAGE WAS BUILT FOR. A press of Tools — the tab or a card — increments it, and a
      page whose visit is not the current one is disposed even when the tab is the same. */
   visit: number;
   host: HTMLDivElement;
-  renderer: any;
-  chat: SeatChat;
-  view: SeatView | null;
-  leftRef: RefObject<DesignLeft | null>;
-  /* WHAT THIS CONTAINER WAS LAST DRAWN WITH — a tree is assigned only when it changed, because an
-     assignment rebuilds every node and would be the container visibly reloading. */
+  renderer: SurfaceRenderer;
   /** THE IDENTITY OF THE TREE LAST DRAWN. Unchanged means the drawn surface still stands. */
   drawnKey: string;
+  /* WHETHER THIS PAGE'S CHAT HAS BEEN GIVEN ITS VISIT AND ASKED FOR ITS CONVERSATION. One read
+     per page: a later report, tree change or rail press must not re-open the thread under the
+     person. */
+  chatStarted: boolean;
+};
+
+/** WHICH ELEMENT THIS TAB'S CHAT IS, by the tag the registry resolves to. */
+const CHAT_TAG_BY_TAB: Record<string, string> = {
+  chat: 'design2-chat',
+  tools: 'design2-tools-chat',
+  ux: 'design2-ux-chat',
+  approvals: 'design2-chat',
+  executions: 'design2-chat',
+  settings: 'design2-chat',
 };
 
 export type DesignSeatShellProps = {
@@ -150,7 +171,7 @@ export type DesignSeatShellProps = {
 export default function DesignSeatShell({ injected, toolsStanding, toolsVisit, onTab }: DesignSeatShellProps) {
   /* THE CONSOLE'S READ IS ITS OWN FILE. Every container is drawn from the same structure; this is
      the structure, and the console's own left application. */
-  const { frame, consoleApp, chat: consoleChat, error, coverDown, setError, upsertCard, removeCard } = useDesignConsole();
+  const { frame, surfaceId, allowed, error, coverDown, setError, upsertCard, removeCard } = useDesignConsole();
   const [railTab, setRailTab] = useState("chat");
   /*
    * THE SEAT'S OWN TAG TABLE, LOADED BEFORE THE FIRST DRAW. The shell's renderer resolves a
@@ -175,6 +196,16 @@ export default function DesignSeatShell({ injected, toolsStanding, toolsVisit, o
      person left, which is the default the UX seat loads on a fresh press. */
   const [uxOpenSession, setUxOpenSession] = useState("");
 
+  /*
+   * THE APPROVE TAB'S TURNS, HYDRATED BY THE SURFACE (owner's ruling, 2026-11-16).
+   *
+   * Its seat owns no conversation state: it renders `/surface/turns`. The surface reads the tab's
+   * own conversation from the record and states the turns here, before the draw, so the thread and
+   * the record cannot disagree. A failed read is stated, never drawn as an empty thread.
+   */
+  const [approvalTurns, setApprovalTurns] = useState<Array<{ role?: string; content?: string }> | null>(null);
+  const [approvalTurnsFor, setApprovalTurnsFor] = useState("");
+
   /* THE ROOM TELLS THE SHELL WHEN ITS SCREEN IS BUILT: the cover is down and the design console
      is readable. The shell's copy of this ring leaves on this message. */
   useEffect(() => {
@@ -185,16 +216,35 @@ export default function DesignSeatShell({ injected, toolsStanding, toolsVisit, o
   /** Where the page stands. One page fills it, absolutely. */
   const stageRef = useRef<HTMLDivElement | null>(null);
   /**
-   * THE PAGE THAT STANDS — AND ONLY IT. A tab's page is created when the tab is pressed and
-   * destroyed when another tab is pressed; returning to a tab is a fresh page. Nothing of the
-   * previous page's live state survives leaving it, which is what makes the previous session
-   * impossible to draw under the next one. The record it reads is the server's, not this map's.
+   * THE SURFACE THAT STANDS — ONE RENDERER, ONE TREE. A tab press changes the tree's children
+   * through the data model; the frame and the renderer are the same elements before and after.
+   * The record it reads is the server's, not this page's.
    */
   const pageRef = useRef<Seat | null>(null);
-  /** The left column that is standing — the layer tree marks its row when an approve writes one. */
-  const leftRef = useRef<DesignLeft | null>(null);
+  /** THE ONE RENDERER. The frame, the left column and the chat are its children. */
+  const rendererRef = useRef<SurfaceRenderer | null>(null);
+  /* THE CHATS THAT ALREADY ANSWER THEIR OWN RAIL. One listener per drawn chat element. */
+  const chatWiredRef = useRef<WeakSet<HTMLElement>>(new WeakSet());
+  /** A PATH THE RENDERER COULD NOT RESOLVE — shown in the room, not swallowed. */
+  const [validationError, setValidationError] = useState("");
 
-  useDesignRowSelection(leftRef);
+  useDesignRowSelection(rendererRef);
+
+  /** THIS TAB'S CHAT, WHEREVER THE TREE DREW IT. */
+  const chatFor = useCallback((tab: string): SeatChat | null => {
+    const tag = CHAT_TAG_BY_TAB[tab];
+    const root = rendererRef.current?.shadowRoot;
+    return tag && root ? ((root.querySelector(tag) as SeatChat | null) ?? null) : null;
+  }, []);
+
+  const onValidationFailed = useCallback((event: Event) => {
+    const detail =
+      (event as CustomEvent<{ code?: string; componentId?: string; path?: string }>).detail;
+    setValidationError(
+      `${detail?.code ?? "VALIDATION_FAILED"} — ${detail?.path ?? "a path"} in `
+      + `${detail?.componentId ?? "a component"} did not resolve.`,
+    );
+  }, []);
 
   /* A SAVED CARD JOINS THE CONSOLE'S LIST IN PLACE. See `upsertCard` in `useDesignConsole`: the
      console is not re-read, so the grid the person is about to press is not rebuilt under them. */
@@ -249,10 +299,7 @@ export default function DesignSeatShell({ injected, toolsStanding, toolsVisit, o
       } = {};
       window.dispatchEvent(new CustomEvent("design-save-ask", { detail: ask }));
       if (!ask.work) {
-        const chat = pageRef.current?.chat as unknown as {
-          hasPersonTurn?: () => boolean;
-          hasScreenChange?: () => boolean;
-        } | undefined;
+        const chat = chatFor("tools");
         if (chat?.hasPersonTurn?.()) ask.work = true;
         if (!ask.work && chat?.hasScreenChange?.()) ask.work = true;
       }
@@ -275,11 +322,11 @@ export default function DesignSeatShell({ injected, toolsStanding, toolsVisit, o
   const saveUxSession = useCallback(async () => {
     const seat = pageRef.current;
     if (!seat || seat.tab !== "ux") return;
-    const chat = seat.chat as unknown as { sessionId?: string; conversationId?: string };
-    const footer = seat.leftRef.current?.host.querySelector("design2-left-footer") as
+    const chat = chatFor("ux");
+    const footer = rendererRef.current?.shadowRoot?.querySelector("design2-left-footer") as
       | (HTMLElement & { busy?: boolean; result?: string })
       | null;
-    const sessionId = String(chat.sessionId || "");
+    const sessionId = String(chat?.sessionId || "");
     if (!sessionId) {
       if (footer) footer.result = "This tab has no session yet.";
       return;
@@ -294,7 +341,7 @@ export default function DesignSeatShell({ injected, toolsStanding, toolsVisit, o
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           session_id: sessionId,
-          conversation_id: String(chat.conversationId || "") || undefined,
+          conversation_id: String(chat?.conversationId || "") || undefined,
         }),
       });
       const answer = await response.json().catch(() => null);
@@ -347,6 +394,9 @@ export default function DesignSeatShell({ injected, toolsStanding, toolsVisit, o
   const onTabChange = useCallback(async (event: Event) => {
     const tab = String((event as CustomEvent<{ tab?: string }>)?.detail?.tab || "");
     if (!tab) return;
+    /* THE RAIL ONLY. The top navigation's own `tab-change` is not a rail press and must not
+       move the room's rail; only this room's items are answered here. */
+    if (!RAIL_TABS.has(tab)) return;
 
     /*
      * A PRESS OF THE TAB THAT ALREADY STANDS IS NOT A NAVIGATION. It is the rail's own
@@ -389,11 +439,7 @@ export default function DesignSeatShell({ injected, toolsStanding, toolsVisit, o
       /* A TURN THE PERSON TYPED IS WORK, even when no field was touched: the chat is part of the
          session, and it is the thing the session is for. */
       if (!ask.work) {
-        const standing = pageRef.current;
-        const chat = standing?.chat as unknown as {
-          hasPersonTurn?: () => boolean;
-          hasScreenChange?: () => boolean;
-        } | undefined;
+        const chat = chatFor("tools");
         if (chat?.hasPersonTurn?.()) ask.work = true;
         /* A FILTER AND A BOX SIZE ARE CHANGES TOO (2026-11-02). They were not counted, so leaving
            after only filtering discarded the session instead of asking about it. */
@@ -432,16 +478,6 @@ export default function DesignSeatShell({ injected, toolsStanding, toolsVisit, o
     railTabRef.current = tab;
     setRailTab(tab);
     onTabRef.current?.(tab);
-
-    /*
-     * THE PRESS WRITES THE ACTIVE ITEM; THE TREE DOES NOT CHANGE. The surface's own value lives at
-     * `/surface/tab` (`data.ts`), and the standing renderer receives it on the DATA channel alone:
-     * the frame, the rail and the columns are the same elements before and after the press.
-     */
-    const standing = pageRef.current;
-    if (standing?.renderer) {
-      standing.renderer.dataModel = surfaceDataModel(standing.renderer.dataModel, { tab });
-    }
 
     if (leavingTools) {
       if (warn) {
@@ -518,10 +554,7 @@ export default function DesignSeatShell({ injected, toolsStanding, toolsVisit, o
     } = {};
     window.dispatchEvent(new CustomEvent("design-save-ask", { detail: ask }));
     if (!ask.work) {
-      const chat = page.chat as unknown as {
-        hasPersonTurn?: () => boolean;
-        hasScreenChange?: () => boolean;
-      };
+      const chat = chatFor("tools");
       if (chat?.hasPersonTurn?.()) ask.work = true;
       if (!ask.work && chat?.hasScreenChange?.()) ask.work = true;
     }
@@ -656,93 +689,38 @@ export default function DesignSeatShell({ injected, toolsStanding, toolsVisit, o
     return () => window.removeEventListener("card-delete", onCardDelete);
   }, [deleteCard]);
 
-  /* ── THE SURFACE IS KEPT; ONLY THE TAB'S OWN PIECES CHANGE ───────────────────────────────── */
-  const disposePage = useCallback(() => {
-    const page = pageRef.current;
-    if (!page) return;
-    pageRef.current = null;
-    /*
-     * THE HOST AND THE RENDERER ARE THE SURFACE'S, NOT THE PAGE'S. They are built on the first
-     * press and kept for the life of the tab, so the frame and its three columns are the SAME
-     * elements before and after every rail press — the plan's node proof. What leaves with the
-     * page is the tab's own chat and its view slot; the next tab replaces exactly those.
-     */
-    page.chat.remove();
-    page.view?.remove();
-  }, []);
-
+  /* ── THE SURFACE IS KEPT; ONLY THE TAB'S OWN ROWS CHANGE ──────────────────────────────────── */
   const openSeat = useCallback((stage: HTMLElement, tab: string, visit: number): Seat => {
     const previous = pageRef.current;
-    /* THE SURFACE THAT STANDS IS REUSED. `previous` is the last tab's record; its host and
-       renderer are the surface, and they are kept unless the stage itself changed. */
     const kept = previous && previous.host.parentElement === stage ? previous : null;
-    disposePage();
 
     let host: HTMLDivElement;
-    let renderer: any;
+    let renderer: SurfaceRenderer;
     if (kept) {
       host = kept.host;
       renderer = kept.renderer;
     } else {
       host = document.createElement("div");
-      host.setAttribute("data-design-seat", tab);
+      host.setAttribute("data-design-seat", "surface");
       host.style.cssText = "position:absolute;inset:0;display:block;min-width:0;min-height:0;";
-      renderer = createSurfaceRenderer(tab);
+      renderer = createSurfaceRenderer(surfaceId, tab);
+      renderer.addEventListener("a2ui:validation-failed", onValidationFailed);
       host.appendChild(renderer);
       stage.appendChild(host);
+      rendererRef.current = renderer;
     }
-
-    /* EACH TAB DRAWS ITS OWN PAGE FILE. Tools draws <tools-chat>; the Chat tab draws <chat-tab>,
-       its own page with its own conversation file; every other tab keeps the shared <design-chat>
-       until its own page is built. The page resolves its own package from the data it is given. */
-    const chat = document.createElement(
-      tab === TOOLS_TAB
-        ? "design2-tools-chat"
-        : tab === CHAT_TAB
-          ? "design2-chat-tab"
-          : tab === UX_TAB
-            ? "design2-ux-chat"
-            : "design2-chat",
-    ) as SeatChat;
-    chat.setAttribute("data-design-chat", tab);
-    /* THE ROOM OWNS THE RAIL. A press moves the room to the container that belongs to the pressed
-       tab; it never switches this seat's tab, its conversation or its thread. */
-    chat.setAttribute("rail-owned-by-host", "");
-
-    /* THE TAB'S OWN CHAT BUILD. Same face, different job: UX draws the analytics conversation,
-       Tools draws the ingest conversation, the other tabs draw the seat's own view for that tab. */
-    let view: SeatView | null = null;
-    /* THE TOOLS TAB HAS NO SECOND VIEW (owner, 2026-11-02). It used to slot `grace-tools-chat` in
-       front of the seat — the old Tools conversation. That element drew an empty card, and the
-       seat behind it decided a foreign view was standing and hid its own thread: her greeting was
-       in the seat and the person saw nothing. The seat IS the Tools chat; nothing is slotted. */
-    if (tab === "approvals") {
-      view = document.createElement("design2-review-view") as SeatView;
-      view.setAttribute("slot", "view");
-      view.setAttribute("view-tab", tab);
-      chat.appendChild(view);
-    }
-    chat.activeTab = tab;
-    chat.collapsed = false;
-    chat.addEventListener("tab-change", onTabChangeRef.current);
 
     const seat: Seat = {
       tab,
       visit,
       host,
       renderer,
-      chat,
-      view,
-      /* THE LEFT COLUMN IS THE SURFACE'S TOO. Carried across the press, `ensureLeftColumn` finds
-         the column already standing and serves the new tab's content in it instead of appending a
-         second one. The drawn values travel with it for the same reason: the tree did not change,
-         so it is not reassigned. */
-      leftRef: kept ? kept.leftRef : { current: null },
       drawnKey: kept ? kept.drawnKey : "",
+      chatStarted: false,
     };
     pageRef.current = seat;
     return seat;
-  }, [disposePage]);
+  }, [surfaceId, onValidationFailed]);
 
   /*
    * THE CHAT IS OPENED FROM A SEAT THAT CANNOT REACH THE LAYOUT. The tools seat reports an ingest
@@ -768,278 +746,147 @@ export default function DesignSeatShell({ injected, toolsStanding, toolsVisit, o
     return () => window.removeEventListener("design-chat-open", onOpenChat);
   }, []);
 
+  /*
+   * ── THE APPROVE TAB'S TURNS, BEFORE ITS SEAT DRAWS ────────────────────────────────────────
+   *
+   * The surface owns this tab's conversation state. When the gate stands, its package's own
+   * conversation is read from the record and stated at `/surface/turns`; the seat renders it and
+   * owns nothing. A read that fails is stated in the room — an empty thread drawn over a failed
+   * read would be a lie about the record.
+   */
+  useEffect(() => {
+    const standing = toolsStanding ? TOOLS_TAB : railTab;
+    if (standing !== APPROVALS_TAB) return;
+    const packages = (((frame?.dataModel as Record<string, any>)?.console?.design_packages ?? {}) as Record<
+      string,
+      { conversationId?: string }
+    >);
+    const conversation = String(packages.approvals?.conversationId ?? "");
+    if (!conversation || approvalTurnsFor === conversation) return;
+    let cancelled = false;
+    void readConversationTurns(conversation)
+      .then((turns) => {
+        if (cancelled) return;
+        setApprovalTurns(turns);
+        setApprovalTurnsFor(conversation);
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        setError((e as Error)?.message ?? String(e));
+      });
+    return () => { cancelled = true; };
+  }, [frame, railTab, toolsStanding, approvalTurnsFor, setError]);
+
   /* ── THE DRAW — the standing container, and only it ────────────────────────────────────── */
   useEffect(() => {
     const stage = stageRef.current;
-    if (!stage || !frame) return;
-    /* THE TAG TABLE FIRST: see `registryReady`. Nothing is built before the seat's names resolve. */
-    if (!registryReady) return;
+    if (!stage || !frame || !registryReady || !surfaceId) return;
 
     const standing = toolsStanding ? TOOLS_TAB : railTab;
-    /* A TOOLS PAGE IS KEYED BY ITS VISIT, not only by the tab: a card press while Tools already
-       stands is a new page, and the page that drew the previous card is disposed with the press. */
     const visit = standing === TOOLS_TAB ? Number(toolsVisit ?? 0) : 0;
     let seat = pageRef.current;
     if (!seat || seat.tab !== standing || seat.visit !== visit) {
-      /* A TAB PRESS IS A NEW PAGE. The previous page is disposed inside `openSeat`, so nothing it
-         held — drawing, chat, draft, filter — can stand under the page that replaces it. */
       seat = openSeat(stage, standing, visit);
-
-      /*
-       * NO PANE MOTION DURING A SWITCH. A page that was just built opens its column and sets its
-       * width, and after a drag the next page's pane changes mode and number; each of those ran the
-       * workspace's 760ms transition, which is the column animating and popping out on every tab
-       * change. The duration is a variable the room can switch off (see the workspace's
-       * `--dur-pane`): it is 0 for the moment the page appears, and the drawn duration returns for
-       * every other change, including the drag.
-       */
+      /* NO PANE MOTION DURING A SWITCH. The page that appears sets its column and its width, and
+         the workspace's 760ms transition animates both; the duration is off for the click's own
+         frame and returns for every other change. */
       stage.style.setProperty("--pane-motion", "0ms");
       window.setTimeout(() => stage.style.removeProperty("--pane-motion"), 1200);
-
-      /*
-       * THE CHAT TAB OPENS ITS LAST MODIFIED CONVERSATION ON THE PRESS. The Tools tab is not
-       * called here: its own page states the session it is in, and its chat binds to that session
-       * when the page's own answer arrives. Calling the package's newest thread here would show
-       * the previous visit's conversation before the new session exists.
-       */
-      if (standing === CHAT_TAB) {
-        const chat = seat.chat as unknown as { loadDefaultConversation?: () => void };
-        chat.loadDefaultConversation?.();
-      }
-      /* The review view reads its own list when it attaches; the new page has just attached it. */
     }
 
-    const hostTree = frame;
-    /* THE SEAT'S PROPS COME FROM THE LOAD. `readSurface` takes the chat out of the tree and keeps
-       the words the door declared for it; the container no longer re-reads them from the frame. */
-    const baseChat = consoleChat;
-    const packages = (((frame.dataModel as Record<string, any>)?.console?.design_packages ?? {}) as Record<
-      string,
-      { packageId?: string; conversationId?: string }
-    >);
-    const injectedChat = (injected?.chat ?? {}) as Record<string, unknown>;
-    const isTools = seat.tab === TOOLS_TAB;
-
-    /* THE TAB'S OWN CONVERSATION. Conversations belong to the package AND to one tab
-       (THE_CONVERSATION_CONTRACT §1), so the id is this container's alone. It is assigned once
-       and never re-pointed: nothing is cleared and no thread is read twice. */
-    const conversationId = isTools
-      ? String((injectedChat.conversationId as string) || packages.tools?.conversationId || "")
-      : seat.tab === "ux"
-        ? String(packages.ux?.conversationId || "")
-        : seat.tab === "chat"
-          /* THE CHAT TAB IS THE DESIGN CONSOLE CHAT. It is the advanced filter over the console
-             cards, so it is bound to the console package's own conversation. It does not read the
-             Tools package, and the separate chat package is not a second source for it. */
-          ? String(packages.console?.conversationId || "")
-          : "";
-
-    /* THE TOOLS VIEW'S OWN FACTS — the package the turn is filed under, the conversation it
-       draws, and the surface's script. They go to the tools view, not to another tab's chat. */
-    if (isTools && seat.view) {
-      const nextSessionId =
-        (typeof injectedChat.sessionId === "string" && injectedChat.sessionId) ||
-        packages.tools?.packageId ||
-        "";
-      const nextInstructions =
-        typeof injectedChat.instructions === "string"
-          ? injectedChat.instructions
-          : typeof injectedChat.graceInstructions === "string"
-            ? injectedChat.graceInstructions
-            : "";
-      /*
-       * THE PACKAGE'S CONVERSATIONS ARE NOT HANDED HERE YET, AND THIS IS WHY.
-       *
-       * The assembly for this intent returns the design system's own list — read from the server:
-       * one conversation, titled "Raibach Prompt Composer". But both sources reachable from this
-       * shell resolve to the CONSOLE's list, not the Tools tab's: the room's frame carries the
-       * console's data model, and the headless engine's report carried the console's thread too.
-       * A first attempt bound that and the seat drew ANOTHER PACKAGE'S conversation — measured:
-       * `conversations: [{ id: ef4f91ec, title: "Design · Console" }]` under the prompt-composer
-       * session. That is worse than an empty list, so the assignment is out until the Tools tab's
-       * own tree is the source. Next step: read `buildContent`'s chat object at run time and take
-       * the list the tools assembly actually resolved.
-       */
-      if (nextSessionId && seat.view.sessionId !== nextSessionId) seat.view.sessionId = nextSessionId;
-      if (conversationId && seat.view.conversationId !== conversationId) {
-        seat.view.conversationId = conversationId;
-      }
-      if (nextInstructions && seat.view.instructions !== nextInstructions) {
-        seat.view.instructions = nextInstructions;
-      }
+    setValidationError("");
+    const surfaceTree = buildSurfaceTree({
+      tree: frame,
+      isTools: standing === TOOLS_TAB,
+      injected,
+      surface: {
+        tab: standing,
+        sessionId: standing === UX_TAB ? uxOpenSession : undefined,
+        /* THE GATE'S TURNS, AS THE SURFACE STATES THEM. Undefined on other tabs: they bind
+           nothing there, and an absent value stays absent. */
+        turns: standing === APPROVALS_TAB ? (approvalTurns ?? []) : undefined,
+      },
+    });
+    try {
+      seat.drawnKey = drawSurface(seat.renderer, surfaceTree, seat.drawnKey, allowed);
+    } catch (e) {
+      console.error('[surface] refused', e);
+      setError((e as Error).message);
+      return;
     }
-
-    /*
-     * THE SURFACE'S TREE AND ITS DATA, BUILT BY THE SEAT'S OWN MODULES. `components.ts` states the
-     * frame, the containers and the slots the standing tab serves; `data.ts` owns `/surface/*`;
-     * `load.ts` owns the door read, the registry and the change-guarded draw. The tree is assigned
-     * only when its key changed, so a press that moves the rail leaves every drawn node standing.
-     */
-    const surfaceTree = buildSurfaceTree({ tree: hostTree, isTools, injected, surface: { tab: seat.tab } });
-    const dataModel = surfaceTree.dataModel;
-    seat.drawnKey = drawSurface(seat.renderer, surfaceTree, seat.drawnKey);
 
     let cancelled = false;
     void (async () => {
       try {
         await seat.renderer.updateComplete;
       } catch {
-        // Lit's updateComplete does not reject; if it ever does, the queries below still run.
+        // Lit's updateComplete does not reject; the query below still runs.
       }
       if (cancelled) return;
 
-      let layout: HTMLElement | null = null;
+      /*
+       * THE TAB'S CHAT IS THE TREE'S RIGHT CHILD — whichever chat the tree named for this tab.
+       *
+       * This asked `CHAT_TAG_BY_TAB[standing]`, and that table has no entry for Approve: the
+       * Approve page draws the room's own chat (`design2-chat`) with the review list in its view
+       * slot, so the shell looked for `undefined`, found nothing, and never attached the rail's
+       * `tab-change` listener. Every press on that page was announced by the bar and heard by
+       * nobody — the owner's report, 2026-11-16: *"once I select approved, I can't navigate the
+       * tabs anymore."* The drawing decides which chat stands; the shell reads the drawing.
+       */
+      const chatTags = new Set(Object.values(CHAT_TAG_BY_TAB));
+      const chatTag = CHAT_TAG_BY_TAB[standing];
+      let chatEl: SeatChat | null = null;
       for (let attempt = 0; attempt < 40; attempt += 1) {
-        layout =
-          (seat.renderer.shadowRoot?.querySelector("design2-workspace") as HTMLElement | null) ?? null;
-        if (layout) break;
+        const right = seat.renderer.shadowRoot?.querySelector('[slot="right"]') as HTMLElement | null;
+        const tag = String(right?.tagName ?? '').toLowerCase();
+        chatEl = right && chatTags.has(tag) ? (right as SeatChat) : null;
+        if (chatEl) break;
         await new Promise((r) => setTimeout(r, 250));
         if (cancelled) return;
       }
-      if (!layout) {
-        /* FAIL HARD. A container that draws its layout and places nothing looks assembled and is
-           not; a warning nobody reads is the same as no report. */
+
+      const workspace = seat.renderer.shadowRoot?.querySelector("design2-workspace") as
+        | (HTMLElement & { leftLedgerText?: string; leftAssembling?: boolean })
+        | null;
+      if (!workspace) {
+        setError(`The ${standing} container never drew its layout.`);
+        return;
+      }
+      workspace.leftLedgerText = standing === TOOLS_TAB && injected?.locked
+        ? (injected.ledger?.text ?? "This card is locked in the Supervisor Queue.")
+        : "";
+      workspace.leftAssembling = standing === TOOLS_TAB && !injected;
+
+      if (!chatEl) {
         setError(
-          `The ${seat.tab} container never drew its layout, so its chat and left column were not placed.`,
+          `The ${standing} container never drew its chat, so its conversation was not opened `
+          + `(the right column holds ${String(seat.renderer.shadowRoot?.querySelector('[slot="right"]')?.tagName ?? 'nothing').toLowerCase()}).`,
         );
         return;
       }
-
-      /*
-       * THE CHAT'S WIDTH IS THE SECTION'S, NOT EACH PAGE'S.
-       *
-       * Every tab is its own page with its own layout element, and each layout drew its own width
-       * from its own rules — one from the assembly's declared load width, one from the equal
-       * share, one from a drag. The result was the chat resizing on every tab press. The width is
-       * part of the interface, so it is one number for the section: the first page's rendered
-       * width anchors it, a drag updates it, and every other page is drawn at that same width.
-       */
-      /* THE TAB'S OWN CHAT, IN ITS OWN CONTAINER — placed once, and only into its own layout. */
-      seat.chat.setAttribute("slot", "right");
-      if (seat.chat.parentElement !== layout) layout.appendChild(seat.chat);
-      const chatInfo: Record<string, unknown> = { ...baseChat };
-      chatInfo.dataModel = dataModel;
-      /* THE TAB PACKAGES, INJECTED AS DATA. They travel separately because the merged Tools
-         data model can replace the console block. */
-      chatInfo.designPackages =
-        ((hostTree.dataModel as Record<string, any> | undefined)?.console?.design_packages ??
-          {}) as Record<string, { packageId?: string; conversationId?: string }>;
-      /* EVERY DESIGN SEAT CARRIES THE SPEECH FLAG. Without it a seat refuses every turn with no
-         visible result. */
-      if (typeof injectedChat.graceLiveContext === "boolean") {
-        chatInfo.graceLiveContext = injectedChat.graceLiveContext;
-      } else {
-        chatInfo.graceLiveContext = false;
+      if (chatEl && !chatWiredRef.current.has(chatEl)) {
+        /* THE RAIL'S PRESS ARRIVES AT THE CHAT IT WAS DRAWN IN. The window listener alone does
+           not cross the renderer's shadow; the chat element is the boundary the old seat used. */
+        chatEl.addEventListener("tab-change", onTabChangeRef.current);
+        chatWiredRef.current.add(chatEl);
       }
-      if (isTools) {
-        /* A TOOL'S CONVERSATIONS ARE ITS OWN (owner, 2026-11-02). The surface's list and id are
-           the CONSOLE's; the Tools seat reads its own package instead, so neither is handed on. */
-        delete chatInfo.conversationId;
-        delete chatInfo.conversations;
-        delete chatInfo.sessionId;
-        /*
-         * THE PAGE'S OWN SESSION IS THE ONLY AUTHORITY. The tab-packages map is the console's
-         * snapshot from when the room loaded; after a save or a discard it names the session that
-         * is already gone, and the chat would open its conversation before this page's own answer
-         * arrives. The Tools chat binds only to the session the Tools answer states — and until
-         * that answer, it is given no session and no package at all.
-         */
-        delete chatInfo.designPackages;
-        delete chatInfo.instructions;
-        chatInfo.dataModel = injected ? dataModel : { session: {} };
-        if (typeof injectedChat.instructions === "string" && injectedChat.instructions) {
-          chatInfo.instructions = injectedChat.instructions;
-        }
-        /* THE TABLE THE CHAT MAY SPEAK ABOUT — the same rows the left column draws. */
-        const tableRows = (injected?.dataModel as Record<string, any>)?.session?.elements;
-        if (Array.isArray(tableRows)) {
-          chatInfo.tableRows = tableRows.map((row: any) => ({
-            id: row?.id,
-            key: row?.key,
-            name: row?.name,
-          }));
-        }
-      }
-      /*
-       * EVERY DESIGN SEAT TAKES THE NEWEST ROW OF ITS OWN PACKAGE. The assembly's pointed
-       * conversation, and the surface's conversation list, are not handed to any seat: the list
-       * the seat reads is the package's own, ordered by `updated_at` descending, so the first row
-       * is the last modified conversation. The package is the divider; the newest row is the
-       * default. The Tools seat does the same with its own package.
-       */
-      if (!isTools) {
-        delete chatInfo.conversationId;
-        delete chatInfo.conversations;
-        delete chatInfo.sessionId;
-        const ownPackage =
-          seat.tab === "approvals" ? ""
-            : seat.tab === "ux" ? uxOpenSession
-              : packages.console?.packageId;
-        if (ownPackage) chatInfo.sessionId = ownPackage;
-      }
-      /*
-       * THE CHAT TAB'S OWN WORDS, NOT THE CONSOLE'S. The surface's chat component carries the
-       * console's script; the Chat tab is its own seat and receives the Chat tab's script from
-       * the room's data. There is no fallback to the console's words: a seat with no words
-       * refuses the turn loudly rather than speaking as another seat.
-       */
-      if (seat.tab === CHAT_TAB) {
-        delete chatInfo.instructions;
-        const chatWords = (hostTree.dataModel as Record<string, any> | undefined)?.console
-          ?.chat_tab_grace_instructions;
-        if (typeof chatWords === "string" && chatWords) {
-          chatInfo.instructions = chatWords;
-        }
-      }
-      for (const [key, value] of Object.entries(chatInfo)) {
-        if (value === undefined || key === "collapsed") continue;
-        /* THE TOOLS SEAT OWNS ITS CONVERSATION (owner, 2026-11-02). It reads the package's own
-           list and opens the last modified thread, on a tab press and on a first bind. An id
-           handed from an assembly is a snapshot, and assigning it here would overwrite the newer
-           one the seat had just read — which is how a press showed an older conversation. */
-        if (isTools && key === "conversationId") continue;
-        if ((seat.chat as unknown as Record<string, unknown>)[key] === value) continue;
-        (seat.chat as unknown as Record<string, unknown>)[key] = value;
-      }
-      /* THE READOUT'S NUMBERS ARE THE SEAT'S OWN READ. The shell no longer hands the assembly's
-         last-call usage object to the page: that object carries one call, and assigning it here
-         overwrote the seat's recorded readout with a single call's figures. The page reads its
-         usage summary from the ledger and owns the readout. */
-      seat.chat.activeTab = seat.tab;
-      /*
-       * THE COLUMN'S COLLAPSE IS THE PERSON'S, NOT A REDRAW'S. The chat starts open when its page
-       * is created; after that, a content report or a tree change must not reopen a column the
-       * person collapsed by clicking the active tab.
-       */
-
-      /* THE LEFT COLUMN — this container's own. */
-      ensureLeftColumn(layout, seat.leftRef);
-      const left = seat.leftRef.current;
-      if (left) {
-        placeLeftColumn({
-          left,
-          railTab: seat.tab,
-          toolsStanding: isTools,
-          injected,
-          consoleApp,
-          tree: hostTree,
-        });
-        /* THE SAME FOOTER FURNITURE AS THE FIGMA TOOL, appended once per UX page. */
-        if (seat.tab === "ux" && !left.host.querySelector("design2-left-footer")) {
-          const footerEl = document.createElement("design2-left-footer") as HTMLElement & {
-            hideNew?: boolean;
-          };
-          footerEl.hideNew = true;
-          left.host.appendChild(footerEl);
-        }
-        leftRef.current = left;
-      }
+      if (!chatEl || seat.chatStarted) return;
+      seat.chatStarted = true;
+      const ownSession = String(
+        ((surfaceTree.dataModel as Record<string, any>)?.surface?.session_id) ?? "",
+      );
+      /* NO HOST WRITE TO A SEAT'S STATE (owner's ruling, 2026-11-16). The session reaches every
+         seat through its `/surface/session_id` binding; assigning it here was a second writer of
+         one fact, and the ruling closes it. The default-open is the seat's own act, asked for
+         once per page, and only seats that implement it answer. */
+      if (ownSession) chatEl.loadDefaultConversation?.();
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [frame, consoleApp, injected, toolsStanding, toolsVisit, railTab, uxOpenSession, openSeat, setError, registryReady]);
+  }, [frame, surfaceId, allowed, injected, toolsStanding, toolsVisit, railTab, uxOpenSession, approvalTurns, openSeat, setError, registryReady]);
 
   if (error) {
     return <div style={{ padding: 24, color: "#f3b" }}>The design interface could not load: {error}</div>;
@@ -1061,6 +908,26 @@ export default function DesignSeatShell({ injected, toolsStanding, toolsVisit, o
         overflow: "hidden",
       }}
     >
+      {validationError ? (
+        <div
+          role="status"
+          style={{
+            position: "absolute",
+            left: 16,
+            right: 16,
+            bottom: 8,
+            zIndex: 5,
+            padding: "6px 10px",
+            borderRadius: 6,
+            background: "rgba(163, 21, 69, 0.92)",
+            color: "#fff",
+            font: "12px/1.4 system-ui, sans-serif",
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          {validationError}
+        </div>
+      ) : null}
       <div
         ref={stageRef}
         style={{

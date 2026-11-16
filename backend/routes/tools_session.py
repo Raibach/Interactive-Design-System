@@ -29,6 +29,7 @@ import os
 from typing import Any
 
 import psycopg2
+import psycopg2.errors
 import psycopg2.extras
 
 import services as state
@@ -42,14 +43,15 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://localhost:5432/railway")
 TOOLS_TAB = "tools"
 
 
-def _leftover_ids(user_id: str) -> list[str]:
-    """Every working row this person's Tools tab still holds — kept or archived. A press
-    starts over, so every one of them is a leftover and none of them may stand."""
+def _leftover_rows(user_id: str) -> list[tuple[str, str]]:
+    """Every working row this person's Tools tab still holds — kept or archived — with the
+    press it was made for. A press starts over, so every row is a leftover except the one that
+    carries THIS press's own name: that row is the session the press already has."""
     with psycopg2.connect(DATABASE_URL) as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id::text
+                SELECT id::text, COALESCE(metadata->>'press_id', '')
                   FROM prompt_sessions
                  WHERE user_id = %s
                    AND metadata->>'session_type' = 'design_tab'
@@ -57,59 +59,90 @@ def _leftover_ids(user_id: str) -> list[str]:
                 """,
                 (user_id, TOOLS_TAB),
             )
-            return [str(row[0]) for row in cur.fetchall()]
+            return [(str(row[0]), str(row[1])) for row in cur.fetchall()]
 
 
-def open_tools_working_session(user_id: str) -> dict[str, Any] | None:
+def open_tools_working_session(user_id: str, press_id: str | None = None) -> dict[str, Any] | None:
     """A PRESS IS A NEW SESSION. The previous visit's row is removed outright — its
     conversation and messages cascade with it, which is what "an abandoned session
     disappears" means — and a fresh session with a fresh, empty conversation is made
-    for this press alone."""
+    for this press alone.
+
+    ONE PRESS ASKS THIS DOOR TWICE. The shell mounts once and the Tools engine assembles beside
+    it, and the store allows one working row per person and tab (the index
+    `idx_prompt_sessions_design_tab_per_user`). `press_id` is the press's own name, written with
+    the marker: a call that finds the row already carrying THIS press's name answers with that
+    row and makes nothing, so both calls of one press work in one session. The lock is what makes
+    the two calls see each other instead of both sweeping and both creating."""
     if not state.prompt_sessions_api:
         raise RuntimeError("the session store is not available")
-    for leftover in _leftover_ids(user_id):
-        state.prompt_sessions_api.delete_session(leftover, user_id, permanent=True)
-    title = DESIGN_TAB_PACKAGE_TITLES.get(TOOLS_TAB, "Design — Tools")
-    description = DESIGN_TAB_PACKAGE_DESCRIPTIONS.get(TOOLS_TAB)
-    created = state.prompt_sessions_api.create_session(
-        user_id,
-        title=title,
-        description=description,
-    )
-    if not created or not created.get("id"):
-        return None
-    session_id = str(created["id"])
-    with psycopg2.connect(DATABASE_URL) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                UPDATE prompt_sessions
-                   SET metadata = COALESCE(metadata, '{}'::jsonb) || %s::jsonb
-                 WHERE id = %s
-                """,
-                (
-                    json.dumps({"session_type": "design_tab", "design_tab": TOOLS_TAB}),
-                    session_id,
-                ),
-            )
-            conn.commit()
-    conversation_id = str(created.get("conversation_id") or "")
-    if not conversation_id:
-        with psycopg2.connect(DATABASE_URL) as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    SELECT id::text
-                      FROM conversations
-                     WHERE session_id = %s
-                     ORDER BY created_at
-                     LIMIT 1
-                    """,
-                    (session_id,),
-                )
-                row = cur.fetchone()
-                conversation_id = str(row[0]) if row else ""
-    return {"packageId": session_id, "conversationId": conversation_id}
+    key = f"design_tools:{user_id}"
+    lock_conn = psycopg2.connect(DATABASE_URL)
+    lock_cur = lock_conn.cursor()
+    lock_cur.execute("SELECT pg_advisory_lock(hashtext(%s))", (key,))
+    try:
+        rows = _leftover_rows(user_id)
+        if press_id:
+            for _leftover, row_press in rows:
+                if row_press == press_id:
+                    return read_tools_working_session(user_id)
+        for leftover, _row_press in rows:
+            state.prompt_sessions_api.delete_session(leftover, user_id, permanent=True)
+        title = DESIGN_TAB_PACKAGE_TITLES.get(TOOLS_TAB, "Design — Tools")
+        description = DESIGN_TAB_PACKAGE_DESCRIPTIONS.get(TOOLS_TAB)
+        created = state.prompt_sessions_api.create_session(
+            user_id,
+            title=title,
+            description=description,
+        )
+        if not created or not created.get("id"):
+            return None
+        session_id = str(created["id"])
+        marker: dict[str, Any] = {"session_type": "design_tab", "design_tab": TOOLS_TAB}
+        if press_id:
+            marker["press_id"] = press_id
+        try:
+            with psycopg2.connect(DATABASE_URL) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE prompt_sessions
+                           SET metadata = COALESCE(metadata, '{}'::jsonb) || %s::jsonb
+                         WHERE id = %s
+                        """,
+                        (json.dumps(marker), session_id),
+                    )
+                    conn.commit()
+        except psycopg2.errors.UniqueViolation:
+            # THE STORE ALREADY HOLDS THIS TAB'S WORKING ROW, and the only call that can have
+            # installed it is the other call of this same press: the sweep above removed every
+            # other row that held the marker. That row is the press's session, and the row made
+            # here is a duplicate of it — nothing has been written to it yet, so it goes.
+            state.prompt_sessions_api.delete_session(session_id, user_id, permanent=True)
+            return read_tools_working_session(user_id)
+        conversation_id = str(created.get("conversation_id") or "")
+        if not conversation_id:
+            with psycopg2.connect(DATABASE_URL) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT id::text
+                          FROM conversations
+                         WHERE session_id = %s
+                         ORDER BY created_at
+                         LIMIT 1
+                        """,
+                        (session_id,),
+                    )
+                    row = cur.fetchone()
+                    conversation_id = str(row[0]) if row else ""
+        return {"packageId": session_id, "conversationId": conversation_id}
+    finally:
+        try:
+            lock_cur.execute("SELECT pg_advisory_unlock(hashtext(%s))", (key,))
+        finally:
+            lock_cur.close()
+            lock_conn.close()
 
 
 def read_tools_working_session(user_id: str) -> dict[str, Any] | None:

@@ -20,6 +20,8 @@ export const SURFACE_PATHS = {
   packageId: '/surface/package_id',
   sessionId: '/surface/session_id',
   conversationId: '/surface/conversation_id',
+  /** THE APPROVE TAB'S TURNS, stated by the surface so its seat can be a pure renderer. */
+  turns: '/surface/turns',
   railCollapsed: '/surface/rail/collapsed',
   thirdOpen: '/surface/third_open',
   heights: '/surface/heights',
@@ -35,6 +37,14 @@ export type SurfaceState = {
   sessionId: string;
   /** The conversation the right column shows. */
   conversationId: string;
+  /**
+   * THE TURNS THE RIGHT COLUMN DRAWS, when a tab's seat is a pure renderer.
+   *
+   * The Approve tab's seat owns no conversation state (owner's ruling, 2026-11-16): it draws what
+   * the surface hands it at `/surface/turns`. The surface hydrates this from the tab's own
+   * conversation before the seat draws, so the thread and the record cannot disagree.
+   */
+  turns: Array<{ role?: string; content?: string }>;
   /** The rail's own state: the column folded to its marks. */
   railCollapsed: boolean;
   /** The right column stands open. The frame draws its rail when this is false. */
@@ -48,6 +58,7 @@ const EMPTY_SURFACE: SurfaceState = {
   packageId: '',
   sessionId: '',
   conversationId: '',
+  turns: [],
   railCollapsed: false,
   thirdOpen: true,
   heights: {},
@@ -65,12 +76,16 @@ export function readSurface(model: Record<string, unknown> | null | undefined): 
   const heights = block.heights && typeof block.heights === 'object' && !Array.isArray(block.heights)
     ? (block.heights as Record<string, number>)
     : {};
+  const turns = Array.isArray(block.turns)
+    ? (block.turns as Array<{ role?: string; content?: string }>)
+    : [];
   const text = (value: unknown): string => (typeof value === 'string' ? value : '');
   return {
     tab: text(block.tab) || EMPTY_SURFACE.tab,
     packageId: text(block.package_id) || EMPTY_SURFACE.packageId,
     sessionId: text(block.session_id) || EMPTY_SURFACE.sessionId,
     conversationId: text(block.conversation_id) || EMPTY_SURFACE.conversationId,
+    turns,
     railCollapsed: block.rail_collapsed === true,
     thirdOpen: block.third_open !== false,
     heights: { ...heights },
@@ -104,6 +119,7 @@ export function surfaceDataModel(
     package_id: next.packageId,
     session_id: next.sessionId,
     conversation_id: next.conversationId,
+    turns: next.turns ?? [],
     rail: { ...rail, collapsed: next.railCollapsed },
     third_open: next.thirdOpen,
     heights: { ...next.heights },

@@ -76,8 +76,8 @@ export function useNotificationGate(options?: NotificationGateOptions): Notifica
      * renderers — so all three are places the application can LAND: a browser whose last tab
      * was any of them opens there, which is what a room is for. No stub remains.
      */
-    const KNOWN_TABS = ['console', 'composer', 'design', 'product', 'development', 'governance'];
-    const LANDABLE_TABS = ['console', 'composer', 'design', 'product', 'development', 'governance'];
+    const KNOWN_TABS = ['console', 'composer', 'design', 'design2', 'product', 'development', 'governance'];
+    const LANDABLE_TABS = ['console', 'composer', 'design', 'design2', 'product', 'development', 'governance'];
     const saved = localStorage.getItem("activeHeaderTab");
     if (saved && LANDABLE_TABS.includes(saved)) return saved;
     return initialTab && LANDABLE_TABS.includes(initialTab) ? initialTab : "console";

@@ -24,16 +24,18 @@ The layers of the one surface:
 - the frame;
 - the left container's content;
 - the middle container's content;
-- the right column's five slots;
+- the right column's chat, whose five boxes are the chat component's own drawing;
 - the tab's active sub-surface: Home, Tools, Approve or UX.
 
 The data model carries the active sub-surface and its values. The renderer draws the same surface.
-The tree does not change; the data does.
+A tab press writes `/surface/tab`; the tree's children change through the data, not through a new
+surface.
 
 ## Slots and containers
 
 The room is one surface: the frame, the left container, the middle container, and the right
-column's five slots.
+column's chat. The chat's five boxes are the chat component's own drawing, not five more surface
+nodes.
 
 ```
 HEADER          the readout: session, calls, tokens
@@ -53,14 +55,17 @@ FOOTER          the tools
 
 | Layer | File | Decides |
 |---|---|---|
-| Catalog | `frontend/src/components/A2UI/catalogs/<pipeline>/catalog.json` | what the server accepts |
-| Registry | `frontend/src/shared/tag-registry.ts` | what may be rendered: name → tag, props, events |
-| Runtime | `frontend/src/components/lit/<element>.ts` | what draws |
+| Catalog | `surface-design/catalog.json`, exported from `surface-design/catalog.ts` | what the server accepts |
+| Registry | `surface-design/registry.ts`, exported as `surface-design/registry.json` | what may be rendered: name → tag, props, events |
+| Runtime | `design_A2UI/**/<element>.ts` | what draws |
 | Resolver | `frontend/src/components/lit/a2ui-renderer.ts` | name → tag |
 
-A component must be in all four. The resolver reads, in order: the composite map, the primitives,
-the structural composites, the `f-` names, the fetched system registry, the allowlist. A name that
-nothing claims is reported, never guessed.
+A component must be in all four. The registry's source is the TypeScript file; `registry.json` is
+the served name→tag table the shell's renderer reads. The shell's `tag-registry.ts` is the
+fallback allowlist, not the seat's source. The resolver reads, in order: the composite map, the
+primitives, the structural composites, the `f-` names, the fetched system registry, the allowlist.
+A name that nothing claims is reported, never guessed. A `{path}` binding that resolves to nothing
+is reported as `VALIDATION_FAILED`, not dropped.
 
 ## Component structure
 
@@ -106,18 +111,21 @@ nothing claims is reported, never guessed.
 
 ## Serving in this repository
 
-1. The server assembly emits the one surface's component tree: the layers, the containers and
-   the slots.
+1. The server assembly emits the one surface's component tree and its one data model, under one
+   `surfaceId`. The door is `POST /api/design/console`; `surface-design/surface/load.ts` reads it once.
 2. The tab's data binding selects the active sub-surface and fills the slots; the tab's actions
-   answer them.
-3. The renderer draws the same surface. The data changes; the surface does not.
-4. The tab's folder is the model's context: the component tree, the data binding, the actions and
+   answer them. The left column, the middle column and the chat are children of the same root;
+   none of them is cut out of the tree.
+3. One `<a2ui-renderer>`, told `system="surface-design"` and the door's `surfaceId`, draws the
+   same surface. The data changes; the surface does not.
+4. A path the model does not hold is reported as `VALIDATION_FAILED` and shown in the room.
+5. The tab's folder is the model's context: the component tree, the data binding, the actions and
    the conversation. The model reads the folder to know what the tab can do.
 
 ## The seat's application
 
 - The room is one surface; the tabs are navigation within it through its sub-surfaces. The chat
-  is the right column's slots, not a column apart.
+  is the right column's single node; its five boxes are its own drawing, not a column apart.
 - The left and middle containers are stable; the tab's content is served inside them.
 - The tab's data binding, actions and conversation ids are its own. No tab reads another tab's.
 - The database mirrors the tabs: package → tab → conversation → message.

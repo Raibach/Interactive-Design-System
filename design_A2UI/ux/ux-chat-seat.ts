@@ -2156,12 +2156,11 @@ export class UxChatSeat extends LitElement {
       && (!this._uxLoaded || this._uxLoadedFor !== String(this.sessionId ?? ''))) {
       void this._loadUxStore();
     }
-    /* THE PAGE READS THE SESSION THE ROOM HANDS IT (owner, 2026-11-07). The room's shell gives
-       the Chat seat the Console package, the UX seat its own package, and the Approve seat none.
-       This block only fills a session when no host stated one; it never takes a seat's session
-       away from it. The Chat seat's conversation file reads that package's own list — the
-       Console's threads and no other tab's. */
-    if (this.dataModel || this.designPackages) {
+    /* THE PAGE READS THE SESSION AND CONVERSATION THE ROOM HANDS IT (owner, 2026-11-07;
+       amended 2026-11-16). The surface states one pair per tab; this block is the fallback for a
+       host that states neither. When the room owns the rail (`railOwnedByHost`), the room is the
+       only writer of which package and which conversation this tab reads. */
+    if ((this.dataModel || this.designPackages) && !this.railOwnedByHost) {
       const packages =
         (this.designPackages as Record<string, any> | undefined) ??
         ((this.dataModel as Record<string, any>)?.console?.design_packages ?? {});

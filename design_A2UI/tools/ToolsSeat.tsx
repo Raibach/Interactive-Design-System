@@ -114,6 +114,13 @@ function sameFields(
     && a.notes.trim() === b.notes.trim();
 }
 
+/**
+ * THIS PAGE LOAD'S OWN NAME, made once when this file is first imported. A press is named by
+ * this load and the press count (see `pressRef`), so the two asks one press makes agree and a
+ * reload — a new load — can never inherit the last one's name.
+ */
+const PAGE_LOAD_ID = crypto.randomUUID();
+
 export default function ToolsSeat({ onAssemblingChange, openTag, openSession, openSystem, press, headless, active, onContent }: ToolsSeatProps) {
   /**
    * THE CATALOGUE A VISIT DEFAULTS TO — the official one, and the design console's own card for it
@@ -131,6 +138,15 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
   /* Read by every action listener: a stale closure would answer for the wrong tab. */
   const activeRef = useRef(Boolean(active));
   activeRef.current = Boolean(active);
+  /*
+   * THE PRESS THIS SEAT ASKS FOR, readable inside the assembly callback (owner, 2026-11-07: a
+   * press is a new session). One press asks the server twice — this seat and the shell's own
+   * door — and the store allows one working row per person and tab. The name is the page load
+   * plus the press count, so both asks of one press carry the same name and the server makes one
+   * session for them; the next press carries a different name and starts the next session.
+   */
+  const pressRef = useRef(Number(press ?? 0));
+  pressRef.current = Number(press ?? 0);
   /*
    * THIS SEAT'S TWO VALUES, and the console's are not among them. `designTree` is the surface
    * `render-design` emits; `currentDesignSession` is the design container the server resolves —
@@ -233,6 +249,12 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
       body: JSON.stringify({
         intent,
         ...(reopenSessionId ? { session_id: reopenSessionId } : {}),
+        /*
+         * THE PRESS'S OWN NAME. The server makes one working row for it: the shell's door and
+         * this one answer the same press, and the store refuses a second row for one person and
+         * tab. The name is what tells the second ask that the first already made the session.
+         */
+        press_id: `${PAGE_LOAD_ID}:${pressRef.current}`,
       }),
     });
     const rawData = await response.json();
@@ -1585,18 +1607,13 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
        * grid is given the server's own card, so the live card reads Closed without a second page
        * read and without the grid inventing a state.
        */
-      const cardRead = await apiFetch(
-        `${API_BASE}/design/cards/${encodeURIComponent(sessionId)}`,
-      );
-      if (cardRead.ok) {
-        const cardAnswer = (await cardRead.json().catch(() => null)) as
-          | { card?: Record<string, any> }
-          | null;
-        const card = cardAnswer?.card;
-        if (card?.id) {
-          window.dispatchEvent(new CustomEvent("design-card-saved", { detail: { card } }));
-        }
-      }
+      /*
+       * A DISCARDED VISIT HAS NO CARD TO READ. The close route REMOVES the unkept visit and its
+       * conversation (an unkept Tools visit is discarded, not carded — owner, 2026-11-09), so the
+       * card read that used to stand here asked for a record the same act had just deleted and
+       * the server answered 404 (measured 2026-11-16). The grid needs no card: a visit that was
+       * never saved never had one.
+       */
       forgetVisit(false);
       if (options.newSession) {
         window.dispatchEvent(
@@ -1705,6 +1722,14 @@ export default function ToolsSeat({ onAssemblingChange, openTag, openSession, op
       // own "Save anyway / Approve / Cancel" question is not asked a second time. A manual Save
       // carries no force and keeps that question. A create-new save also starts the next session.
       const detail = (event as CustomEvent<{ force?: boolean; newSession?: boolean }>).detail ?? {};
+      /*
+       * THE FOOTER'S SAVE BELONGS TO THE STANDING TAB, EXCEPT A LEAVE'S. This engine is mounted
+       * once and kept headless, so its window listener otherwise answers the UX footer's Save as
+       * well and writes the Tools session, which the press that left Tools has already replaced.
+       * A leave's Save carries `force` because the room already asked the question; it must still
+       * write the visit that is leaving.
+       */
+      if (!activeRef.current && !detail.force) return;
       void saveDesignSession({
         force: Boolean(detail.force),
         newSession: Boolean(detail.newSession),

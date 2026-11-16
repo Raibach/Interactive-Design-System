@@ -84,7 +84,18 @@ export class DesignReviewView extends LitElement {
   static properties = {
     sessionId: { type: String, attribute: 'session-id' },
     reviewId: { attribute: 'review-id' },
+    /*
+     * THE TAB THIS VIEW CLAIMS, AS AN ATTRIBUTE ON ITSELF. The chat's own stylesheet draws a
+     * slotted view only under the tab the view declares (`[view-tab="approvals"]` inside
+     * `.view-slot.tab-approvals`), and the chat asks the same question in `_viewSlotted`. The
+     * archived room set this with `setAttribute("view-tab", "approvals")`; a surface gives an
+     * element its props instead, so the attribute is declared here and reflected — the one way a
+     * component in a tree can carry a claim its host reads as an attribute.
+     */
+    viewTab: { type: String, attribute: 'view-tab', reflect: true },
   };
+
+  declare viewTab?: string;
 
   static styles = css`
     :host {

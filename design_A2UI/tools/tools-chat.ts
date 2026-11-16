@@ -2514,6 +2514,12 @@ export class ToolsChat extends LitElement {
     this._scrollSaveTimer = window.setTimeout(() => {
       this._scrollSaveTimer = null;
       if (this.conversationId !== id) return;
+      /* A SEAT THAT IS NO LONGER ON THE PAGE HAS NO POSITION TO REMEMBER. Leaving Tools discards
+         an unkept visit, and the route deletes the row and cascades its conversation; a timer
+         that outlived the seat would write to a conversation the leave had just removed and the
+         server would answer 404 (measured 2026-11-16). The record is gone, so there is nothing
+         to write to — the answer is not a failure to report, it is a request not to make. */
+      if (!this.isConnected) return;
       const el = this._scrollerEl();
       if (!el) return;
       void fetch(`/api/conversations/${encodeURIComponent(id)}/surface-state`, {

@@ -1,5 +1,63 @@
 # Design A2UI — log
 
+## 2026-11-16 — the Approve tab's fake seat removed, and Home's arrangement back in its own sheet
+
+**Home.** Home's seat draws its rail and its panel itself again. `chat/design-chat-seat/view.ts`
+has no wrapper element and no slot attributes, and `chat/design-chat.styles.ts` carries the row,
+the panel, the output region, the composer and the folded state once more. Measured on a fresh
+page: the column is 104 wide at load, which is the door's own `isThirdOpen: false`; one press
+opens it to an 846-wide panel with a 784-wide thread; a second press folds it and hides the
+panel; the gripper resizes the column in both directions.
+
+**The removal.** `approve/approval-chat.ts` — a hand-written element that drew the chat's
+furniture with no conversation behind it — and the layout element
+`surface-design/parts/chat-layout.ts` are deleted, with their registry entries. `registry.json`
+(30 names) and `catalog.json` (36 components) are re-exported from the one source.
+
+**The Approve tab.** It names `chat-panel` again and reads the console's package and
+conversation, with its own package, script and turns branches removed. Measured on the page:
+`design2-chat`, panel `tab-approvals`, the pending cards in the left column, one conversation,
+the response card, the action bar, the input and the tray. It still speaks with the Chat tab's
+script, because the tree states a script only for the Chat tab and the chat element is reused
+from tab to tab; the tab's own script waits for a seat of its own. The surface's read of one
+conversation's turns and `/surface/turns` are kept for that seat.
+
+**The proof.** `npx tsc -b --noEmit` passes. `node design_A2UI/tests/four-layers.mjs` reports 30
+names, 36 catalogue components, one missing definition (`design-left-panel`, missing before this
+work), no missing imports and nothing absent from the catalogue.
+
+## 2026-11-16 — one surface, one renderer, one data model
+
+**The save bug.** `tools/ToolsSeat.tsx` is mounted once and kept headless; its `design-left-save`
+listener answered the UX footer's Save too and wrote a Tools session the press had already
+replaced. The listener now answers only while Tools stands, except a leave's forced Save.
+
+**The four layers.** `design2-tools-chat`, `design2-ux-chat`, `design2-review-view` and
+`design2-ux-app-frame` are in the catalogue, the registry source and the shell's allowlist, and
+their modules are imported. The catalogue is 35 components (6 primitives and 29 names);
+`registry.json` is 29 names.
+
+**The repair list.** `chat-repair-actions` keeps its wire name; its tag is
+`design2-repair-actions`. The frame and both stylesheets select the new tag, and
+`chat/left/repair-actions.ts` is imported. The old tag returns zero.
+
+**One tree.** `surface/load.ts` no longer takes the chat or the left column out of the door's
+tree; `surface/components.ts` selects the tab's left, middle and chat children;
+`DesignSeatShell.tsx` creates one `<a2ui-renderer>` and keeps it. The left column's second
+renderer, the per-tab chat creation and the property-copying loop are gone. The chat's props are
+`{path}` bindings to `/surface/*`, and the renderer's missing path emits `VALIDATION_FAILED`,
+which the room shows.
+
+**The frame.** `design2-workspace` draws the left column's ledger and wait as its own overlay.
+
+**The proof.** `npx tsc -b --noEmit` passes; `node design_A2UI/tests/four-layers.mjs` reports 29
+names, 35 catalogue components and zero missing definitions, imports or catalogue entries. The
+running page has not been re-measured.
+
+**Still open.** The Tools chat is one 5,645-line component with a large internal assembly; its
+places are the next cut. The shell's kernel imports, the server routes and the `enabled: false`
+gate remain.
+
 ## 2026-11-15 — the seat becomes sovereign, and the application's room is archived
 
 **The tree.** The folder now holds the plan's interface tree: `surface-design/surface/` (the frame,

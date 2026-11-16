@@ -43,11 +43,9 @@ export function applySeatDefaults(host: any): void {
 
 /** The conversation card's rows, as this seat's list and its filter make them. */
 export function conversationRowsForList(host: any) {
-    /* THE APPROVE TAB'S ROWS ARE RECORDS, NOT CONVERSATIONS (owner, 2026-11-07): its view draws
-       them, and the conversations card above it draws nothing — never another tab's list. */
-    if (host.activeTab === 'approvals') {
-      return html`<p class="conversation-none">This tab's records are drawn by its own view.</p>`;
-    }
+    /* THE ROWS ARE THIS TAB'S OWN CONVERSATIONS — the same rule in every chat build (owner,
+       2026-11-16). The Approve advice line that stood here is gone with the tab's borrowed package;
+       each tab draws the conversation it is reading. */
     /* THE SURFACE'S OWN LIST IS DRAWN UNTIL THE PACKAGE'S READ LANDS — the header's sessions were
        fed this way, and a card that hides them until a fetch comes back is a card that looks
        empty. The server read takes over the moment it arrives, and a failed read says its reason

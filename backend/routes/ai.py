@@ -76,16 +76,22 @@ PACKAGE_TABS = "chat,trace,tools,executions,eval,settings"
 # button is drawn unwired (see chat-navigation-bar: TODO(behavior), node 40001119:6600).
 CONSOLE_TABS = "chat,eval,tools,approvals,settings"
 
-# THE DESIGN ROOM'S RAIL. The model's own list for this seat plus the one button without which
-# the check view cannot be reached: "repair". `chat-panel` draws the checker's findings in its
-# "view" hole only on the tabs that hole is drawn for, and maps BOTH `repair` and `approvals` to
-# `chat-repair-actions` (`_wantedViewTag`) — while the rail only draws a button for a tab the
-# seat's list names ("a typo on the server is not an error anywhere — it is a button that quietly
-# is not there"). So the list is stated here rather than left to the model: an answer that omits
-# the tab would leave the check row in the tree and unreachable on screen, which is the hole this
-# constant closes. `trace` stays because Design's seat is given a trace view; `approvals` does
-# not, because approvals are the console's job.
-DESIGN_TABS = "chat,trace,tools,executions,eval,repair,ux,settings"
+# THE DESIGN ROOM'S RAIL, AND IT IS ONE LIST FOR EVERY TAB OF THE ROOM.
+#
+# This said `chat,trace,tools,executions,eval,repair,ux,settings`, which is the CONSOLE's older
+# rail: its `trace`, `eval` and `repair` buttons were removed from this room by the owner
+# (2026-09-19: *"remove the repairs from the tab — repairs live under the approvals."*), and the
+# comment that justified `repair` was wrong about how the findings are reached — `chat-panel`
+# draws them in its "view" hole because the tree names them in `children.view`, and that slot is
+# drawn whatever tab is standing. Handing that stale list to the chat is what put the three icons
+# back on the Tools tab while Home drew the room's five (owner, 2026-11-16: *"you're adding back
+# icons that have been removed."*).
+#
+# The list is the SAME fact as `routes/design_console.py`'s `DESIGN_CONSOLE_TABS`, which dresses
+# the chat node of the console door. Two files, one room: they must name the same tabs, and the
+# room shows Home, Tools, Approve, UX and Settings. `executions` is named because the room's seat
+# declares it; the rail draws no button for a tab it has no icon for.
+DESIGN_TABS = "chat,tools,executions,ux,approvals,settings"
 
 # THE PRODUCT ROOM'S RAIL. The product role's own declared tabs (`role_caps.py`, the 'product'
 # role: chat, trace, tools) — the stage needs no more, and the seat draws a button only for a
@@ -1195,6 +1201,11 @@ class AISurfaceRequest(BaseModel):
     """
     intent: str
     session_id: str | None = None  # For render-session intent
+    # THE PRESS'S OWN NAME (2026-11-16). One Tools press asks this door twice — the shell mounts
+    # once and the Tools engine assembles beside it — and the store allows one working row per
+    # person and tab. The name is what tells the second ask that the first already made the
+    # press's session. Absent means the caller has no press to share, and the door starts over.
+    press_id: str | None = None
     context: AISurfaceContext | None = None  # Document state for AI decisions
 
 
@@ -1561,23 +1572,29 @@ def ai_assemble_surface(
                 key=lambda session: str(session.get("updated_at") or ""),
                 reverse=True,
             )
-        # ── THE DESIGN ROOM'S OWN ROWS ARE NOT CONSOLE CARDS ──────────────────────────────────
+        # ── A SILENT SESSION IS NEVER A CARD ──────────────────────────────────────────────────
         # `get_sessions` returns every package row. The room's container and its
-        # `design_master`/`design_child` element rows are internals. The TOOLS session is a card:
-        # it is the live job, and its card is how it is opened and handed on. The room's
-        # conversation tabs (chat, ux, console) are their own pages, not the console's job cards.
-        _design_internals = {"design", "design_master", "design_child"}
-        _design_conversation_pages = {"chat", "ux", "console"}
+        # `design_master`/`design_child` element rows are internals; the conversation tabs
+        # (`chat`, `tools`, `ux`, `console`) are captured in the background and are not job cards;
+        # the console's own row is not a card. A KEPT `design_session` is the card the person
+        # saved. The plan path uses the same predicate (`console_scope.ELIGIBILITY_SQL`); this is
+        # its fallback, so the two paths cannot disagree about what may draw.
+        _non_cards = {"design", "design_master", "design_child", "design_tab", "console"}
+
+        def _session_type(session: dict[str, Any]) -> str:
+            meta = session.get("metadata") or {}
+            if isinstance(meta, str):
+                try:
+                    meta = json.loads(meta) if meta.strip() else {}
+                except (json.JSONDecodeError, ValueError):
+                    meta = {}
+            return str(meta.get("session_type") or "")
+
         sessions = [
             session
             for session in sessions
-            if str((session.get("metadata") or {}).get("session_type") or "")
-            not in _design_internals
-            and not (
-                str((session.get("metadata") or {}).get("session_type") or "") == "design_tab"
-                and str((session.get("metadata") or {}).get("design_tab") or "")
-                in _design_conversation_pages
-            )
+            if _session_type(session) not in _non_cards
+            and not _session_type(session).startswith("governance")
         ]
         ms_a = (time.perf_counter() - t_a_start) * 1000
 
@@ -3645,7 +3662,7 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
             else:
                 from routes.tools_session import open_tools_working_session
 
-                design_tools_tab = open_tools_working_session(uid)
+                design_tools_tab = open_tools_working_session(uid, request.press_id)
             if not design_tools_tab:
                 raise HTTPException(
                     status_code=503,
@@ -3757,13 +3774,28 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
             # had to say, word for word, and it ended in a question; she said it because a prompt
             # told her to, not because she had anything to say. Her opening is hers to write from
             # the situation the turn carries.
+            # WHAT SHE OPENS WITH (owner, 2026-11-13: *"we can prompt her to list the features of
+            # the application"*). The rule above still holds: this names what the person can start
+            # with and asks her to say it herself, so it is facts about the tab and a shape for the
+            # opening, not a sentence for her to repeat.
             design_grace_instructions = (
                 "You are the design system's assistant, and you are with the designer. You built the "
                 "Lit components of this design system from Figma. The left column "
                 "holds the catalogue — what has been measured, what was written, and the checks "
                 "that did not pass. The middle column shows the component being reviewed. "
                 "Answer the designer's question directly, in a few sentences, and say plainly what "
-                "to change when something is wrong."
+                "to change when something is wrong. "
+                "This room handles three kinds of work. It brings Figma components into the "
+                "catalogue and reviews them: every value is read from the file exactly, with "
+                "nothing guessed, and a component is refused at approval when one of the four "
+                "declarations the WCAG 2.2 check requires — keyboard, announcement, label and "
+                "role — is missing, with the refusal naming the declaration and the annotation to "
+                "write. It holds the approval queue for components waiting to be approved. It tags "
+                "the design's UX with PostHog. A component can also be replaced on a live site "
+                "with the version that was brought in. "
+                "When the designer has not asked anything yet, open by telling them in your own "
+                "words, in a few short lines, what this room handles, and then wait for them to "
+                "choose."
             )
             # ── THE BAR'S TITLE IS THE CATALOGUE, NOT "Design" ───────────────────────────
             #
@@ -3817,9 +3849,8 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
                 "prompt-composer": "prompt-composer",
                 "carbon": "carbon",
             }
-            _catalogue_for_tab = a2ui_catalog_for(
-                _CATALOGUE_BY_SYSTEM.get(design_system, "prompt-composer")
-            ) or {}
+            _catalogue_id_for_tab = _CATALOGUE_BY_SYSTEM.get(design_system, "prompt-composer")
+            _catalogue_for_tab = a2ui_catalog_for(_catalogue_id_for_tab) or {}
 
             design_catalogue_facts = {
                 "system": design_system,
@@ -4078,6 +4109,18 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
                     (opened_session or {}).get("title") or design_title or "Untitled"
                 ),
                 "catalogue": design_catalogue_facts,
+                # ── THE LEFT RAIL'S THREE VALUES, STATED RATHER THAN LEFT OUT ────────────────
+                #
+                # `figma-layers-view` binds `/session/design_catalogue`, `/session/design_selected`
+                # and `/session/design_query`. The tool writes all three as the person works, and
+                # the model carried NONE of them, so the first draw of the tab reported a binding
+                # that resolved to nothing ("VALIDATION_FAILED — /session/design_query in
+                # left-rail did not resolve"). The values below are the tab's true starting state:
+                # the catalogue it is built in, no row selected, and no filter in the search box.
+                # A path a component binds is a fact the room owes it, even when the fact is empty.
+                "design_catalogue": _catalogue_id_for_tab,
+                "design_selected": "",
+                "design_query": "",
                 # A container is not a draft and has nothing to describe yet. Stated, rather than
                 # left out, so the seat reads "none" from the value instead of guessing at a
                 # missing key.
@@ -5940,7 +5983,7 @@ Output ONLY valid JSON:
             "draft": None,
         }
         if is_design_session_save:
-            apply_design_save_metadata(save_metadata, request, uid)
+            apply_design_save_metadata(save_metadata, request, uid, _design_meta)
         if ai_description:
             save_metadata["ai_description"] = ai_description
 

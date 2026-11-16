@@ -16,6 +16,7 @@ export const ROOM_SURFACES = new Set([
   'development',
   'governance',
   'design',
+  'design2',
 ]);
 
 export interface ApplyComposerSurfaceDeps {

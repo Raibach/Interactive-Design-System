@@ -15,6 +15,9 @@
  * the payload names them the same way: `design-workspace` is drawn by `<design2-workspace>`.
  */
 import { CHAT_SEAT_REGISTRY } from '../chat/registry';
+import { APPROVE_REGISTRY } from '../approve/registry';
+import { TOOLS_REGISTRY } from '../tools/registry';
+import { UX_REGISTRY } from '../ux/registry';
 
 export interface SurfaceRegistryEntry {
   tag: string;
@@ -146,14 +149,25 @@ export const DESIGN_ROOM_REGISTRY: Record<string, SurfaceRegistryEntry> = {
     },
     events: [],
   },
+  'design-left-panel': {
+    tag: 'design-left-panel',
+    surface: 'design',
+    description: 'THE TOOLS LEFT PANEL: the form and the catalogue tree, in the left column.',
+    props: {},
+    events: [],
+  },
 };
 
 /**
- * THE SEAT'S WHOLE ALLOWLIST — the chat's own eighteen names and the room's five, in one table.
- * The shell's loader reads the name→tag half of this file as `registry.json`; the page gate is the
- * same table, so a name the seat does not declare draws nothing and is reported by name.
+ * THE SEAT'S WHOLE ALLOWLIST — the chat's eighteen names, the four tab components, and the
+ * room's seven, in one table. The shell's loader reads the name→tag half of this file as
+ * `registry.json`; the page gate is the same table, so a name the seat does not declare draws
+ * nothing and is reported by name.
  */
 export const DESIGN_SEAT_REGISTRY: Record<string, SurfaceRegistryEntry> = {
   ...CHAT_SEAT_REGISTRY,
+  ...TOOLS_REGISTRY,
+  ...UX_REGISTRY,
+  ...APPROVE_REGISTRY,
   ...DESIGN_ROOM_REGISTRY,
 };

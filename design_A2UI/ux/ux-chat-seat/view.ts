@@ -159,7 +159,11 @@ export function seatView(host: any) {
                   ? html`<design2-ux-chat-header
                   data-slot="conversations"
                   status-text=${(() => {
-                    const n = host.activeTab === 'approvals' ? 0 : (host._conversationRows?.length ?? 0);
+                    /* THE COUNT IS THIS TAB'S OWN LIST — the same rule in every chat build
+                       (owner, 2026-11-16: *"I should see the conversational number count load. It
+                       should be exactly like tools."*). The Approve special case was a leftover
+                       from borrowing another package's thread; each tab has its own now. */
+                    const n = host._conversationRows?.length ?? 0;
                     // The drawing's copy is "23 Conversations"; one of them is one conversation.
                     return `${n} ${n === 1 ? 'Conversation' : 'Conversations'}`;
                   })()}

@@ -1,36 +1,32 @@
 /**
  * useDesignConsole — THE DESIGN CONSOLE'S ONE READ.
  *
- * The room's frame is the design console's answer: its left application (the card grid), its tree,
- * and the chat entry the shell removes and keeps for itself. This hook owns that request and the
- * facts its answer produces:
+ * The room's frame is the design console's answer: one surface id, one tree, one data model.
+ * This hook owns that request and the facts its answer produces:
  *
- *   - `frame`        the console's tree without its left column (the chat is taken out in the shell);
- *   - `consoleApp`   the console's own left application, ready to place;
+ *   - `frame`        the door's whole tree, untouched;
+ *   - `surfaceId`    the id the door's `createSurface` message named;
  *   - `error`        the door's refusal, in the door's words;
  *   - `coverDown`    the room's cover fact: true once the tree or an error has arrived, or once the
  *                    ten-second dead stop has passed.
  *
- * Nothing here draws. `DesignSeatShell` composes this with the chat and the left column.
+ * Nothing here draws and nothing here splits the tree. `DesignSeatShell` composes the frame with
+ * the tab's own rows; the renderer resolves every value.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { readSurface } from '../load';
 import type { Tree } from '../load';
 import { isCardLocked } from '@design2/surface-design/cardLifecycle';
 
-export type DesignConsoleApp = {
-  leftId?: string;
-  components: any[];
-};
-
 export type DesignConsoleState = {
   frame: Tree | null;
-  consoleApp: DesignConsoleApp | null;
-  /** The props the door declared for the seat — taken out of the tree by the load. */
-  chat: Record<string, unknown>;
+  /** The one surface id the door named. */
+  surfaceId: string;
+  /** The catalogue's allowed component names; the shell refuses the final tree against it. */
+  allowed: Set<string>;
   error: string | null;
   coverDown: boolean;
-  /** The shell's own failure — a frame that never drew its layout — is stated through the same door. */
+  /** The shell's own failure is stated through the same door. */
   setError: (message: string) => void;
   /** A saved session's card, placed in the console's own list without re-reading the console. */
   upsertCard: (card: Record<string, any>) => void;
@@ -40,8 +36,8 @@ export type DesignConsoleState = {
 
 export function useDesignConsole(): DesignConsoleState {
   const [frame, setFrame] = useState<Tree | null>(null);
-  const [consoleApp, setConsoleApp] = useState<DesignConsoleApp | null>(null);
-  const [chat, setChat] = useState<Record<string, unknown>>({});
+  const [surfaceId, setSurfaceId] = useState('');
+  const [allowed, setAllowed] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   /* THE COVER IS UP FROM THE ROOM'S FIRST FRAME. `gateDown` means the cover is down, so it starts
      FALSE. It is set by the real facts below, never by a guessed delay. */
@@ -56,12 +52,11 @@ export function useDesignConsole(): DesignConsoleState {
     setError(null);
     void (async () => {
       try {
-        /* THE DOOR, THE ENVELOPE, THE CHAT AND THE LEFT COLUMN ARE ALL ONE CALL. `load.ts` owns
-           the read and the two extractions; this hook owns only the state the room draws from. */
+        /* THE DOOR'S WHOLE ANSWER IS THE SURFACE. `load.ts` owns the read; nothing is extracted. */
         const loaded = await readSurface();
         if (cancelled) return;
-        setChat(loaded.chat);
-        setConsoleApp({ leftId: loaded.left.leftId, components: loaded.left.components as any[] });
+        setSurfaceId(loaded.surfaceId);
+        setAllowed(loaded.allowed);
         setFrame(loaded.tree);
         /* THE COVER COMES DOWN ON THE REAL FACT: the assembler's tree has landed. */
         setGateDown(true);
@@ -130,5 +125,5 @@ export function useDesignConsole(): DesignConsoleState {
     });
   }, []);
 
-  return { frame, consoleApp, chat, error, coverDown, setError, upsertCard, removeCard };
+  return { frame, surfaceId, allowed, error, coverDown, setError, upsertCard, removeCard };
 }

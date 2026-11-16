@@ -1924,6 +1924,9 @@ export const TAG_REGISTRY = {
       'the shared `workspace-layout` stays with the Console, the Governance room and Development; this name is the Design room\'s alone',
     ],
   },
+  /* THE DESIGN A2UI SEAT IS NOT IN THE LIVING APPLICATION: its names live in the seat's own
+     registry, and the living shell reaches it through the A2UI surface, never through an entry
+     here. */
   'composer-workspace': {
     tag: 'composer-workspace',
     surface: 'composer',
@@ -2440,6 +2443,70 @@ export const TAG_REGISTRY = {
     props: {
     },
     events: [],
+  },
+  // ── THE DESIGN A2UI SEAT'S FOUR TAB COMPONENTS ──────────────────────────────
+  // The folder's own surface names. The seat's table (`surface-design/registry.json`) is
+  // read first; these entries are the shell allowlist's answer for the same names.
+  'tools-chat': {
+    tag: 'design2-tools-chat',
+    surface: 'design',
+    column: 'right',
+    description: 'THE TOOLS TAB\'S CHAT: the ingest conversation and its turn.',
+    props: {
+      conversationId: { type: 'string', optional: true },
+      sessionId: { type: 'string', optional: true },
+      instructions: { type: 'string', optional: true },
+      graceLiveContext: { type: 'boolean', optional: true },
+      dataModel: { type: 'object', optional: true },
+      activeTab: { type: 'string', optional: true },
+      collapsed: { type: 'boolean', optional: true },
+      messages: { type: 'array', optional: true },
+      conversations: { type: 'array', optional: true },
+    },
+    events: ['conversation-change', 'tab-change', 'product-attach', 'product-tool'],
+    constraints: [],
+  },
+  'ux-chat': {
+    tag: 'design2-ux-chat',
+    surface: 'design',
+    column: 'right',
+    description: 'THE UX TAB\'S CHAT: the analytics conversation and its turn.',
+    props: {
+      conversationId: { type: 'string', optional: true },
+      sessionId: { type: 'string', optional: true },
+      instructions: { type: 'string', optional: true },
+      graceLiveContext: { type: 'boolean', optional: true },
+      dataModel: { type: 'object', optional: true },
+      activeTab: { type: 'string', optional: true },
+      collapsed: { type: 'boolean', optional: true },
+      messages: { type: 'array', optional: true },
+      conversations: { type: 'array', optional: true },
+    },
+    events: ['conversation-change', 'tab-change', 'product-attach', 'product-tool'],
+    constraints: [],
+  },
+  'review-view': {
+    tag: 'design2-review-view',
+    surface: 'design',
+    column: 'right',
+    description: 'THE APPROVALS SURFACE: the sessions sent for review, the detail and the queue.',
+    props: {
+      sessionId: { type: 'string', optional: true },
+      reviewId: { type: 'string', optional: true },
+    },
+    events: ['design-approval-count'],
+    constraints: [],
+  },
+  'ux-app-frame': {
+    tag: 'design2-ux-app-frame',
+    surface: 'design',
+    column: 'left',
+    description: 'THE UX APPLICATION FRAME: the analytics program at the address the surface gives it.',
+    props: {
+      src: { type: 'string', optional: true },
+    },
+    events: [],
+    constraints: [],
   },
 } as const;
 

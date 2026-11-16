@@ -58,11 +58,14 @@ export function applySeatDefaults(host: any): void {
 
 /** The conversation card's rows, as this seat's list and its filter make them. */
 export function conversationRowsForList(host: any) {
-    /* THE APPROVE TAB'S ROWS ARE RECORDS, NOT CONVERSATIONS (owner, 2026-11-07): its view draws
-       them, and the conversations card above it draws nothing — never another tab's list. */
-    if (host.activeTab === 'approvals') {
-      return html`<p class="conversation-none">This tab's records are drawn by its own view.</p>`;
-    }
+    /*
+     * THE ROWS ARE THIS TAB'S OWN CONVERSATIONS — every tab, the same rule (owner, 2026-11-16:
+     * *"It should be exactly like home … I just want them to be the same"*). This returned the
+     * advice line "This tab's records are drawn by its own view." for the Approve tab, which is
+     * why that tab's conversation card showed one sentence where Home shows the conversation it is
+     * reading. The line was true while Approve had no conversation of its own; it has one now, and
+     * the card draws it like every other tab's.
+     */
     /* THE SURFACE'S OWN LIST IS DRAWN UNTIL THE PACKAGE'S READ LANDS — the header's sessions were
        fed this way, and a card that hides them until a fetch comes back is a card that looks
        empty. The server read takes over the moment it arrives, and a failed read says its reason

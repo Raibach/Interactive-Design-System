@@ -465,7 +465,7 @@ export const toolsChatStyles = css`
        pushes its own rows off the bottom edge — measured: the header sat clipped at the
        panel's lower boundary with the feed above it taking the whole height. The 12px under
        the list is gone: the slot's own 10px gap is the drawn distance between children. */
-    .view-slot ::slotted(chat-repair-actions) {
+    .view-slot ::slotted(design2-repair-actions) {
       flex: 0 0 auto;
     }
     /* ONE SLOT, ONE VIEW AT A TIME. The slot can hold several views at once (the trace feed
@@ -477,10 +477,10 @@ export const toolsChatStyles = css`
        because the slot had no idea which tab was looking. */
     .view-slot ::slotted(trace-feed) { display: none; }
     .view-slot ::slotted(eval-feed) { display: none; }
-    .view-slot ::slotted(chat-repair-actions) { display: none; }
+    .view-slot ::slotted(design2-repair-actions) { display: none; }
     .view-slot.tab-eval ::slotted(eval-feed) { display: block; }
-    .view-slot.tab-approvals ::slotted(chat-repair-actions) { display: block; }
-    .view-slot.tab-repair ::slotted(chat-repair-actions) { display: block; }
+    .view-slot.tab-approvals ::slotted(design2-repair-actions) { display: block; }
+    .view-slot.tab-repair ::slotted(design2-repair-actions) { display: block; }
     /* A ROOM'S OWN VIEW, PER TAB — the same one-slot-one-view discipline as the tag
        rules above, made generic so the seat needs no room's names: the view declares its
        tab on itself (the view-tab attribute, e.g. view-tab="trace" — the attribute
@@ -517,7 +517,7 @@ export const toolsChatStyles = css`
     .view-slot.tab-eval { background: transparent; }
     /* The trace fold holds the same slot; only the feed it names may draw there. */
     .fold-wrap ::slotted(eval-feed) { display: none; }
-    .fold-wrap ::slotted(chat-repair-actions) { display: none; }
+    .fold-wrap ::slotted(design2-repair-actions) { display: none; }
     /* …and only the view that NAMED the trace tab may draw there: it is the trace tab's
        hole, so a claimant of any other tab is hidden — the pair's other half. */
     .fold-wrap ::slotted([view-tab]:not([view-tab="trace"])) { display: none; }
@@ -539,7 +539,7 @@ export const toolsChatStyles = css`
       background: var(--chat-bg, #FFFFFF);
     }
     .chat-top ::slotted(*) { display: none; }
-    .chat-top ::slotted(chat-repair-actions) { display: block; }
+    .chat-top ::slotted(design2-repair-actions) { display: block; }
     /* AND THE ROOMS' OWN VIEWS DRAW — the allow-list above is what keeps this hole to KNOWN
        views only (2026-10-03: the Product room's context strip was assigned, projected, and
        then hidden here — measured on the live page as a zero-sized element). A room's view

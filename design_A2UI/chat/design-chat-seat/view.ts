@@ -160,7 +160,14 @@ export function seatView(host: any) {
                   ? html`<design2-chat-header
                   data-slot="conversations"
                   status-text=${(() => {
-                    const n = host.activeTab === 'approvals' ? 0 : (host._conversationRows?.length ?? 0);
+                    /* THE COUNT IS THIS TAB'S OWN LIST — every tab, the same rule (owner,
+                       2026-11-16: *"I should see the conversational number count load. It should
+                       be exactly like tools."*). This read `activeTab === 'approvals' ? 0 : …`
+                       because the Approve tab used to borrow the console's package, and counting
+                       the console's threads under Approve would have been a lie. Approve has its
+                       own package and conversation now, so its count is its own list like every
+                       other tab's; a zero here was the bar drawing nothing. */
+                    const n = host._conversationRows?.length ?? 0;
                     // The drawing's copy is "23 Conversations"; one of them is one conversation.
                     return `${n} ${n === 1 ? 'Conversation' : 'Conversations'}`;
                   })()}

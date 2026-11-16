@@ -371,12 +371,19 @@ export class A2UIRenderer extends LitElement {
      * it is drawing for; empty means none, and the app's own tables answer as they always have.
      */
     system: { type: String },
+    /*
+     * THE ONE SURFACE THIS RENDERER DRAWS. The door's `createSurface` message names it; the room
+     * sets it before the tree and the values arrive, so the surface is addressable by the id the
+     * server issued. Empty means the caller did not name one.
+     */
+    surfaceId: { type: String, attribute: 'surface-id' },
   };
 
   declare components: A2UIComponent[];
   declare rootId: string;
   declare dataModel: Record<string, unknown>;
   declare system: string;
+  declare surfaceId: string;
 
   constructor() {
     super();
@@ -384,6 +391,7 @@ export class A2UIRenderer extends LitElement {
     this.rootId = 'root';
     this.dataModel = {};
     this.system = '';
+    this.surfaceId = '';
   }
 
   /** Errors from the pass being rendered. Rebuilt every render, never accumulated. */
@@ -591,6 +599,24 @@ export class A2UIRenderer extends LitElement {
    */
   private _assign(el: HTMLElement, comp: A2UIComponent): void {
     const props = componentProps(comp, this.dataModel);
+    /*
+     * A BINDING THAT RESOLVES TO NOTHING IS REPORTED, NOT DROPPED. A path the model does not hold
+     * is a payload asking for a fact the surface was never given; drawing nothing and saying
+     * nothing is how a room looks assembled and is empty. The event names the component and the
+     * path, and the room shows it in the person's own words.
+     */
+    for (const [key, value] of Object.entries(comp as unknown as Record<string, unknown>)) {
+      if (key === 'id' || key === 'component' || key === 'children' || key === 'props') continue;
+      if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
+      const path = (value as { path?: unknown }).path;
+      if (typeof path === 'string' && (props as Record<string, unknown>)[key] === undefined) {
+        this.dispatchEvent(new CustomEvent('a2ui:validation-failed', {
+          bubbles: true,
+          composed: true,
+          detail: { code: 'VALIDATION_FAILED', componentId: comp.id, path },
+        }));
+      }
+    }
     try {
       // THE ELEMENT'S OWN DEFAULTS, BEFORE THIS PAYLOAD TOUCHES IT. Called here, first,
       // because releaseStaleProps below needs the values the element came with — not the

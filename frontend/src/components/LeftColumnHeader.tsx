@@ -93,6 +93,7 @@ export default function LeftColumnHeader({
     { id: 'console', label: 'Console' },
     { id: 'composer', label: 'Composer' },
     { id: 'design', label: 'Design' },
+    { id: 'design2', label: 'Design A2UI' },
     /*
      * ONE STUB REMAINED, AND IT SAID SO — AND NOW IT IS A ROOM.
      *

@@ -6,10 +6,10 @@ Overview¶
 >
 > | layer | file | what it decides |
 > |---|---|---|
-> | CATALOG — the schema | `frontend/src/components/A2UI/catalogs/<pipeline>/catalog.json` | what the **server** accepts. One per pipeline (`primitives`, `ecommerce`, `prompt-composer`), each with its own `catalogId`, so a surface only renders its own. Loaded at backend startup; a payload it rejects is refused **503**, and the whole surface goes, not just the component. |
-> | REGISTRY — the allowlist | `frontend/src/shared/tag-registry.ts` | what may be **rendered**: name → tag, surface, column, props, events. An unregistered tag fails silently at runtime. |
+> | CATALOG — the schema | `frontend/src/components/A2UI/catalogs/<pipeline>/catalog.json` | what the **server** accepts. One per pipeline (`primitives`, `ecommerce`, `prompt-composer`, `surface-design`), each with its own `catalogId`, so a surface only renders its own. The Design A2UI seat's catalogue is `design_A2UI/surface-design/catalog.json` (35 components: 6 primitives and 29 names), exported from `catalog.ts`. Loaded at backend startup; a payload it rejects is refused **503**, and the whole surface goes, not just the component. |
+> | REGISTRY — the allowlist | `frontend/src/shared/tag-registry.ts` | what may be **rendered**: name → tag, surface, column, props, events. The seat's registry source is `design_A2UI/surface-design/registry.ts`, served as `registry.json` (29 names → tags); `tag-registry.ts` is the shell's fallback. An unregistered tag fails silently at runtime. |
 > | RUNTIME — the elements | `frontend/src/components/lit/<element>.ts` | what actually **draws**. |
-> | RESOLVER | `frontend/src/components/lit/a2ui-renderer.ts` | name → tag, in this order: `COMPOSITE_MAP` → A2UI primitives → structural composites → the allowlist (`pascalToKebab`). A name nothing claims reports as such — it is never guessed from casing. |
+> | RESOLVER | `frontend/src/components/lit/a2ui-renderer.ts` | name → tag, in this order: `COMPOSITE_MAP` → A2UI primitives → structural composites → the `f-` names → the fetched system registry (`surface-design/registry.json`) → the allowlist (`pascalToKebab`). A name nothing claims reports as such — it is never guessed from casing. |
 >
 > A component must be in **all** of them, and `primitives` is the shared floor: each theme's
 > catalog must carry its definitions byte-identical, and the checker fails when a theme drifts.

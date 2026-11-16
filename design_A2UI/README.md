@@ -1,4 +1,4 @@
-# Design A2UI — a sovereign seat for the Design room
+# Design A2UI — the Design room's own seat
 
 This folder is the Design room's own seat: the interface the person uses when they press Design
 or Design A2UI. It is not a copy that runs beside the application; it is the application's Design
@@ -16,16 +16,20 @@ two tabs are the same surface reached two ways.
 
 ## What was achieved today
 
-The seat became sovereign. Every element it draws carries this folder's own name, every name the
-model may emit is declared in this folder's registry and schema, and the room it draws is assembled
-from this folder's own files. The application's Design room was moved out of the application's
-source and into an archive; nothing in the running application imports it any more. The shell keeps
-only what is universal: the page, the sign-in, the transport, the error reporting, the assets, the
-A2UI renderer, the catalogue loader and the registry mechanism. The tab supplies the place; this
-folder supplies the room.
+The room draws one surface. One `<a2ui-renderer>`, told the door's `surfaceId` and
+`system="surface-design"`, draws one tree and one data model: the frame, the left column, the
+middle column and the chat are children of the same root. The left column no longer has a second
+renderer, and a rail press writes the data model instead of building a new page.
 
-The two Design tabs now mount the same seat. The old room remains on disk as the fallback, and
-deleting it is now a decision rather than a risk.
+The four elements the room draws directly — the Tools chat, the UX chat, the Approve review and
+the UX application frame — are declared in the catalogue, the registry and the shell's allowlist,
+and their modules are imported. The catalogue is 35 components (6 primitives and 29 names); the
+served registry is 29 names. The repair list's wire name is `chat-repair-actions`; its element tag
+is `design2-repair-actions`, and the old tag returns zero.
+
+The save bug is fixed. The Tools engine is mounted once and kept headless; its Save listener
+answered the UX footer's Save as well and wrote a Tools session the press had already replaced. It
+now answers only while Tools stands, except a leave's forced Save.
 
 ## How it was made
 
@@ -53,16 +57,15 @@ and UX seats follow, so the remaining work is repetition rather than invention.
 
 ## The proof
 
-Measured on the running application at 5001: the Design tab and the Design A2UI tab draw the
-surface; the rail's press keeps the frame and its columns as the same elements and changes only the
-data and the right column; the Tools tab draws its own form and catalogue tree; the Approve page
-draws its review list; the UX tab draws its application and its greeting; and the type check
-reports zero errors. Two page loads in a row open the same conversation and create no new one.
+`npx tsc -b --noEmit` passes. `node design_A2UI/tests/four-layers.mjs` reports 29 registry names,
+35 catalogue components and zero missing definitions, imports or catalogue entries. The page has
+not been re-measured since the one-surface change; the runtime walk is the next proof.
 
 ## What is not finished
 
-The seat still imports the shell's shared helpers — the sign-in identity, the transport, the
-envelope reader, the registry loader, the renderer and the image assets. That is the boundary the
-plan draws: those are the shell's. Inside the folder, the chat seat's conversation presses and the
-UX seat's remaining readers are not yet split into their place files, the UX message round trip
-has not been proven end to end, and the Tools tab's server-side routes are still the application's.
+The Tools chat (`tools/tools-chat.ts`, 5,645 lines) is still one component with a large internal
+assembly. It is one node of the surface's tree, not a second surface; its places are the next cut.
+The seat still imports the shell's kernel — the sign-in identity, the transport, the envelope
+reader, the registry loader, the renderer and the image assets. The Tools tab's server-side routes
+are still the application's. `surface-design/tab.ts` still carries `enabled: false`; the flag is the
+owner's gate. The page has not been re-measured since the one-surface change.

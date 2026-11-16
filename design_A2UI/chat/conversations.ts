@@ -40,6 +40,9 @@ export interface ChatConversationHost extends HTMLElement {
   conversations?: Array<{ id?: string; title?: string; tab?: string }>;
   sessionId?: string;
   activeTab: string;
+  /** True when the ROOM owns the rail: the surface binds which tab stands and this seat does not
+   *  move it. See `moveSeatTo`. */
+  railOwnedByHost?: boolean;
   _historyChecked: boolean;
   _historyError: string;
   _conversationRows: ConversationRow[] | null;
@@ -235,7 +238,7 @@ export function moveSeatTo(this: ChatConversationHost, id: string, opts: { tab?:
   this._inspectionReports = [];
   this.conversationId = id;
   this._historyError = '';
-  if (opts.tab) {
+  if (opts.tab && !this.railOwnedByHost) {
     /* A QUERY RECORD OPENS ON ITS OWN TAB. A conversation filed with `tab = "sessions"` is a stored
        lane query, not a thread — opening it moves to Sessions and REPLAYS the recorded filter. */
     /* THIS SEAT STAYS ON TOOLS (owner, 2026-11-02). A thread born in this tab is stored under the
@@ -243,6 +246,12 @@ export function moveSeatTo(this: ChatConversationHost, id: string, opts: { tab?:
        row by its stored tab therefore moved the rail onto Chat while the person was working in
        Tools — the flip they saw between the two. Only the two tabs that are a different process (a
        stored query, and the approvals gate) move this seat. */
+    /* AND WHEN THE ROOM OWNS THE RAIL, THE ROOM IS THE ONLY WRITER OF WHICH TAB STANDS. The surface
+       binds this seat's `activeTab` from `/surface/tab`, so a write here is a second writer of one
+       fact: it moved the rail off Approve the moment the seat opened its conversation, and the
+       review list — which its stylesheet draws only under `tab-approvals` — went with it. Measured
+       2026-11-16 on the running page: the tab was 'approvals' in the model and 'chat' on the
+       element, written by `readPackageConversations` → this function. */
     this.activeTab =
       opts.tab === 'approvals' ? 'approvals'
         : opts.tab === 'sessions' ? 'sessions'

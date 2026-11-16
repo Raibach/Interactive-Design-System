@@ -15,28 +15,27 @@
  *     with every reference they reach;
  *   - the data those components bind against (its session's `ingest`, `elements`, `checks`,
  *     `preview` and the rest);
- *   - and its chat's information — conversation, session, script, rail — which the SHELL's one
- *     chat loads. Nothing of the Figma surface's chat is drawn; there is no second chat.
+ *   - and its chat's own entry — the raw component with its `{path}` bindings, so the surface's
+ *     tree can bind the Tools chat to the same values the assembly resolved.
  *
  * Its `workspace-layout`, its chat column and its own right side are discarded here, deliberately:
- * the shell already owns a layout and a chat, and a second one is exactly what made the room jerk.
+ * the surface's own tree is the one layout, and a second one is exactly what made the room jerk.
  */
-import { componentProps } from "@/components/lit/a2ui-renderer";
 import { isCardLocked } from "@design2/surface-design/cardLifecycle";
 
 export type Tree = { components: any[]; dataModel: Record<string, any> };
 
 export type Content = {
-  /** The id the shell's root should point its left slot at. */
+  /** The id the surface's root should point its left slot at. */
   leftId: string;
   /** The left application, every reachable component included. */
   components: any[];
   /** THE RUN'S COLUMN — present only when the engine produced something to draw (Submit). */
   middleId?: string;
   middleComponents?: any[];
-  /** The data those components bind against. The shell keeps its own keys and takes these. */
+  /** The data those components bind against. The surface keeps its own keys and takes these. */
   dataModel: Record<string, any>;
-  /** The chat information the shell's one chat loads while this content is standing. */
+  /** The chat's own entry, raw: its `{path}` props are the bindings the surface's tree reuses. */
   chat: Record<string, unknown>;
   /**
    * THE CARD IS IN A SUPERVISOR QUEUE. The active canvas is suppressed: no ingest form, no
@@ -77,7 +76,7 @@ function reachable(tree: Tree, startId: string): any[] {
   return out;
 }
 
-/** The Figma application, as content the shell can inject — or null when the tree names none. */
+/** The Figma application, as content the surface can inject — or null when the tree names none. */
 export function buildContent(tree: Tree): Content | null {
   const root = tree.components.find((c) => c?.id === "root") as any;
   const leftId = root?.children?.left as string | undefined;
@@ -88,10 +87,13 @@ export function buildContent(tree: Tree): Content | null {
   const middleComponents = middleId
     ? reachable(tree, middleId).filter((c) => c?.component !== "design2-chat")
     : [];
-  const chatEntry = tree.components.find((c) => c?.component === "chat-panel" || c?.component === "design2-chat");
-  const chat = chatEntry
-    ? (componentProps(chatEntry, tree.dataModel as Record<string, unknown>) as Record<string, unknown>)
-    : {};
+  /* THE CHAT'S OWN ENTRY, RAW. The surface's tree binds the Tools chat to these same paths;
+     resolving them here would make the shell a second binding path, and the values would stop
+     following the data model. */
+  const chatEntry = tree.components.find(
+    (c) => c?.component === "chat-panel" || c?.component === "design2-chat",
+  );
+  const chat = (chatEntry ?? {}) as Record<string, unknown>;
 
   const session = (tree.dataModel as Record<string, any>)?.session ?? {};
   const cardState = String(session.card_state ?? "");
@@ -120,9 +122,9 @@ export function buildContent(tree: Tree): Content | null {
     components: locked ? [] : components,
     middleId: locked ? undefined : middleId,
     middleComponents: locked ? [] : middleComponents,
-    /* THE APPLICATION'S DATA, AS THE APPLICATION DECLARED IT. The shell merges this under its own
-       model so the injected components resolve their paths; it is not the shell's job to know
-       which keys the Figma application uses. */
+    /* THE APPLICATION'S DATA, AS THE APPLICATION DECLARED IT. The surface merges this under its
+       own model so the injected components resolve their paths; it is not the surface's job to
+       know which keys the Figma application uses. */
     dataModel: { session, ...(tree.dataModel as Record<string, any>) },
     chat,
     locked,

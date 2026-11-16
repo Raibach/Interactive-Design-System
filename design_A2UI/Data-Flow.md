@@ -336,4 +336,27 @@ To optimize performance:
 
 - **Batching:** Buffer updates for 16ms, batch render together.
 - **Diffing:** Compare old/new components, update only changed properties.
+
+## This folder
+
+This folder draws one surface, and the reference above applies with three local facts.
+
+- **One door, one surface.** `surface-design/surface/load.ts` sends `POST /api/design/console`
+  once per load and reads the answer's `surfaceId`, component tree and data model. There is no
+  second `createSurface` for the left column; the left, middle and right are children of the same
+  root.
+- **One renderer.** `surface-design/DesignSeatShell.tsx` creates one `<a2ui-renderer>`, sets
+  `system="surface-design"` and the door's `surfaceId`, and hands it the tree. The rail press
+  writes `/surface/tab`, `/surface/session_id` and `/surface/conversation_id`; the renderer
+  re-applies the props. The frame, the left body and the right column keep their identity.
+- **One binding path.** The renderer resolves every `{path}`; the room does not resolve values by
+  hand. A path the model does not hold emits `a2ui:validation-failed` with
+  `code: "VALIDATION_FAILED"`, the component id and the path, and the room shows it.
+
+The four layers are the folder's: `surface-design/catalog.json` (the catalogue the server
+accepts), `surface-design/registry.ts`/`registry.json` (the registry source and the served
+name→tag table), the elements under `chat/`, `tools/`, `ux/` and `approve/`, and the shell's
+`a2ui-renderer.ts` (the universal resolver). `node design_A2UI/tests/four-layers.mjs` is the
+folder's check; it reads the two exports and the elements' imports and reports every missing
+name, tag or import.
 - **Granular updates:** Update `/user/name` not entire `/` model.

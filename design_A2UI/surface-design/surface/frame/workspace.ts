@@ -56,6 +56,10 @@ export class DesignWorkspaceLayout extends LitElement {
      * a prompt, and this layer covers a thing she is not allowed to squeeze.
      */
     chatOverlaysContent: { type: Boolean, attribute: 'chat-overlays-content' },
+    /** THE LEFT COLUMN'S READ-ONLY LEDGER — a locked Tools card's status, said in the column. */
+    leftLedgerText: { type: String, attribute: 'left-ledger-text' },
+    /** THE LEFT COLUMN'S WAIT — the Tools assembly has not reported yet. */
+    leftAssembling: { type: Boolean, attribute: 'left-assembling' },
   };
 
   /**
@@ -77,6 +81,10 @@ export class DesignWorkspaceLayout extends LitElement {
 
   /** The room's `chat-overlays-content` declaration. See the property note. */
   declare chatOverlaysContent: boolean;
+  /** The left column's read-only ledger — the locked Tools card's state. */
+  declare leftLedgerText: string;
+  /** The left column's wait — the Tools assembly has not reported yet. */
+  declare leftAssembling: boolean;
 
   /**
    * THE LEFT COLUMN, SAME LAW AS THE RIGHT: the payload may set it, the operator
@@ -1687,9 +1695,56 @@ export class DesignWorkspaceLayout extends LitElement {
       overflow: hidden;
     }
     .pane.left > .left-body {
+      position: relative;
       flex: 1 1 auto;
       min-height: 0;
       overflow: auto;
+    }
+    .left-ledger {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      margin: 0;
+      padding: 24px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.6;
+      font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+      font-size: 13px;
+      color: #f3e9ef;
+      background: #25141f;
+      border: 1px solid #6b4a5e;
+      border-radius: 12px;
+    }
+    .left-spin {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 16px;
+      pointer-events: none;
+    }
+    .left-spin-ring {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      border: 3px solid rgba(126, 114, 227, 0.6);
+      border-top-color: rgb(126, 114, 227);
+      animation: design-left-spin 900ms linear infinite;
+    }
+    .left-spin-text {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 500;
+      color: #582846;
+      font-family: "IBM Plex Sans", system-ui, sans-serif;
+    }
+    @keyframes design-left-spin {
+      to { transform: rotate(360deg); }
     }
     .pane.left > ::slotted([slot='left-footer']) {
       flex: 0 0 auto;
@@ -2176,7 +2231,18 @@ export class DesignWorkspaceLayout extends LitElement {
              the first thing to scroll away, which is the opposite of what a header is for.
              Its own slot, so a surface that has no header for this column draws none. -->
         <slot name="left-header"></slot>
-        <div class="left-body"><slot name="left"></slot></div>
+        <div class="left-body">
+          <slot name="left"></slot>
+          ${this.leftLedgerText
+            ? html`<pre class="left-ledger">${this.leftLedgerText}</pre>`
+            : nothing}
+          ${this.leftAssembling
+            ? html`<div class="left-spin" aria-hidden="true">
+                <span class="left-spin-ring"></span>
+                <span class="left-spin-text">Assembling design tools surface…</span>
+              </div>`
+            : nothing}
+        </div>
         <!-- THE CONTROL BAR'S HOME, as the design draws it: the LAST child of the left
              column's container, below the prompt input area. Its own slot rather than
              part of the body, so it is pinned to the bottom of the column. -->

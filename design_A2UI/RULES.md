@@ -6,11 +6,11 @@
   cards and the chat). The rail navigates within the surface through its sub-surfaces: Home,
   Tools, Approve, UX. The top tab stays. A tab press never creates a new surface.
 - The room is one surface made of layers: the frame, the left container, the middle container and
-  the right column's five slots. The chat is the right column's slots; it is not a column beside
-  a separate left surface.
-- The furniture is assembled once. A tab press changes the active sub-surface and re-injects its
-  data; it does not rebuild the surface. The built pages are kept; a new session re-injects data
-  into the kept furniture.
+  the right column's chat. The chat is a child of the same tree; its five boxes are its own
+  drawing, not a second surface.
+- One renderer draws it. A tab press writes the data model and changes the tree's children; the
+  frame, the left body and the right column are kept. There is no second renderer and no second
+  data model.
 
 ## Slots and containers
 
@@ -35,17 +35,18 @@ universal component is allowed only when its data comes from the tab's binding.
 
 ## The shell holds a link, not the seat
 
-- The React shell is navigation. It holds one tab for this seat, and that tab is a link to this
-  folder's own surface. The shell never imports this folder's code, its components, its styles or
-  its tests.
-- This folder is the whole seat: its surface, its component tree, its catalogue entries, its
-  registry entries, its data binding, its actions, its conversations and its back end. Nothing the
-  seat needs lives in the shell.
+- The React shell is navigation. It holds one tab for this seat, and that tab mounts this
+  folder's `DesignBox.tsx`. The shell's universal kernel — the page, the sign-in, the transport,
+  the A2UI renderer, the catalogue loader and the registry mechanism — is the only other thing it
+  holds.
+- This folder is the seat: its surface, its component tree, its catalogue entries, its registry
+  entries, its data binding, its actions and its conversations. The catalogue and registry
+  exports beside it are this folder's files.
 - The test, and it is a rule: remove this folder and the living application still runs. The tab
   then fails, honestly, because its link points at what is gone. A blank room is a defect; a
   reported missing surface is the correct answer.
-- A change made in the shell to make this seat work is a defect. The seat fixes itself in here.
-  The only thing the shell may hold is the tab and the address it links to.
+- A change made in the shell's kernel to make this seat draw is a defect. The seat fixes itself
+  in here. The shell may hold the tab and the kernel, nothing of the seat's surface.
 
 ## The UX surface hosts an application
 
@@ -65,9 +66,10 @@ universal component is allowed only when its data comes from the tab's binding.
 ## A self-describing surface
 
 - A surface describes itself: its own catalog file (what the server accepts), its own registry
-  entries (what may be rendered — name → tag, props, events), its own runtime elements under its
-  own tags, its own resolver mapping, and its own data binding and assembly. Reading this folder
-  tells the model what the surface can draw and do; nothing outside it is required to understand it.
+  source (name → tag, props, events) and its served table, its own runtime elements under its own
+  tags, its own data binding and assembly. The resolver is the shell's universal renderer; the
+  table it resolves through is this seat's. Reading this folder tells the model what the surface
+  can draw and do.
 - The four layers are the seat's, not the section's. The same-looking element in two seats is two
   copies with two names; that is deliberate. Each seat must pass its test from its own four layers,
   its own names and its own data. A shared element is not shared during this refactor; it is copied.
@@ -100,9 +102,9 @@ The frontend mirrors it: the chat surface is the package; one folder per tab; on
 
 ## The flag
 
-`surface-design/tab.ts` carries `enabled: false` until the seat has its own session, container and
-conversation keys. While it is false, the tab is absent from the bar and the drawer, it is not
-landable, and nothing mounts it. The only enabled window is the parity/test run, with no saves.
+`surface-design/tab.ts` carries `enabled: false`. The flag is the owner's gate: while it is false
+the tab is absent from the bar and the drawer, it is not landable, and nothing mounts it. The only
+enabled window is the parity/test run, with no saves. This folder does not flip the flag.
 
 ## Extraction order
 
@@ -119,7 +121,9 @@ becomes a thin composition. Watch import order, the CSS cascade and circular imp
 
 The old element prefix in the new seat returns zero, except the documented shared names. The new
 prefix in the current Design returns zero. Strings count: query selectors, data attributes, event
-names, localStorage keys, tab keys.
+names, localStorage keys, tab keys. The wire name `chat-repair-actions` is the surface's name;
+its element tag is `design2-repair-actions`, and the old tag returns zero in the frame and both
+stylesheets.
 
 ## Names
 

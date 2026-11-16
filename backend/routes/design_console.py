@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 from datetime import datetime
 from typing import Any
@@ -36,7 +37,11 @@ import services as state
 from card_lifecycle import LOCKED_STATES, CardState, card_state_of, is_card_locked, locked_state_message
 from deps import A2UI_CATALOG_ID, a2ui_catalog_for, validate_a2ui_components
 from grace_gui import LAST_USAGE, query_llm
-from prompt_sessions_api import DESIGN_SYSTEM_DESCRIPTION
+from prompt_sessions_api import (
+    DESIGN_SYSTEM_DESCRIPTION,
+    DESIGN_TAB_PACKAGE_DESCRIPTIONS,
+    DESIGN_TAB_PACKAGE_TITLES,
+)
 from tools import render_tools_block
 
 router = APIRouter()
@@ -62,7 +67,10 @@ def _card_status(row: dict[str, Any], state: CardState | None) -> tuple[str, str
             meta = {}
     stage = str((meta if isinstance(meta, dict) else {}).get("review_stage") or "")
     if state == CardState.PENDING_APPROVAL:
-        return "Pending Approval", "#8BE0A4"
+        # THE WORD ON THE CARD IS "Pending" (owner, 2026-11-16: *"Just make it say pending. It
+        # doesn't have to say pending approval, the cards and approval."*). The state's stored name
+        # keeps its lifecycle value (`Pending_Approval`); only the word the person reads is shorter.
+        return "Pending", "#8BE0A4"
     if state == CardState.QUEUED_FOR_SHARE:
         return "Queued for Share", "#8BE0A4"
     if stage == "approved":
@@ -174,6 +182,56 @@ talks with you here about the design work and the cards on the left. Answer in p
 person's own terms, and answer only what they asked. The cards and the packages are the room's;
 speak about them from what they hold. Do not answer as the console operator, do not emit surface
 commands, and do not invent actions.
+
+This room handles three kinds of work. It brings Figma components into the catalogue and reviews
+them, refusing a component at approval when one of the four declarations the WCAG 2.2 check
+requires — keyboard, announcement, label and role — is missing, and naming the declaration and
+the annotation to write. It holds the approval queue for components waiting to be approved. It
+tags the design's UX with PostHog.
+
+When the person has not asked anything yet, open by telling them in your own words, in a few
+short lines, what this room handles, and then wait for them to choose.
+"""
+
+
+def _approvals_grace_context(
+    approval_cards: list[dict[str, Any]], cards: list[dict[str, Any]]
+) -> str:
+    """WHO SHE IS ON THE APPROVE TAB, SAID WITH THIS LOAD'S OWN FACTS.
+
+    The same shape as the Chat tab's script: the room's words, then the one number she is to
+    speak from. Nothing here is invented — the counts are the lists the door just built, so the
+    sentence on screen and the cards beside it cannot disagree.
+
+    SHE DOES NOT LIST THE CARDS ON LANDING (owner, 2026-11-16: *"I can list them here if you would
+    like and we can work through these"*). She says what the queue is, says the console holds the
+    cards and some are pending, and OFFERS to list them; the list is hers to draw when the person
+    asks for it, not a recital at the door.
+    """
+    waiting = len(approval_cards)
+    total = len(cards)
+    if waiting == 0:
+        waiting_line = "none right now"
+    elif waiting == 1:
+        waiting_line = "1 card"
+    else:
+        waiting_line = f"{waiting} cards"
+    return f"""\
+You are in the Design room's Approve tab — the approval queue. The column on the left holds the
+Figma cards that have not been approved yet; the Design console is the room's catch-all and holds
+every card, the ones pending approval included. This tab's work is answering those cards: approve
+one, or ask for changes, and say plainly what a refusal needs. Speak about the cards from what they
+hold. Do not answer as the console operator, do not emit surface commands, and do not invent
+actions.
+
+THIS LOAD'S FACTS — they are what is on the screen beside you:
+- On the console: {total} cards in all.
+- Pending approval: {waiting_line}
+
+When the person has not asked anything yet, say in two or three short sentences that this is the
+approval queue, that the console holds the room's cards and some are pending approval, and that you
+can list them here and work through them together. Do not introduce yourself by name, do not list
+the cards now, and offer no buttons.
 """
 
 
@@ -293,8 +351,128 @@ def _design_extract_json(response_text: str) -> Any:
 
 
 
+CONSOLE_TAB = "console"
+
+# ── ONE LOAD, ONE FRESH SESSION ─────────────────────────────────────────────────────────────────
+#
+# Owner, 2026-11-16: *"The Console must create a single, fresh session per page load, not per read.
+# Ensure the session creation logic is idempotent or cached so that the two reads during one load
+# do not collide or overwrite each other. The session should be temporary (not saved for history
+# retrieval), but it must have a valid Session ID for the audit trail."*
+#
+# The page names its load with `X-Surface-Load`, and that NAME is what a session is made for: the
+# first read of a load removes the previous console row, makes a fresh session and its one empty
+# conversation, and remembers the pair under the name; every later read of the same load is handed
+# the same pair and writes nothing. A new load makes a new pair. The lock makes two reads that
+# arrive together take turns instead of racing the one-row-per-design-tab rule.
+_CONSOLE_LOADS: dict[tuple[str, str], tuple[float, dict[str, Any]]] = {}
+_CONSOLE_LOADS_LOCK = threading.Lock()
+_CONSOLE_LOAD_TTL = 15 * 60.0
+_CONSOLE_LOADS_MAX = 64
+
+
+def _console_load_get(user_id: str, load_id: str) -> dict[str, Any] | None:
+    with _CONSOLE_LOADS_LOCK:
+        hit = _CONSOLE_LOADS.get((user_id, load_id))
+        if not hit:
+            return None
+        if time.time() - hit[0] > _CONSOLE_LOAD_TTL:
+            _CONSOLE_LOADS.pop((user_id, load_id), None)
+            return None
+        return dict(hit[1])
+
+
+def _console_leftovers(user_id: str) -> list[str]:
+    """Every console row this person still holds — the previous landing's visit."""
+    with psycopg2.connect(DATABASE_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id::text
+                  FROM prompt_sessions
+                 WHERE user_id = %s
+                   AND metadata->>'session_type' = 'design_tab'
+                   AND metadata->>'design_tab' = %s
+                """,
+                (user_id, CONSOLE_TAB),
+            )
+            return [str(row[0]) for row in cur.fetchall()]
+
+
+def open_console_working_session(user_id: str, load_id: str) -> dict[str, Any] | None:
+    """THE CONSOLE'S OWN DOOR — the Tools tab's shape, held to a page load.
+
+    A load is a page that has just opened. Its first read makes the session; its later reads get
+    that same session back. The next load makes another. Nothing from an earlier landing is read
+    or kept: the previous console row is removed outright, so the package the seat opens holds one
+    conversation and it is empty — which is the fact her greeting waits for.
+    """
+    pair = _console_load_get(user_id, load_id)
+    if pair:
+        return pair
+    if not state.prompt_sessions_api:
+        raise RuntimeError("the session store is not available")
+    with _CONSOLE_LOADS_LOCK:
+        # RE-CHECK UNDER THE LOCK: two reads that arrived together both missed above, and the
+        # second must find what the first made instead of making a second one.
+        hit = _CONSOLE_LOADS.get((user_id, load_id))
+        if hit and time.time() - hit[0] <= _CONSOLE_LOAD_TTL:
+            return dict(hit[1])
+        for leftover in _console_leftovers(user_id):
+            state.prompt_sessions_api.delete_session(leftover, user_id, permanent=True)
+        title = DESIGN_TAB_PACKAGE_TITLES.get(CONSOLE_TAB, "Design · Console")
+        description = DESIGN_TAB_PACKAGE_DESCRIPTIONS.get(CONSOLE_TAB)
+        created = state.prompt_sessions_api.create_session(
+            user_id,
+            title=title,
+            description=description,
+        )
+        if not created or not created.get("id"):
+            return None
+        session_id = str(created["id"])
+        with psycopg2.connect(DATABASE_URL) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE prompt_sessions
+                       SET metadata = COALESCE(metadata, '{}'::jsonb) || %s::jsonb
+                     WHERE id = %s
+                    """,
+                    (
+                        json.dumps({"session_type": "design_tab", "design_tab": CONSOLE_TAB}),
+                        session_id,
+                    ),
+                )
+                conn.commit()
+        conversation_id = str(created.get("conversation_id") or "")
+        if not conversation_id:
+            with psycopg2.connect(DATABASE_URL) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT id::text
+                          FROM conversations
+                         WHERE session_id = %s
+                         ORDER BY created_at
+                         LIMIT 1
+                        """,
+                        (session_id,),
+                    )
+                    row = cur.fetchone()
+                    conversation_id = str(row[0]) if row else ""
+        pair = {"packageId": session_id, "conversationId": conversation_id}
+        if len(_CONSOLE_LOADS) >= _CONSOLE_LOADS_MAX:
+            oldest = min(_CONSOLE_LOADS.items(), key=lambda kv: kv[1][0])[0]
+            _CONSOLE_LOADS.pop(oldest, None)
+        _CONSOLE_LOADS[(user_id, load_id)] = (time.time(), dict(pair))
+        return pair
+
+
 @router.post("/api/design/console")
-def design_console(x_user_id: str | None = Header(None, alias="X-User-ID")) -> list[dict[str, Any]]:
+def design_console(
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
+    x_surface_load: str | None = Header(None, alias="X-Surface-Load"),
+) -> list[dict[str, Any]]:
     """The design console's own surface: its identity, its design-only cards, and the tree.
 
     Returns the same A2UI envelope shape the primary console's assembly returns (a list of
@@ -302,6 +480,10 @@ def design_console(x_user_id: str | None = Header(None, alias="X-User-ID")) -> l
     be a false contract, and FastAPI refuses a list against it (measured: dict_type)."""
     if not x_user_id:
         raise HTTPException(status_code=400, detail="X-User-ID is required: the package is the user's own.")
+    # THE PAGE'S OWN NAME FOR THIS LOAD. The room is read more than once while it settles, and the
+    # session is made once for this name (see `open_console_working_session`). A caller that names
+    # no load is its own load, so it is given a name here rather than sharing the last one.
+    surface_load = str(x_surface_load or "").strip() or f"request-{time.time_ns()}"
 
     # THE DESIGN PACKAGE IS THE ROOM'S OWN ROW — created on first landing, exactly once, the same
     # get-or-create the design surface uses (a partial unique index holds the rule). The console's
@@ -377,6 +559,32 @@ def design_console(x_user_id: str | None = Header(None, alias="X-User-ID")) -> l
         "conversationId": design_chat_tab["conversationId"],
     }
 
+    # ── THE APPROVE TAB IS A PACKAGE TOO, WITH ITS OWN CONVERSATION ─────────────────────────
+    #
+    # Owner, 2026-11-16: *"each one of those tabs have to have its own conversation"*. The row is
+    # made by the one writer every tab uses (`get_or_create_design_tab`), so leaving and returning
+    # finds the same conversation, and it is the row the generic per-tab store already has a place
+    # for (`design_tabs.key = 'approve'` in the relational database).
+    #
+    # THIS DOOR WRITES NO SENTENCE INTO IT. It used to, and that was a stored line sitting there
+    # forever while the counts changed beside it. Her introduction is a TURN THE SEAT ASKS FOR on
+    # arrival, exactly as the Chat tab's is, and the words come from the script above, which this
+    # load fills with the live facts. Delete the tab's conversations and the seat's next arrival
+    # makes a new one and she introduces the gate again.
+    try:
+        design_approvals_tab = state.prompt_sessions_api.get_or_create_design_tab(
+            user_id=x_user_id, tab="approvals"
+        )
+        if design_approvals_tab:
+            design_packages["approvals"] = {
+                "packageId": design_approvals_tab["packageId"],
+                "conversationId": design_approvals_tab["conversationId"],
+            }
+    except Exception as e:  # noqa: BLE001 — a failure to resolve is stated with its cause
+        print(f"[Design Console] the Approve tab's package could not be resolved: {e}")
+    except Exception as e:  # noqa: BLE001 — a failure to resolve is stated with its cause
+        print(f"[Design Console] the Approve tab's package could not be resolved: {e}")
+
     # ── THE CONSOLE TAB IS A TAB, AND A TAB IS A PACKAGE ────────────────────────────────────────
     #
     # Owner, 2026-11-02: *"The console for design should have its own package just like the global
@@ -388,19 +596,20 @@ def design_console(x_user_id: str | None = Header(None, alias="X-User-ID")) -> l
     # the list read the Design CONTAINER's row — one package answering for another, and a list that
     # could never show what the seat was showing, because the container owns no conversations.
     # `design_tab | console` already existed and was used by nothing.
+    # SINCE 2026-11-16 ITS SESSION IS MADE FRESH ONCE PER PAGE LOAD, by this file's own door
+    # (`open_console_working_session`). The row shape above is what the door writes: one working row
+    # of this tab, with a real session id for the audit trail and one empty conversation.
     try:
-        design_console_tab = state.prompt_sessions_api.get_or_create_design_tab(
-            user_id=x_user_id, tab="console"
-        )
+        design_console_tab = open_console_working_session(x_user_id, surface_load)
     except Exception as e:  # noqa: BLE001 — a failure to resolve is stated with its cause
         raise HTTPException(
             status_code=503,
-            detail=f"DESIGN CONSOLE FAILURE: the Console tab's package could not be resolved — {e}",
+            detail=f"DESIGN CONSOLE FAILURE: the Console tab's session could not be started — {e}",
         ) from e
     if not design_console_tab:
         raise HTTPException(
             status_code=503,
-            detail="DESIGN CONSOLE FAILURE: the Console tab's package did not resolve (not created).",
+            detail="DESIGN CONSOLE FAILURE: the Console tab's session did not start.",
         )
     design_packages["console"] = {
         "packageId": design_console_tab["packageId"],
@@ -483,7 +692,10 @@ def design_console(x_user_id: str | None = Header(None, alias="X-User-ID")) -> l
                 # A session is a visit to Tools that the person kept. It is a prompt session row and
                 # its card is read here the same way the element cards are — no second table and no
                 # second list, because a session that appeared in one console and not another would
-                # be two answers to "what am I working on".
+                # be two answers to "what am I working on". The LIVE Tools row is the tab's own
+                # package, not a card: it is carried by `design_packages["tools"]` below, and a
+                # working visit that has not been kept must not appear in the grid as a second
+                # "Design — Tools" card beside the card the person actually saved.
                 cur.execute(
                     """
                     SELECT ps.id::text AS id, ps.title, ps.description, ps.status,
@@ -497,13 +709,7 @@ def design_console(x_user_id: str | None = Header(None, alias="X-User-ID")) -> l
                                 WHERE sp.session_id = ps.id AND sp.user_id = %s
                             )
                        )
-                       AND (
-                            ps.metadata->>'session_type' = 'design_session'
-                         OR (
-                                ps.metadata->>'session_type' = 'design_tab'
-                            AND ps.metadata->>'design_tab' = 'tools'
-                            )
-                       )
+                       AND ps.metadata->>'session_type' = 'design_session'
                        AND ps.is_archived IS NOT TRUE
                      ORDER BY ps.updated_at DESC
                     """,
@@ -611,6 +817,12 @@ def design_console(x_user_id: str | None = Header(None, alias="X-User-ID")) -> l
         )
 
     cards: list[dict[str, Any]] = []
+    # THE APPROVE TAB'S OWN LIST (owner, 2026-11-16). The console is the catch-all and draws every
+    # card, queued ones included; the Approve tab is the GATE and draws only what is waiting there:
+    # a Figma card (made by the Tools tab) whose state is Pending_Approval. An approved card leaves
+    # this list — it is on the console, in the catalogue, and answered. One build of the card feeds
+    # both lists, so the card the reviewer sees is the card the owner sees.
+    approval_cards: list[dict[str, Any]] = []
 
     # ── THE DESIGN SYSTEMS FIRST, THEN THE SESSIONS, THEN THE ELEMENTS ──────────────────────────
     #
@@ -643,27 +855,28 @@ def design_console(x_user_id: str | None = Header(None, alias="X-User-ID")) -> l
         # stops it being changed. The queue read remains the supervisor's own view.
         _state_word, _state_color = _card_status(_row, _card_state)
         _routing = _meta.get("routing") if isinstance(_meta.get("routing"), dict) else {}
-        cards.append(
-            _design_card(
-                card_id=str(_row.get("id") or ""),
-                element_key="",
-                # A SESSION IS NEVER WITHOUT A NAME ON SCREEN: an untitled one is drawn as
-                # Untitled, which is a true statement about it rather than a blank card.
-                title=(_row.get("title") or "").strip() or "Untitled",
-                description=(_row.get("description") or "").strip(),
-                status=_state_word,
-                status_color=_state_color,
-                state=_card_state.value if _card_state else "",
-                locked=is_card_locked(_row),
-                routing=_routing,
-                reviewer=str(_meta.get("reviewer") or ""),
-                created_at=_row.get("created_at"),
-                last_used=_row.get("updated_at") or _row.get("last_accessed_at"),
-                # WHICH TAB'S SESSION THIS CARD REOPENS. The save writes `surface: 'ux'`; every
-                # other kept session has no surface and opens the Tools tab as before.
-                surface=str(_meta.get("surface") or ""),
-            )
+        _card = _design_card(
+            card_id=str(_row.get("id") or ""),
+            element_key="",
+            # A SESSION IS NEVER WITHOUT A NAME ON SCREEN: an untitled one is drawn as
+            # Untitled, which is a true statement about it rather than a blank card.
+            title=(_row.get("title") or "").strip() or "Untitled",
+            description=(_row.get("description") or "").strip(),
+            status=_state_word,
+            status_color=_state_color,
+            state=_card_state.value if _card_state else "",
+            locked=is_card_locked(_row),
+            routing=_routing,
+            reviewer=str(_meta.get("reviewer") or ""),
+            created_at=_row.get("created_at"),
+            last_used=_row.get("updated_at") or _row.get("last_accessed_at"),
+            # WHICH TAB'S SESSION THIS CARD REOPENS. The save writes `surface: 'ux'`; every
+            # other kept session has no surface and opens the Tools tab as before.
+            surface=str(_meta.get("surface") or ""),
         )
+        cards.append(_card)
+        if _card_state == CardState.PENDING_APPROVAL and str(_meta.get("design_tab") or "") == "tools":
+            approval_cards.append(_card)
 
     # ── NO CARD FOR A CATALOGUE ELEMENT ────────────────────────────────────────────────────────
     # Owner, 2026-11-02: *"each of those cards represents a package with its own conversation…
@@ -835,6 +1048,10 @@ Output ONLY this exact JSON (no markdown, no extra text):
                 "path": "/",
                 "value": {
                     "cards": cards,
+                    # THE APPROVE TAB'S GATE. The same card objects as `cards`, kept to the ones
+                    # waiting for an answer: a Figma card in Pending_Approval. The grid in that tab
+                    # binds this path; every other tab binds `/cards`.
+                    "approval_cards": approval_cards,
                     # THE DESIGN CONSOLE'S OWN SESSION AND CONVERSATION — the facts the emitted
                     # seat binds to. The session is the CONSOLE TAB'S PACKAGE, which is where its
                     # conversation lives; the conversation is that package's last modified thread.
@@ -843,6 +1060,15 @@ Output ONLY this exact JSON (no markdown, no extra text):
                         "conversation_id": console_conversation or "",
                         "grace_instructions": DESIGN_CONSOLE_GRACE_INSTRUCTIONS,
                         "chat_tab_grace_instructions": DESIGN_CHAT_TAB_GRACE_INSTRUCTIONS,
+                        # THE APPROVE TAB'S SCRIPT, SAID WITH THIS LOAD'S OWN FACTS. It is the same
+                        # shape as the Chat tab's: the room's words, plus the numbers it is to
+                        # introduce. The seat's own arrival asks for the turn, so deleting the
+                        # tab's conversations makes her introduce the gate again (owner,
+                        # 2026-11-16: *"if I remove the conversations, it should automatically
+                        # regenerate the intro conversation stating what's on the left"*).
+                        "approvals_grace_instructions": _approvals_grace_context(
+                            approval_cards, cards
+                        ),
                         "design_packages": design_packages,
                         "conversations": [
                             {

@@ -80,90 +80,36 @@ design_A2UI/
       rail/                      the navigation: the items, collapse, unread, the approval pulse
       left-container/            the panel and its slot; what it serves
       middle-container/          its slot; what it serves
-      load.ts                    the top tab press: resolve, hand the package and session, mount once
-      components.ts              the surface tree for the model: frame, containers, slots, rail
+      load.ts                    the top tab press: the one door, the surface id, the one tree
+      components.ts              the surface tree: frame, containers, slots, the tab's rows
       data.ts                    /surface/*: the active item, package, session, heights
-    chat/                        the Chat tab
-      conversations/             the card: the bar, the rows, the new mark, the remove
-      readout/                   the status strip: session, calls, tokens, the stage
-      thread/                    the turns, the reply's buttons, the folds, the sessions view
-      input/                     the typing area, Send, Stop, Enter, attach, tool, paste
-                                 (the chat's input place, never the Composer room)
-      tray/                      the footer's marks and its numbers
-      left/                      the console's card grid, served in the left container
-      assets/                    the icons the tab uses, its own copies
-      data.ts                    /chat/*
-      conversation.ts            the tab's own conversation ids
-      README.md                  the slice's contract
-    tools/                       the Tools tab: ingest form, catalogue tree, preview, its thread
-    approve/                     the Approve tab: the records, its thread
-    ux/                          the UX tab: the app, its thread
+    catalog.ts / catalog.json    the schema the server accepts (35 components)
+    registry.ts / registry.json  the name→tag source and the served table (29 names)
+    DesignBox.tsx                the tab's content box
+    DesignRoom.tsx               the room's React owner
+    DesignRoomContainer.tsx      the lazy boundary
+    DesignSeatShell.tsx          the one renderer, the one tree, the one data model
+    tab.ts                       the tab's descriptor
+  chat/                          the Chat tab: the seat, its places, its parts, the frame
+    conversations/ readout/ thread/ input/ tray/ left/ parts/ frame/
+    conversations.ts             the tab's own conversation ids
+    console-conversations.ts     the console's file
+    design-chat-seat.ts          the seat
+  tools/                         the Tools tab: the seat, the workspace, the form, the tree
+  approve/                       the Approve tab: the review view
+  ux/                            the UX tab: the seat, the app frame, its chat
+  tests/                         four-layers.mjs and export-catalogs.mts
 ```
 
-## What the Tools tab uses but this folder does not hold
+## What the Tools tab uses and this folder now holds
 
-The ingest's record is `design/figma-ingest/`, and it holds one file: `CHANGELOG.md`, 982 lines. It
-is the log, not the code. The code is in two other places, and neither is inside `design_A2UI/`.
+The ingest's drawing is this folder's: `tools/figma-ingest-form.ts` (295 lines),
+`tools/figma-layers-view.ts` (2,461) and `tools/tools-tab.ts` (100), with the seat's tags and its
+catalogue entries. The Tools seat, its workspace, its parts and its conversation file are here too.
 
-The drawing, in the current application:
-
-| File | Lines | What it is |
-|---|---|---|
-| `frontend/src/components/lit/figma-ingest-form.ts` | 295 | the form: the Figma URL, the notes and Submit |
-| `frontend/src/components/lit/figma-layers-view.ts` | 2,461 | the catalogue tree |
-| `frontend/src/tools/ToolsTab.ts` | 100 | the tab entry, which mounts both |
-| `frontend/src/tools/ToolsLeftPanel.ts` | 41 | the tab's left panel |
-| `frontend/src/components/IngestModal.tsx` | 3,402 | the ingest's older door: the whole modal |
-| `frontend/src/rooms/design/tools/GraceToolsChat.ts` | 474 | the seat's own Grace chat |
-| `frontend/src/rooms/design/tools/approval-facts.ts` | 25 | the approval's facts |
-
-`surface-design/DesignRoom.tsx:19` imports `@/tools/ToolsTab`, so the new room draws the current
-application's form and tree. The catalogue entry for `figma-ingest-form` is declared in
-`frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json` — the Composer's catalogue,
-not one of this seat's.
-
-What has already been copied, from `rooms/design/tools/` into `chat-surface-design/tools/`:
-
-| Current file | In this folder | Lines |
-|---|---|---|
-| `ToolsSeat.tsx` | `ToolsSeat.tsx`, 60 lines different | 2,670 |
-| `tools-chat.ts` | `tools-chat.ts` | 5,660 → 5,661 |
-| `tools-workspace.ts` | `tools-workspace.ts` | 2,217 |
-| `tools-chat.styles.ts` | same | 698 |
-| `controls.ts` | same | 523 |
-| `conversation.ts` | `conversations.ts` | 393 |
-| `content.ts` | same | 131 |
-| `ingest-chat.ts`, `ingest-summary.ts`, `ingest-acceptance.ts` | same | 67, 93, 76 |
-| `ToolsDecisionDialog.tsx` | same | 79 |
-| `session.ts`, `index.ts` | same | 15, 14 |
-| `frame/`, `parts/` | copies | — |
-
-So the seat's copy is here and the program's copy is not. The seven files above, the modal and the
-13,414 server lines are still the current application's.
-
-The server, in `backend/`:
-
-| File | Lines | What it does |
-|---|---|---|
-| `routes/figma.py` | 8,800 | the ingest's routes: 33 endpoints, from `/api/catalog/ingest` to `/api/figma/commit` |
-| `figma_fidelity.py` | 2,544 | the drawing's exact numbers |
-| `figma_twopass.py` | 632 | the two-pass comparison |
-| `figma_service.py` | 590 | the Figma reads |
-| `figma_mcp.py` | 358 | the Figma connection |
-| `figma_facts.py` | 258 | the fact sheet |
-| `figma_key_coverage.py` | 156 | the key coverage |
-| `figma_ingest_gate.py` | 76 | the gate |
-
-The Tools tab calls these doors as they are: `/api/figma/ingest`, `/api/figma/steps/<id>`,
-`/api/figma/discard`, `/api/figma/remove`, `/api/figma/ingest/<job>/facts`, and the assembly's
-`/api/ai/assemble-surface` and `/api/ai/save-surface`. No module in this folder owns any of them.
-
-So the Tools tab in this folder is a shell around the current application's ingest. That is the
-honest state: the form, the tree, the tab entry, the catalogue entry and the 13,414 lines of server
-are all borrowed. The Tools slice cannot begin until the first three are copied into this folder
-and the server is copied with the tab's own routes; that is the handoff's step 4, and
-`../design copy/REFACTORING-PLAN-11-15-26.md` is the existing plan for the server and the
-catalogue.
+The server is still the application's: `backend/routes/figma.py` (8,800 lines) and the six modules
+beside it. The Tools tab calls those doors as they are, and the seat's server copy is the handoff's
+step 4 — not this pass. The Tools tab is one node of the surface's tree, not a second surface.
 
 ## The server, cut by process
 
@@ -422,14 +368,16 @@ call them "declared":
 
 ## The load and the navigation: what the shell does
 
-Today the shell creates a page and a seat per tab (`openSeat`/`disposePage`). After the slice:
+The shell now does this. `surface/load.ts` reads the door once and returns the surface id and the
+whole tree; `DesignSeatShell.tsx` keeps one `<a2ui-renderer>` and one data model.
 
-1. The top tab press calls `surface/load.ts` once. It resolves the session and the package, and it
-   mounts the surface.
-2. A rail press writes `/surface/tab` and the tab's conversation. `left-container/` and
-   `middle-container/` are told what to serve; the right column reads the tab's conversation.
-3. No page is built and no seat is built. The frame, the rail, the containers and the slots are
-   kept.
+1. The top tab press calls `surface/load.ts` once. It reads the door's `surfaceId`, tree and data
+   model, and it preloads the seat's registry.
+2. A rail press writes `/surface/tab`, `/surface/session_id` and `/surface/conversation_id`.
+   `components.ts` selects the tab's left, middle and chat children; the right column reads the
+   tab's conversation.
+3. No per-tab page and no per-tab chat are built. The frame, the left body, the middle and the
+   right column are the same elements; the tree's children change through the data.
 
 This is the handoff's third step. It comes after the Chat tab's places exist as folders, because a
 seat that still gathers every function cannot take a new tab's data without being rebuilt.
@@ -447,8 +395,9 @@ step below pulls from them, and the working application is never edited.
 3. **The Chat tab, one place at a time:** the conversations, the readout, the thread, the composer,
    the tray. Each place gets its `view.ts`, `data.ts`, `actions.ts` and `state.ts`; the seat loses
    that markup and those functions.
-4. **The load and the navigation.** The shell mounts the surface once and swaps the tab inside it.
-   The proof is the node identity across a rail press.
+4. **The load and the navigation.** Done in this pass: the shell mounts one surface and swaps the
+   tab's children through the data model. The proof is the node identity across a rail press; the
+   runtime walk is still the owner's test.
 5. **Tools, then Approve, then UX.** The same cut, one tab at a time. The Tools tab starts by
    copying its own three drawing files — `figma-ingest-form.ts`, `figma-layers-view.ts` and the
    tab entry — into `tools/`, with the seat's own tags, then the slice. The server copy follows
@@ -460,11 +409,12 @@ One place per commit. The type check after each. The behavior walk after each.
 ## The proof, and the build boundary
 
 - `npx tsc -b --noEmit` must pass.
+- `node design_A2UI/tests/four-layers.mjs` reports zero missing definitions, imports or catalogue
+  entries (29 names, 35 catalogue components).
 - Each place's behavior walk on the running app at 5001: every press above, in the place that was
   copied. A copied function that no longer answers its own press is a defect.
 - The node proof for the load: the frame, the rail and the slots are the same elements before and
   after a rail press.
-- `npm run catalog:check`: no new blocking findings and no `event-unheard` for the copied places.
 - `npm run parity:design2` opens 4173, which serves the built folder, so it requires a build. We
   are not building during development; the rendered check waits for the owner's word. The type
   check, the action walk and the node proof are the gate until then.
