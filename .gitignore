@@ -356,3 +356,7 @@ product/mitosis-main/
 /REFACTOR11-15-26.md
 /Raibach-IDS-Assembly.json
 /SECURITY-AND-COMPLIANCE.md
+
+# THE RETIRED FILES ARE LOCAL ONLY (2026-11-16). The archive holds files the live application
+# does not use. It stays on this machine for reference and is never published to the review copy.
+/archive/
