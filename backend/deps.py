@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import HTTPException
 
 import accessibility_contract
+import a2ui_schema_gate
 
 # ── Role-based access stubs ────────────────────────────────────────────
 # NOTE: Role-based access gated via user_is_admin() stub (dev mode allows all)
@@ -248,8 +249,78 @@ def a2ui_catalog_id(surface: str | None = None, system: str | None = None) -> st
     return a2ui_catalog_for(surface, system).get("catalogId", A2UI_CATALOG_ID)
 
 
+def _declared_placements(entry: dict[str, Any] | None) -> list[str]:
+    """The region names a catalogue entry declares under its `placements` property.
+
+    The generator writes them into the component's own object schema. An entry with no
+    `placements` block draws no named regions, and a payload's object-shaped `children` for it is
+    left for the gate to refuse.
+    """
+    if not isinstance(entry, dict):
+        return []
+    for part in list(entry.get("allOf") or []) + [entry]:
+        properties = part.get("properties") if isinstance(part, dict) else None
+        placements = properties.get("placements") if isinstance(properties, dict) else None
+        declared = placements.get("properties") if isinstance(placements, dict) else None
+        if isinstance(declared, dict):
+            return [str(region) for region in declared]
+    return []
+
+
+def normalize_a2ui_placements(
+    components: list[dict[str, Any]], catalog: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Turn a named-region `children` object into the standard array plus `placements`.
+
+    THE ROOM'S DOOR SENDS THE STANDARD'S CHILD LIST. `children` is an array of ids, and the region
+    each child stands in is a separate `placements` map the catalogue declares. An answer that
+    still uses the older object form is converted HERE, before validation, so the gate judges the
+    same shape the renderer draws. The conversion is driven by the catalogue: only a component
+    whose entry declares regions is converted, and a key the entry does not declare, or a region
+    holding a list, is left exactly as written for the gate to refuse rather than guessed at.
+
+    The input is not modified; a converted component is a new object.
+    """
+    entries = catalog.get("components") or {}
+    out: list[dict[str, Any]] = []
+    for comp in components:
+        if not isinstance(comp, dict):
+            out.append(comp)
+            continue
+        name = comp.get("component")
+        regions = _declared_placements(entries.get(name) if isinstance(name, str) else None)
+        raw = comp.get("children")
+        if not regions or not isinstance(raw, dict):
+            out.append(comp)
+            continue
+        if any(region not in regions for region in raw):
+            out.append(comp)
+            continue
+        placements: dict[str, str] = {}
+        children: list[str] = []
+        converted = True
+        for region in regions:
+            if region not in raw:
+                continue
+            value = raw[region]
+            if not isinstance(value, str):
+                converted = False
+                break
+            placements[region] = value
+            if value not in children:
+                children.append(value)
+        if not converted:
+            out.append(comp)
+            continue
+        out.append({**comp, "children": children, "placements": placements})
+    return out
+
+
 def validate_a2ui_components(
-    components: list[dict[str, Any]], surface: str | None = None, system: str | None = None
+    components: list[dict[str, Any]],
+    surface: str | None = None,
+    system: str | None = None,
+    blocking: bool = False,
 ) -> None:
     """
     Zero-trust validation of an updateComponents payload against the catalog.
@@ -264,6 +335,13 @@ def validate_a2ui_components(
     by name). Omitted or unknown, it is the Composer's. `system` is the PACKAGE's
     chosen design system and WINS when given — a draft assembled for a package that
     chose one must be gated by that partition, not by the surface's.
+
+    `blocking` makes a STRUCTURAL refusal an HTTP 503. The Design room's door sets it, because
+    that room's catalogue now compiles and describes the room's tree. The other doors keep the
+    recorded finding until their own catalogues can describe their payloads: the Composer's
+    catalogue still declares `children` as an array while several of its doors send the object
+    form, and a blocking check there would take working rooms down over a known catalogue gap.
+    The name check and the accessibility check always refuse, with or without this flag.
     """
     catalog = a2ui_catalog_for(surface, system)
     catalog_name = catalog.get("title") or surface or DEFAULT_A2UI_SURFACE
@@ -306,6 +384,134 @@ def validate_a2ui_components(
         if accessibility_detail:
             print(f"❌ [A2UI VALIDATION FAILED] {accessibility_detail}", file=sys.stderr)
             raise HTTPException(status_code=503, detail=accessibility_detail)
+
+    # ── THE STANDARD'S OWN SCHEMA, CHECKED ON EVERY PAYLOAD (2026-11-16) ────────────────────────
+    #
+    # THE NAME CHECK ABOVE IS NOT COMPLIANCE. An id and a name that is a key in the catalogue admit
+    # any payload whose words are spelled right, whatever its props or children look like, so
+    # nothing reaching a surface had been structurally checked.
+    #
+    # BLOCKING WHERE THE CATALOGUE IS TRUE (owner's plan, 2026-11-16). It was logged and the payload
+    # drawn because the shared types could not be compiled: every entry with a text, number or
+    # true/false property failed before it was looked at, and a blocking gate would have taken the
+    # rooms down over a defect in the standard's own documents. The missing document is vendored
+    # now, every entry in every catalogue compiles, and the Design room's door asks for a refusal.
+    # The other doors keep the recorded finding until their own catalogues describe their payloads;
+    # turning the refusal on there first would take working rooms down over a known catalogue gap.
+    # A gate that CANNOT run is a refusal when `blocking` is set, because a check that did not look
+    # must never read as a pass.
+    try:
+        schema_results = a2ui_schema_gate.validate(components, catalog)
+    except a2ui_schema_gate.SchemaGateFailure as gate_error:
+        if blocking:
+            detail = {
+                "error": {
+                    "code": "VALIDATION_FAILED",
+                    "surfaceId": "main",
+                    "path": "/components",
+                    "message": (
+                        f"the A2UI schema gate could not run: {gate_error}. Nothing was drawn, "
+                        f"because a check that did not look must not read as a pass."
+                    ),
+                }
+            }
+            print(f"❌ [A2UI VALIDATION FAILED] {detail}", file=sys.stderr)
+            raise HTTPException(status_code=503, detail=detail) from gate_error
+        print(
+            f"⚠️ [A2UI SCHEMA] the check could not run: {gate_error} — the payload was drawn anyway",
+            file=sys.stderr,
+        )
+        return
+
+    for row in schema_results:
+        if row.get("ok"):
+            continue
+        index = int(row.get("index") or 0)
+        refused_name = str(row.get("name") or "")
+        errors = row.get("errors") or []
+        compile_error = str(row.get("compileError") or "")
+        if compile_error:
+            if blocking:
+                detail = {
+                    "error": {
+                        "code": "VALIDATION_FAILED",
+                        "surfaceId": "main",
+                        "path": f"/components/{index}",
+                        "message": (
+                            f"Component '{refused_name}' cannot be checked against "
+                            f"{catalog.get('catalogId') or catalog_name}: {compile_error}. Nothing "
+                            f"was drawn, because an entry the standard cannot compile cannot be "
+                            f"judged."
+                        ),
+                    }
+                }
+                print(f"❌ [A2UI VALIDATION FAILED] {detail}", file=sys.stderr)
+                raise HTTPException(status_code=503, detail=detail)
+            print(
+                f"⚠️ [A2UI SCHEMA] component '{refused_name}' (index {index}) cannot be checked: "
+                f"{compile_error} — the payload was drawn anyway",
+                file=sys.stderr,
+            )
+            continue
+        joined = "; ".join(
+            f"{error.get('path') or '/'} {error.get('keyword')} {error.get('message')}"
+            for error in errors[:4]
+        )
+        if blocking:
+            detail = {
+                "error": {
+                    "code": "VALIDATION_FAILED",
+                    "surfaceId": "main",
+                    "path": f"/components/{index}",
+                    "message": (
+                        f"Component '{refused_name}' does not match "
+                        f"{catalog.get('catalogId') or catalog_name}: {joined}. The component is a "
+                        f"declaration the catalogue disagrees with, so nothing was drawn."
+                    ),
+                }
+            }
+            print(f"❌ [A2UI VALIDATION FAILED] {detail}", file=sys.stderr)
+            raise HTTPException(status_code=503, detail=detail)
+        print(
+            f"⚠️ [A2UI SCHEMA] component '{refused_name}' (index {index}) does not match "
+            f"{catalog.get('catalogId') or catalog_name}: {joined} — the payload was drawn anyway",
+            file=sys.stderr,
+        )
+
+    # ── A CHILD MUST STAND IN A DECLARED REGION ─────────────────────────────────────────────────
+    #
+    # The standard's `children` array says which ids compose the tree; a component that draws
+    # NAMED regions needs a second declared fact to say which region each id stands in. The
+    # catalogue cannot express "every child is placed" as a JSON Schema keyword, so it is checked
+    # here: a child with no region would stand in the DOM unprojected and invisible, which is a
+    # surface that looks assembled and is not. The renderer reports the same defect; refusing it
+    # at the door means a malformed tree never reaches the person. The rule is the Design room's
+    # own, so it runs only for the door that asked for a refusal.
+    if not blocking:
+        return
+    for index, comp in enumerate(components):
+        placements = comp.get("placements") if isinstance(comp, dict) else None
+        children = comp.get("children") if isinstance(comp, dict) else None
+        if not isinstance(placements, dict) or not isinstance(children, list):
+            continue
+        placed = {value for value in placements.values() if isinstance(value, str)}
+        unplaced = [child for child in children if isinstance(child, str) and child not in placed]
+        if unplaced:
+            detail = {
+                "error": {
+                    "code": "VALIDATION_FAILED",
+                    "surfaceId": "main",
+                    "path": f"/components/{index}/children",
+                    "message": (
+                        f"Component '{comp.get('component')}' lists {unplaced} in 'children' but "
+                        f"no 'placements' region names "
+                        f"{'them' if len(unplaced) > 1 else 'it'}. This element draws named "
+                        f"regions and has no default one, so the child would draw nowhere."
+                    ),
+                }
+            }
+            print(f"❌ [A2UI VALIDATION FAILED] {detail}", file=sys.stderr)
+            raise HTTPException(status_code=503, detail=detail)
 
 def user_is_admin(user_id: str) -> bool:
     """Stub: check if user has admin privileges. Replace with DB lookup."""

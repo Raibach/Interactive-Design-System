@@ -63,26 +63,15 @@ def card_state_of(row: Mapping[str, Any] | None) -> CardState | None:
 
 
 def is_card_locked(row: Mapping[str, Any] | None) -> bool:
-    """True when the card has been SUBMITTED and its owner has lost mutation rights.
+    """THERE IS NO LOCK ON A CARD (owner, 2026-11-16): *"There's no fucking lock, there's never a
+    fucking lock on a card."*
 
-    PENDING IS THE DEFAULT, NOT A SUBMISSION (owner, 2026-11-16): *"we haven't built an approval
-    queue. They're just supposed to be what happens by default when you ingest a Figma component
-    and you don't approve it, so that they all default pending unless they're approved."* So the
-    state alone cannot lock a card. Locking on the state meant every Figma card went read-only the
-    moment it was saved — no re-save, no close, no re-ingest — and the refusal named a Supervisor
-    Queue that does not exist yet.
-
-    The lock belongs to a submission: the routing record that
-    `POST /api/design/sessions/{id}/queue` writes when someone sends a card. A card with no such
-    record is pending because nothing has approved it, and it stays editable.
+    A card is a working record. Pending is the default a saved Figma card wears, and it is not a
+    refusal: the card opens, its canvas draws, and it can be re-opened, re-ingested, edited and
+    closed without asking anyone. The function stays so every caller keeps one answer, and the
+    answer is false.
     """
-    state = card_state_of(row)
-    if state not in LOCKED_STATES:
-        return False
-    routing = _metadata(row).get("routing")
-    if not isinstance(routing, Mapping):
-        return False
-    return bool(str(routing.get("queued_at") or ""))
+    return False
 
 
 # THE WORD THE CARD PRINTS — ONE DEFINITION (owner, 2026-11-16).

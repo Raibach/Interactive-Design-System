@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://a2ui.org/specification/v0_9/catalog.json",
+  "title": "The A2UI function vocabulary this repository actually has",
+  "$comment": "THE MISSING SIBLING, DEFINED AS IT IS. The shared types reach FunctionCall through every DynamicString, DynamicNumber and DynamicBoolean, and FunctionCall requires an instance to match catalog.json#/$defs/anyFunction. The published sibling document answers HTTP 404, so no catalogue entry could be compiled and no payload could be checked. This file is that document, and its anyFunction matches nothing, because no catalogue in this repository declares a functions block and backend/catalog_write.py refuses a card that exposes a callable function. A function call is therefore refused by the standard's own schema, not by a stand-in that would accept anything. If a catalogue ever declares a functions block, this definition must be replaced with that vocabulary in the same change.",
+  "$defs": {
+    "anyFunction": false
+  }
+}

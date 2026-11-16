@@ -44,6 +44,7 @@ from design_parameters import ParameterTypeError, typecheck_module
 from figma_fidelity import fidelity_gate, fidelity_report
 from figma_ingest_gate import check_fidelity, check_stated_keys
 import accessibility_contract
+import catalog_write
 import figma_facts
 import figma_twopass
 from figma_service import (
@@ -1390,12 +1391,81 @@ def _catalog_file_path(pipeline: str = INGEST_CATALOG_PIPELINE) -> str | None:
     return None
 
 
-def _register_in_catalog(tag: str, meta: dict[str, Any], pipeline: str = "prompt-composer") -> str:
-    """Declare the component in the pipeline catalog's JSON Schema (A2UI/catalogs/<pipeline>).
+# THE PROP TYPES THE CONTRACT MAY STATE, and the catalogue kind each one is. A type that is not
+# here is passed through unchanged, so `catalog_write.build_entry` refuses it by name instead of
+# this table guessing a schema for it.
+_CATALOG_KIND_BY_CONTRACT_TYPE = {
+    "String": "text",
+    "Number": "number",
+    "Boolean": "boolean",
+    "ComponentId": "componentRef",
+    "ChildList": "children",
+}
 
-    The catalog is what the SERVER validates an AI payload against, so a component that
-    is not declared here cannot be emitted at all. Both edits the schema needs are made:
-    the definition, and its entry in $defs.anyComponent.oneOf.
+
+def _catalog_card(tag: str, meta: dict[str, Any]) -> dict[str, Any]:
+    """THE APPROVED CARD, AS THE CATALOGUE WRITER READS IT.
+
+    The name is the tag this approval writes. The description is the design's own when Figma
+    states one, then the card's, then the sentence the generator has always written — and it is
+    never empty, because an entry the model cannot read is not usable.
+
+    The props are the contract's, typed by the contract's own vocabulary; the accessibility block
+    travels under `x-a11y` (never `accessibility`, which the shared types use for an instance's
+    own attributes). The required list is the contract's required properties that the prop map
+    actually declares, exactly as before.
+    """
+    contract = meta.get("contract") if isinstance(meta.get("contract"), dict) else {}
+    accessibility = contract.get("accessibility") if isinstance(contract, dict) else None
+    target = meta.get("targetNode") if isinstance(meta.get("targetNode"), dict) else {}
+    description = str(
+        target.get("mcp_description")
+        or target.get("description")
+        or meta.get("approvalDescription")
+        or ""
+    ).strip()
+    if not description:
+        description = (
+            f"Lit web component <{tag}>, generated from Figma node "
+            f"{meta.get('nodeId', '')} ({meta.get('figmaName', '')}) and rendered from "
+            f"src/components/lit/{tag}.ts. Ingested, then approved into the catalogue."
+        )
+    props: dict[str, Any] = {}
+    for declared in contract.get("props") or []:
+        if not isinstance(declared, dict):
+            continue
+        name = str(declared.get("name") or "")
+        if not name:
+            continue
+        kind = str(declared.get("type") or "")
+        props[name] = {"kind": _CATALOG_KIND_BY_CONTRACT_TYPE.get(kind, kind)}
+    required = [
+        str(item)
+        for item in (accessibility or {}).get("requiredProperties") or []
+        if str(item) in props
+    ]
+    return {
+        "element_name": tag,
+        "description": description,
+        "props": props,
+        "required": required,
+        "x_a11y": accessibility,
+    }
+
+
+def _register_in_catalog(tag: str, meta: dict[str, Any], pipeline: str = "prompt-composer") -> str:
+    """Write the component into the pipeline catalogue's JSON Schema (A2UI/catalogs/<pipeline>).
+
+    AN APPROVAL IS THE CATALOGUE'S ADMISSION BOUNDARY, and a name that is already there is a NEW
+    VERSION of that element, not a duplicate: the old entry is traded for the new one, and the
+    catalog keeps one definition of the name. A name that does not exist is added, and joins
+    `$defs.anyComponent.oneOf`, because a component the union does not reference cannot be named
+    in a payload.
+
+    THE ORDER IS THE CONTRACT'S: the accessibility contract is gated first (an incomplete one
+    refuses and nothing is written), the entry is built, the file is replaced in one rename, and
+    the file is read back and compared with what was asked for. The gate and the writer are the
+    approval's own modules — this function does not keep a second copy of either rule.
     """
     path = _catalog_file_path()
     if not path:
@@ -1403,71 +1473,135 @@ def _register_in_catalog(tag: str, meta: dict[str, Any], pipeline: str = "prompt
             "no catalogue file found — looked in A2UI/catalogs/ and "
             "frontend/src/components/A2UI/catalogs/; nothing can be declared until one exists"
         )
+
+    card = _catalog_card(tag, meta)
+    verdict = accessibility_contract.gate(card.get("x_a11y"))
+    if not verdict["ok"]:
+        raise HTTPException(status_code=503, detail=verdict["detail"])
+
+    try:
+        entry = catalog_write.build_entry(card)
+    except catalog_write.CatalogWriteRefused as refusal:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": refusal.code,
+                "message": refusal.message,
+                **refusal.detail,
+            },
+        )
+
     try:
         with open(path, encoding="utf-8") as f:
-            raw = f.read()
-        catalog = json.loads(raw)
+            catalogue = json.load(f)
     except Exception as e:
         return f"unreadable ({path}: {e})"
 
-    key = f'"{tag}"'
-    if key in catalog.get("components", {}):
-        return f"already declared in {pipeline}"
+    existed = tag in (catalogue.get("components") or {})
+    try:
+        catalog_write.write(path, catalog_write.apply(catalogue, tag, entry))
+    except OSError as e:
+        return f"could not write the catalogue ({path}: {e})"
 
-    contract = meta.get("contract", {})
-    accessibility = contract.get("accessibility") if isinstance(contract, dict) else None
-    if not isinstance(accessibility, dict):
-        accessibility = {}
-    props = {
-        "component": {"const": tag},
-    }
-    for p in contract.get("props", []):
-        if not p.get("name"):
-            continue
-        json_type = {"String": "string", "Boolean": "boolean", "Number": "number"}.get(p.get("type"), "string")
-        props[p["name"]] = {"type": json_type}
-
-    # THE CONTRACT'S REQUIRED PROPERTIES BECOME THE ENTRY'S REQUIRED PROPERTIES. A property the
-    # contract names is required only when the element actually declares it; a requirement the
-    # schema cannot express would refuse every payload for no reason.
-    required = ["component"]
-    for prop in accessibility.get("requiredProperties") or []:
-        if prop in props and prop not in required:
-            required.append(prop)
-
-    definition = {
-        "type": "object",
-        "allOf": [
-            {"$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"},
-            {"$ref": "#/$defs/CatalogComponentCommon"},
-            {
-                "type": "object",
-                "description": (
-                    f"Lit web component <{tag}>, generated from Figma node "
-                    f"{meta.get('nodeId', '')} ({meta.get('figmaName', '')}) and rendered from "
-                    f"src/components/lit/{tag}.ts. Ingested, then approved into the catalogue."
+    # WHAT WAS WRITTEN IS WHAT IS ON DISK. A rename that reported success and a file that does
+    # not hold the entry are two different facts, and only this read can tell them apart.
+    try:
+        with open(path, encoding="utf-8") as f:
+            written = json.load(f)["components"][tag]
+        body = written["allOf"][2]
+        written_name = str(body["properties"]["component"]["const"])
+        written_description = str(body["description"])
+    except Exception as e:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "error": "CATALOG_WRITE_UNVERIFIED",
+                "message": (
+                    f"The catalogue was written and could not be read back for {tag}: {e}. "
+                    "The entry is not a claim this approval can make."
                 ),
-                "properties": props,
-                "required": required,
-                "unevaluatedProperties": False,
             },
-        ],
-        # THE CONTRACT TRAVELS WITH THE ENTRY. The approval gate refused an incomplete one, so
-        # this block is the record of a declaration that passed. The composition gate reads it
-        # beside the name, and the palette reads it when the component is offered to the model.
-        "accessibility": accessibility,
-    }
+        )
+    if written_name != tag or written_description != card["description"]:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "error": "CATALOG_WRITE_MISMATCH",
+                "message": (
+                    f"The catalogue holds {written_name!r} with a description this approval did "
+                    f"not write ({tag!r}). Nothing else was changed."
+                ),
+                "expected": {"name": tag, "description": card["description"]},
+                "written": {"name": written_name, "description": written_description},
+            },
+        )
+    return f"{'replaced' if existed else 'declared'} in {pipeline}"
 
-    catalog.setdefault("components", {})[tag] = definition
-    one_of = catalog.setdefault("$defs", {}).setdefault("anyComponent", {}).setdefault("oneOf", [])
-    ref = {"$ref": f"#/components/{tag}"}
-    if ref not in one_of:
-        one_of.append(ref)
 
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(catalog, f, indent=2)
-        f.write("\n")
-    return f"declared in {pipeline}"
+def _mark_card_approved(session_id: str, actor: str) -> dict[str, Any]:
+    """THE CARD THE APPROVAL ANSWERS READS ACTIVE — `review_stage = 'approved'`, from the record.
+
+    A card's word is computed from this stage (`card_lifecycle.card_status_word`), so the catalogue
+    write alone would leave the card reading Pending while the element was already shipped. Only a
+    saved Figma card is touched: an ingest that ran in an open working row has no card to approve,
+    and its stage is left alone.
+    """
+    try:
+        import services as state
+
+        api = state.prompt_sessions_api
+        if not api:
+            return {"error": "the database is not available, so the card's stage was not written"}
+        session = api.get_session(session_id, actor)
+        if not session:
+            return {
+                "error": f"the session {session_id[:8]}… could not be read by this person, so the "
+                         f"card's stage was not written"
+            }
+        metadata = session.get("metadata") or {}
+        if isinstance(metadata, str):
+            try:
+                metadata = json.loads(metadata)
+            except (json.JSONDecodeError, ValueError):
+                metadata = {}
+        if str(metadata.get("session_type") or "") != "design_session":
+            return {
+                "stage": "skipped",
+                "why": "the ingest ran in a working row, not a saved card; there is no card to approve",
+            }
+        if str(metadata.get("review_stage") or "") == "approved":
+            return {"stage": "approved", "created": False}
+        updated = api.update_session(
+            session_id=session_id,
+            user_id=actor,
+            status="approved",
+            metadata={"review_stage": "approved"},
+        )
+        if not updated:
+            return {
+                "error": "the session could not be written by this person, so its stage was not changed"
+            }
+        return {"stage": "approved", "created": True}
+    except Exception as e:
+        return {"error": f"the card's stage could not be written: {e}"}
+
+
+def _record_approval_receipt(session_id: str, layer: str, actor: str) -> dict[str, Any]:
+    """THE RECEIPT LAST. It claims the layer is in the catalogue, so the write must already stand."""
+    try:
+        import services as state
+        from routes.design_acceptance import AcceptanceNotRecorded, record_accepted
+    except Exception as e:
+        return {"error": f"the acceptance receipt could not be written: {e}"}
+    try:
+        api = state.prompt_sessions_api
+        if not api:
+            return {"error": "the database is not available, so the acceptance receipt was not written"}
+        return record_accepted(api, session_id, layer, actor)
+    except AcceptanceNotRecorded as refusal:
+        return {"error": str(refusal)}
+    except Exception as e:
+        return {"error": f"the acceptance receipt could not be written: {e}"}
 
 
 REGISTRATION_FAILURE_MARKERS = ("unreadable", "could not", "no catalogue", "refusing", "not found", "failed")
@@ -3977,6 +4111,76 @@ def _layer_index(node: dict[str, Any], path: str = "", depth: int = 1) -> list[d
     for child in kids:
         out.extend(_layer_index(child, layer_path, depth + 1))
     return out
+
+
+_COMPONENT_TREE_DIR = os.path.join(FRONTEND_DIR, "catalog-tree")
+
+
+def _layer_name_of(tag: str) -> str:
+    """THE LAYER NAME A TAG STANDS FOR — the identity the system actually uses.
+
+    A tag is where an element was written; a layer name is what the design system knows. The Figma
+    map records the pairing (`litComponent` -> `figmaName`), and the approved layer record carries
+    the root layer's name when the map does not. Empty means the record states none, and nothing is
+    guessed from the tag.
+    """
+    try:
+        with open(os.path.join(FRONTEND_DIR, "src", "components", "registry.json"), encoding="utf-8") as handle:
+            document = json.load(handle)
+        for entry in document.get("components") or []:
+            if isinstance(entry, dict) and entry.get("litComponent") == tag:
+                name = str(entry.get("figmaName") or "").strip()
+                if name:
+                    return name
+    except (OSError, ValueError):
+        pass
+    try:
+        with open(os.path.join(FIGMA_LAYERS_DIR, f"{INGEST_CATALOG_PIPELINE}.json"), encoding="utf-8") as handle:
+            document = json.load(handle)
+        for record in (document.get("nodes") or {}).values():
+            if isinstance(record, dict) and record.get("tag") == tag:
+                name = str((record.get("tree") or {}).get("name") or "").strip()
+                if name:
+                    return name
+    except (OSError, ValueError):
+        pass
+    return ""
+
+
+def _component_tree_layer_names() -> set[str]:
+    """EVERY LAYER NAME THE APPLICATION'S COMPONENT TREE LISTS.
+
+    THE SYSTEM ONLY UNDERSTANDS LAYER NAMES (owner, 2026-11-16): *"If the layer name is not listed,
+    then it's not live. If the database for the component tree doesn't have the layer name then the
+    system never knows if it's live or not. The system only understands layer names."* So this is
+    the live test: the layer name's presence in the component tree the application is assembled
+    from (`catalog-tree/<pipeline>.json`). A tag is not consulted, and a node id is not consulted.
+    """
+    path = os.path.join(_COMPONENT_TREE_DIR, f"{INGEST_CATALOG_PIPELINE}.json")
+    try:
+        with open(path, encoding="utf-8") as handle:
+            document = json.load(handle)
+    except (OSError, ValueError):
+        return set()
+    names: set[str] = set()
+    for group in document.get("groups") or []:
+        for element in (group or {}).get("elements") or []:
+            if not isinstance(element, dict):
+                continue
+            for value in (
+                element.get("name"),
+                (element.get("provenance") or {}).get("figmaName"),
+            ):
+                text = str(value or "").strip()
+                if text:
+                    names.add(text)
+    return names
+
+
+def _live_layer(tag: str) -> tuple[str, bool]:
+    """THE LAYER NAME AND WHETHER THE COMPONENT TREE LISTS IT — the delete and replace test."""
+    layer_name = _layer_name_of(tag)
+    return layer_name, bool(layer_name) and layer_name in _component_tree_layer_names()
 
 
 def _existing_by_layer_name(name: str) -> dict[str, Any] | None:
@@ -7275,57 +7479,56 @@ async def _remove_component(
     pipeline = catalog or INGEST_CATALOG_PIPELINE
     _op_step(op_id, f"Checking whether {tag} is used by the application's own code…")
 
-    # ── THE LIVENESS CHECK, BEFORE ANYTHING IS TOUCHED ──────────────────────────────────────────
-    # A component the application's own code names is not a catalogue entry any more; it is part of
-    # the application, and deleting its file breaks whatever names it. `figma-layers-view.ts` draws
-    # every catalogue row with `<f-40001207-3497>`, so removing that one would empty the left column
-    # while reporting success. The refusal NAMES the files, so the next step is a real one: stop
-    # naming it, and then it can be removed.
-    # THE CHECK IS TIED TO THE COMPONENT'S OWN ELEMENT — its id, which is a file named for it.
-    # A catalogue's schema key (`Column`, `Text`, `Card`) is a DECLARATION the renderer resolves to
-    # a primitive; it has no file here and no element to break (measured 2026-10-25: no `Column.ts`,
-    # while ingested components such as `f-40001177-2476` each have one). The word "Column" is all
-    # through the application's code for unrelated reasons — `LeftColumnHeader`, `leftColumn`,
-    # `ColumnFlipToggle` — so a name-keyed search refuses every removal in a schema catalogue.
-    # Owner, 2026-10-25: *"Should be tied to the ID and if there is no ID, we should just remove…"*
+    # ── THE LIVENESS CHECK, BY LAYER NAME ──────────────────────────────────────────────────────
+    # THE SYSTEM ONLY UNDERSTANDS LAYER NAMES (owner, 2026-11-16): *"If the layer name is not
+    # listed, then it's not live. If the database for the component tree doesn't have the layer
+    # name then the system never knows if it's live or not. The system only understands layer
+    # names."* A tag is where the element was written; the layer name is what the design system
+    # knows. This resolves the tag to its layer name and asks the component tree whether that name
+    # is listed. A listed layer is being served, so it cannot be removed — only replaced by
+    # approving that same layer name again.
     file_path = os.path.join(FRONTEND_COMPONENTS_DIR, f"{tag}.ts")
-    live_in = await asyncio.to_thread(_liveness_references, tag) if os.path.exists(file_path) else []
-    if live_in:
+    layer_name, live = await asyncio.to_thread(_live_layer, tag)
+    if live:
         note = (
-            f"{tag} is live in the application's own code, so removing it would break what names it. "
-            f"It is named by {', '.join(live_in)}. A component that is live cannot be removed by a "
-            "click, and this is deliberately not a warning: the file deletion is what has to be "
-            "stopped, and it is stopped here rather than in a view that might not ask."
+            f"{tag} is the element whose layer name is {layer_name!r}. That layer name is listed in "
+            "the application's component tree, so it is currently being served. It cannot be "
+            "removed: removing it would break what is served. It can only be REPLACED — approve the "
+            "same layer name again with a new or existing Figma component."
         )
         _log_ingest({
             "kind": "removal-refused",
             "actor": actor,
             "tag": tag,
+            "layerName": layer_name,
             "reason": reason,
             "ruling": "live",
-            "namedBy": live_in,
             "note": note,
             "nextStep": (
-                "Stop naming it: the name leaving " + ", ".join(live_in) + " is what makes " + tag +
-                " removable — a click cannot."
+                f"Replace {layer_name!r} by approving the same layer name again. Nothing was removed."
             ),
         })
-        print(f"[!] [figma-ingest] {tag} was NOT removed — live in {', '.join(live_in)}")
+        print(
+            f"[!] [figma-ingest] {tag} was NOT removed — layer name {layer_name!r} is in the "
+            "component tree"
+        )
         _op_step(
             op_id,
-            f"Stopped at: checking whether {tag} is used by the application's own code — it is, in "
-            f"{', '.join(live_in)}. Nothing was removed.",
+            f"Stopped at: the layer name {layer_name!r} is in the component tree, so {tag} is live. "
+            "Nothing was removed.",
         )
         raise HTTPException(
             status_code=409,
             detail={
                 "tag": tag,
+                "layerName": layer_name,
                 "ruling": "live",
-                "namedBy": live_in,
+                "live": True,
+                "removable": False,
                 "note": note,
                 "nextStep": (
-                    "Replace it, or stop naming it: the name leaving " + ", ".join(live_in) +
-                    " is what makes it removable — a click cannot."
+                    f"Replace the layer {layer_name!r} by approving it again. A live element cannot "
+                    "be removed; nothing was removed."
                 ),
             },
         )
@@ -7835,8 +8038,18 @@ async def api_figma_component_by_tag(tag: str):
     specs = _specs_from_draft(source, tree) if source and tree else []
     facts = (record or {}).get("facts") or []
 
+    # WHETHER THE APPLICATION'S COMPONENT TREE LISTS THIS ELEMENT'S LAYER NAME. A tag is not the
+    # identity the system uses; the layer name is. A layer name the tree lists is being served, so
+    # the element cannot be removed — only replaced. The selection the model assembles reads these
+    # fields to offer Delete, or the replacement warning.
+    layer_name, live = await asyncio.to_thread(_live_layer, tag)
+
     return {
         "tag": tag,
+        "layerName": layer_name,
+        "live": live,
+        "removable": not live,
+        "listedIn": f"frontend/catalog-tree/{INGEST_CATALOG_PIPELINE}.json" if live else None,
         "file": file_rel,
         "exists": os.path.exists(file_path),
         "bytes": os.path.getsize(file_path) if os.path.exists(file_path) else 0,
@@ -8189,6 +8402,10 @@ class CommitRequest(BaseModel):
     # _name_collisions for how the collision is found, and the retag below for what the answer
     # does. Unset means "no" — the copy is added as its own component.
     overwriteTag: str | None = None
+    # THE SECOND ANSWER when the element being replaced is LIVE. A live element is served, so
+    # replacing it changes what the application shows. The first answer names the tag; this one
+    # confirms that the served element may be replaced.
+    confirmReplace: bool = False
     # WHICH CHILD PATTERNS TO WRITE. The panel lists every pattern with a checkbox: new ones
     # ticked, existing ones unticked (replacing a component is a deliberate act). Unset means
     # "every drafted pattern", which is the old behaviour for callers that send no choice.
@@ -8429,25 +8646,41 @@ async def api_figma_commit(request: CommitRequest, http_request: Request):
     _IMAGE_FILE_KEY.set(str(approval_meta.get("fileKey") or ""))
     if approval_node:
         approval_spec = _figma_spec_for_model(approval_node)
-        existing = _existing_by_layer_name(approval_node.get("name") or "")
+        layer_name = str(approval_node.get("name") or "")
+        existing = _existing_by_layer_name(layer_name)
         collisions = _name_collisions(approval_spec)
         instances = _name_instances(approval_spec)
-        if existing and not request.overwriteTag:
-            raise HTTPException(
-                status_code=409,
-                detail={
-                    "error": "EXISTS",
-                    "message": (
-                        f"The catalogue already has {existing.get('tag')} for the layer named "
-                        f"{approval_node.get('name')}. Approving replaces it; answer with "
-                        "overwriteTag set to that tag to say so. Nothing was written."
-                    ),
-                    "existing": existing,
-                    "collisions": collisions,
-                    "instances": instances,
-                    "nextStep": "Approve again with overwriteTag set to the tag to replace.",
-                },
-            )
+        if existing:
+            existing_tag = str(existing.get("tag") or "")
+            existing_layer, existing_live = await asyncio.to_thread(_live_layer, existing_tag)
+            # THE LAYER NAME DECIDES REPLACE OR ADD (owner, 2026-11-16): *"approve either replaces
+            # an existing [element] or adds a new one and it's all done by the layer name."* The
+            # same layer name IS the same element, so approval replaces that element — the tag the
+            # existing element carries is the write name, whatever tag this draft was built under.
+            request.overwriteTag = existing_tag
+            if existing_live and not request.confirmReplace:
+                live_layer = existing_layer or layer_name
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "error": "LIVE_REPLACE_CONFIRM",
+                        "message": (
+                            f"This approval replaces the element whose layer name is "
+                            f"{live_layer!r}. That layer name is listed in the application's "
+                            "component tree, so it is currently being served; the replacement "
+                            "changes what the application shows. Nothing was written. Confirm "
+                            "the replacement to continue."
+                        ),
+                        "existing": {**existing, "layerName": live_layer, "live": True},
+                        "layerName": live_layer,
+                        "live": True,
+                        "collisions": collisions,
+                        "instances": instances,
+                        "nextStep": (
+                            "Answer again with confirmReplace: true to replace the live element."
+                        ),
+                    },
+                )
 
     tags = request.tags if request.tags else list(drafts)
     # ── THE TICKED PATTERNS ARE THE WHOLE WRITE SET ─────────────────────────
@@ -8781,6 +9014,41 @@ async def api_figma_commit(request: CommitRequest, http_request: Request):
                 + ". Fix the registry files and approve again — nothing is hidden."
             ),
         )
+    # ── THE CARD THE APPROVAL ANSWERS, AND THE RECEIPT LAST ────────────────────────────────────
+    # The catalogue entry above is the shipped fact. The card's stage is what makes its word read
+    # Active, and the receipt is the record that the layer was accepted — written LAST, because it
+    # claims work that already stands. A failure here does not undo the catalogue write; it is
+    # stated as the half-state it is, and approving again records the answer.
+    approval_record: dict[str, Any] = {}
+    approval_session = str(meta.get("sessionId") or "")
+    approval_actor = _resolve_actor(http_request) or str(meta.get("actor") or "")
+    if approval_session:
+        card_result = await asyncio.to_thread(_mark_card_approved, approval_session, approval_actor)
+        approval_record["card"] = card_result
+        layer = str(request.overwriteTag or meta.get("targetTag") or (tags[0] if tags else ""))
+        receipt = await asyncio.to_thread(
+            _record_approval_receipt, approval_session, layer, approval_actor,
+        )
+        approval_record["acceptance"] = receipt
+        record_failures = [
+            str(result.get("error"))
+            for result in (card_result, receipt)
+            if isinstance(result, dict) and result.get("error")
+        ]
+        if record_failures:
+            _op_step(
+                request.opId,
+                "The element is in the catalogue; its card records are incomplete: "
+                + "; ".join(record_failures),
+            )
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    f"The element IS in the catalogue at {layer}, and the card's records are "
+                    "incomplete: " + "; ".join(record_failures) + ". Nothing was rolled back — "
+                    "the catalogue write stands; approve again to record the answer."
+                ),
+            )
     _op_step(
         request.opId,
         f"Approved {(meta or {}).get('targetTag') or request.jobId}: "
@@ -8795,6 +9063,7 @@ async def api_figma_commit(request: CommitRequest, http_request: Request):
         "replaced": replaced,
         "tags": tags,
         "registration": registration,
+        "approval": approval_record,
     }
 
 

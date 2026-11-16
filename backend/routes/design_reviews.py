@@ -16,8 +16,11 @@ The activity table could not carry these: its `element_id` is NOT NULL, and a re
 a SESSION, not on a component. The surface table is the right home, and giving it a writer is the
 second thing this module does.
 
-WHAT A REVIEW IS NOT. It does not publish, and it does not write the catalogue. Approving a session
-records that gate; the write into the catalogue is the last gate and it is a separate act.
+WHAT A REVIEW IS NOT. It does not write a component by itself. `request` and `changes` record a
+gate on the session. `approve` is the one answer that publishes: it calls the card approval action
+(`card_approval.approve_card`), which performs the catalogue write from the card's own record and
+moves the card to Active in the same act, and then records the gate. The action's facts travel back
+with the review, so the conversation can say what happened.
 """
 from __future__ import annotations
 
@@ -237,12 +240,20 @@ def _answerable(
     A row written before `reviewer_id` existed carries only the name; the name is matched against
     the signed-in person's own, so an older review is still answerable and still not answerable by
     anyone else.
+
+    A CARD SAVED BY THE TOOLS TAB IS ADDRESSED TO NOBODY (owner, 2026-11-16). The save writes
+    `review_stage = 'in-review'` so the card stands in the pending list; it does not name a
+    reviewer, because nobody was asked — the person who made it approves it. This read already
+    refuses a session the caller cannot read, so a session with no reviewer is answerable by the
+    person who can read it, and by nobody else.
     """
     if stage != "in-review":
         return False
     if reviewer_id:
         return reviewer_id == user_id
-    return bool(reviewer) and reviewer.strip().lower() == my_name.strip().lower()
+    if reviewer:
+        return reviewer.strip().lower() == my_name.strip().lower()
+    return True
 
 
 @router.get("/api/design/sessions/{session_id}/review")
@@ -334,7 +345,23 @@ def write_review(
             )
         stage = "approved"
         event = "review-approved"
-        metadata = {"review_stage": stage}
+        # THE APPROVAL PERFORMS THE WRITE (owner, 2026-11-16). The person's answer is the
+        # authorisation; the action reads the card's own record, resolves the element by layer
+        # name, writes the drawing and the catalogue and moves the card to Active. A refusal is
+        # answered with its facts and the stage is not changed, so a refused card stays Pending
+        # and the conversation can say why.
+        from routes.design_card_approval import approval_status
+
+        from card_approval import CardApprovalRefused, approve_card
+
+        try:
+            approval = approve_card(api, session_id, uid, row=session)
+        except CardApprovalRefused as refusal:
+            raise HTTPException(
+                status_code=approval_status(refusal.code),
+                detail=refusal.as_detail(),
+            )
+        metadata = {"review_stage": stage, "approval": approval}
     elif action == "changes":
         if now_stage != "in-review":
             raise HTTPException(
@@ -382,22 +409,32 @@ def write_review(
     with api.get_db() as conn:
         cur = conn.cursor()
         cur.execute("SET app.current_user_id = %s", (uid,))
+        detail = {
+            "by": uid,
+            "note": note,
+            "reviewer": reviewer,
+        }
+        if action == "approve":
+            # THE GATE'S OWN EVENT CARRIES THE WRITE'S FACTS, so the record says what the approval
+            # did — the layer, the element and the catalogue — not only that a button was pressed.
+            detail["approval"] = {
+                key: approval.get(key)
+                for key in ("action", "layer", "tag", "file", "card")
+                if key in approval
+            }
         cur.execute(
             """INSERT INTO design_surface_events (session_id, surface, event, detail, at)
                VALUES (%s, 'review', %s, %s::jsonb, NOW())""",
-            (
-                session_id,
-                event,
-                json.dumps({
-                    "by": uid,
-                    "note": note,
-                    "reviewer": reviewer,
-                }),
-            ),
+            (session_id, event, json.dumps(detail)),
         )
         conn.commit()
 
-    return read_review(session_id, x_user_id)
+    response = read_review(session_id, x_user_id)
+    if action == "approve":
+        # THE FACTS TRAVEL WITH THE REVIEW. The conversation's model writes the sentence from them;
+        # this route does not write a sentence of its own.
+        response["approval"] = approval
+    return response
 
 
 @router.get("/api/design/reviews")

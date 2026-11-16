@@ -35,7 +35,12 @@ from pydantic import BaseModel
 
 import services as state
 from card_lifecycle import LOCKED_STATES, CardState, card_state_of, card_status_word, is_card_locked, locked_state_message
-from deps import A2UI_CATALOG_ID, a2ui_catalog_for, validate_a2ui_components
+from deps import (
+    a2ui_catalog_for,
+    a2ui_catalog_id,
+    normalize_a2ui_placements,
+    validate_a2ui_components,
+)
 from grace_gui import LAST_USAGE, query_llm
 from prompt_sessions_api import (
     DESIGN_SYSTEM_DESCRIPTION,
@@ -920,15 +925,17 @@ is the ROOM's own — the buttons `DESIGN_CONSOLE_TABS` names, and nothing else.
 gone from this room: the framed application it opened took a minute to draw a white column, and
 the owner's call was to take it out rather than wait):
 1. id "root", component "design-workspace" — the Design room's own frame. Its
-   panes are NAMED slots, so "children" is an OBJECT keyed by slot name; the
-   array form fills nothing.
+   panes are NAMED regions. "children" is the ARRAY of ids, and "placements" says
+   which region each id stands in — {{"left": "card-grid", "right":
+   "design-console-chat"}}. A child with no placement draws nowhere.
 2. "card-grid": ConsoleCardGrid in slot "left", items bound to {{"path": "/cards"}}
 3. "design-console-chat": "chat-panel" in slot "right", bound to the design
    console's own conversation: conversationId {{"path": "/console/conversation_id"}},
    sessionId {{"path": "/console/session_id"}}. There is no middle slot.
 4. "isThirdOpen": false — the chat column loads CLOSED.
-5. "design-console-chat" carries ONE child in its "view" slot: "repair-view", a
-   "chat-repair-actions" bound to /findings.
+5. "design-console-chat" carries ONE child in its "view" region: "repair-view", a
+   "chat-repair-actions" bound to /findings. Its "children" is ["repair-view"] and
+   its "placements" is {{"view": "repair-view"}}.
 6. "design-console-chat" carries "allowedTabs": "{DESIGN_CONSOLE_TABS}".
 7. Short friendly ai_message
 
@@ -937,9 +944,9 @@ Emit nothing else — no greeting, no header, no Text above them.
 Output ONLY this exact JSON (no markdown, no extra text):
 {{
   "components": [
-    {{"id": "root", "component": "design-workspace", "isThirdOpen": false, "children": {{"left": "card-grid", "right": "design-console-chat"}}}},
+    {{"id": "root", "component": "design-workspace", "isThirdOpen": false, "children": ["card-grid", "design-console-chat"], "placements": {{"left": "card-grid", "right": "design-console-chat"}}}},
     {{"id": "card-grid", "component": "ConsoleCardGrid", "items": {{"path": "/cards"}}}},
-    {{"id": "design-console-chat", "component": "chat-panel", "tracePrompt": false, "allowedTabs": "{DESIGN_CONSOLE_TABS}", "conversationId": {{"path": "/console/conversation_id"}}, "conversations": {{"path": "/console/conversations"}}, "sessionId": {{"path": "/console/session_id"}}, "children": {{"view": "repair-view"}}}},
+    {{"id": "design-console-chat", "component": "chat-panel", "tracePrompt": false, "allowedTabs": "{DESIGN_CONSOLE_TABS}", "conversationId": {{"path": "/console/conversation_id"}}, "conversations": {{"path": "/console/conversations"}}, "sessionId": {{"path": "/console/session_id"}}, "children": ["repair-view"], "placements": {{"view": "repair-view"}}}},
     {{"id": "repair-view", "component": "chat-repair-actions", "findings": {{"path": "/findings"}}, "stages": {{"path": "/repairs/stages"}}}}
   ],
   "ai_message": "Your message"
@@ -1026,8 +1033,13 @@ Output ONLY this exact JSON (no markdown, no extra text):
             ),
         )
 
-    # THE GATE IS DESIGN'S OWN — the whole tree, after every component is in it.
-    validate_a2ui_components(components)
+    # THE ROOM'S OWN SHAPE, BEFORE ANYTHING JUDGES IT — the whole tree, after every component is
+    # in it. An answer that still names its regions in the older `children` object is converted
+    # to the standard child array plus the catalogue's declared `placements` map.
+    components = normalize_a2ui_placements(components, a2ui_catalog_for("surface-design"))
+    # THE GATE IS DESIGN'S OWN — the room's catalogue, not the Composer's. The announcement below
+    # names the same catalogue, so the surface and the gate cannot describe two different worlds.
+    validate_a2ui_components(components, surface="surface-design", blocking=True)
 
     elapsed_ms = int((time.perf_counter() - started) * 1000)
     print(f"[PERF TRACE] POST /api/design/console | total={elapsed_ms}ms")
@@ -1037,7 +1049,7 @@ Output ONLY this exact JSON (no markdown, no extra text):
             "version": "v0.9.1",
             "createSurface": {
                 "surfaceId": "main",
-                "catalogId": A2UI_CATALOG_ID,
+                "catalogId": a2ui_catalog_id("surface-design"),
             },
         },
         {

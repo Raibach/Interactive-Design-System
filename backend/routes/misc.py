@@ -11,6 +11,7 @@ import services as state
 from deps import (
     DEMO_MODE,
     REASONING_TRACE_PATH,
+    a2ui_catalog_for,
     a2ui_catalog_surfaces,
     a2ui_registry_for,
     get_user_id_from_header,
@@ -517,6 +518,27 @@ async def api_catalog_registry(system: str):
             detail=f"no catalogue partition named '{system}'",
         )
     return {"system": system, "components": a2ui_registry_for(system)}
+
+
+@router.get("/api/catalog/{system}")
+async def api_catalog_document(system: str):
+    """A partition's CATALOGUE — the JSON the browser reads its final-tree allowlist from.
+
+    THE BUILT APP CANNOT READ A SOURCE PATH. The seat used to fetch
+    `/src/components/A2UI/catalogs/<system>/catalog.json`, which only the dev server serves; on
+    the tunnel's static server that address answered the page document, and the room failed with
+    `Unexpected token '<', "<!doctype " ... is not valid JSON`. The file lives on this server, and
+    one door serves it to both the dev server and the build (both route `/api` here).
+    """
+    if system not in a2ui_catalog_surfaces():
+        raise HTTPException(
+            status_code=404,
+            detail=f"no catalogue partition named '{system}'",
+        )
+    try:
+        return a2ui_catalog_for(None, system)
+    except ValueError as refusal:
+        raise HTTPException(status_code=503, detail=str(refusal))
 
 
 @router.get("/api/catalog/audit/{catalog}")

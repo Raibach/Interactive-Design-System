@@ -24,34 +24,18 @@ def _row(row: Any, names: tuple[str, ...]) -> dict[str, Any]:
     return row if isinstance(row, dict) else dict(zip(names, row))
 
 
-@router.post("/api/design/acceptance")
-def record_acceptance(
-    body: AcceptanceRequest,
-    x_user_id: str | None = Header(None, alias="X-User-ID"),
-) -> dict[str, Any]:
-    """Record one acceptance. Idempotent by session, layer name, and event."""
-    uid = get_user_id_from_header(x_user_id)
-    session_id = str(body.sessionId or "").strip()
-    layer = str(body.layer or "").strip()
-    if not session_id:
-        raise HTTPException(
-            status_code=422,
-            detail="An acceptance needs the session it belongs to.",
-        )
-    if not layer:
-        raise HTTPException(
-            status_code=422,
-            detail="An acceptance needs the layer name of the design that was accepted.",
-        )
-    api = state.prompt_sessions_api
-    if not api:
-        raise HTTPException(status_code=503, detail="Database not available.")
-    if not api.get_session(session_id, uid):
-        raise HTTPException(
-            status_code=404,
-            detail="No design session exists for this person.",
-        )
+class AcceptanceNotRecorded(RuntimeError):
+    """The receipt could not be read back, so it is not a fact and must not be reported as one."""
 
+
+def record_accepted(api: Any, session_id: str, layer: str, uid: str) -> dict[str, Any]:
+    """Record one acceptance. Idempotent by session, layer name, and event.
+
+    THE ACT IS THE RECEIPT'S OWN CLAIM. A caller must write the catalogue BEFORE it calls this,
+    because the row says the layer was accepted into it. This function writes the receipt and
+    nothing else — there is one definition of the receipt, and the approval and this route both
+    reach it here rather than keeping two copies of the same INSERT.
+    """
     detail = json.dumps({"layer": layer, "by": uid})
     with api.get_db() as conn:
         cur = conn.cursor()
@@ -85,9 +69,8 @@ def record_acceptance(
         conn.commit()
 
     if not row:
-        raise HTTPException(
-            status_code=409,
-            detail="The acceptance could not be recorded or read back.",
+        raise AcceptanceNotRecorded(
+            "The acceptance could not be recorded or read back."
         )
     accepted = _row(row, ("id", "at"))
     return {
@@ -97,3 +80,36 @@ def record_acceptance(
         "at": str(accepted.get("at") or ""),
         "created": bool(created),
     }
+
+
+@router.post("/api/design/acceptance")
+def record_acceptance(
+    body: AcceptanceRequest,
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
+) -> dict[str, Any]:
+    """Record one acceptance. Idempotent by session, layer name, and event."""
+    uid = get_user_id_from_header(x_user_id)
+    session_id = str(body.sessionId or "").strip()
+    layer = str(body.layer or "").strip()
+    if not session_id:
+        raise HTTPException(
+            status_code=422,
+            detail="An acceptance needs the session it belongs to.",
+        )
+    if not layer:
+        raise HTTPException(
+            status_code=422,
+            detail="An acceptance needs the layer name of the design that was accepted.",
+        )
+    api = state.prompt_sessions_api
+    if not api:
+        raise HTTPException(status_code=503, detail="Database not available.")
+    if not api.get_session(session_id, uid):
+        raise HTTPException(
+            status_code=404,
+            detail="No design session exists for this person.",
+        )
+    try:
+        return record_accepted(api, session_id, layer, uid)
+    except AcceptanceNotRecorded as refusal:
+        raise HTTPException(status_code=409, detail=str(refusal))
