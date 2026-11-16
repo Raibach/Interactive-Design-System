@@ -40,7 +40,7 @@ import { systemTagFor } from '@/shared/a2uiRegistries';
 // ── the payload shape ───────────────────────────────────────────────────────
 
 /** Keys that are structure, not props. Everything else is passed through. */
-const STRUCTURAL = new Set(['id', 'component', 'children', 'props']);
+const STRUCTURAL = new Set(['id', 'component', 'children', 'props', 'placements']);
 
 export interface A2UIComponent {
   id: string;
@@ -53,6 +53,13 @@ export interface A2UIComponent {
    * LIST of ids (the panel's one content hole holds both views). See childRefs().
    */
   children?: string[] | Record<string, string | string[]>;
+  /**
+   * THE REGION EACH CHILD STANDS IN, when `children` is the standard array. The catalogue
+   * declares the region names a component draws; this map says which child stands in each.
+   * A child the map does not name is reported, because a named-region element has no default
+   * region and would draw it nowhere. See placementFor().
+   */
+  placements?: Record<string, string>;
   /** Literal props, siblings of `id` — NOT a nested `props` object. */
   [prop: string]: unknown;
 }
@@ -85,6 +92,14 @@ export interface A2UIComponent {
  * Anything else contributes no children rather than throwing: a malformed
  * `children` is a bad payload, and it is reported by the per-entry validation,
  * not by a crash that takes the surface down.
+ *
+ * THE DECLARED FORM. A payload may also keep `children` as the standard's ARRAY and
+ * say where each child stands through `placements` — `{"left": "card-grid"}`. The
+ * catalogue declares the region names a component draws, and the design room's
+ * door sends this form: the array is the standard's list, and the named regions
+ * are a declared property of the component instead of a second shape for the
+ * reserved key. Both forms are drawn; the object form remains for the rooms that
+ * already speak it.
  */
 export function childRefs(comp: A2UIComponent): Array<{ id: string; slot: string | null }> {
   const raw = comp.children;
@@ -105,6 +120,24 @@ export function childRefs(comp: A2UIComponent): Array<{ id: string; slot: string
     return out;
   }
   return [];
+}
+
+/**
+ * The region a child stands in, from the payload's `placements` map.
+ *
+ * `null` means the map did not name this child. The caller draws it in the default region; a
+ * named-region element has none, so `_validate` reports the unplaced child rather than letting it
+ * stand in the DOM unprojected and invisible.
+ */
+function placementFor(
+  placements: Record<string, unknown> | null,
+  childId: string,
+): string | null {
+  if (!placements) return null;
+  for (const [region, id] of Object.entries(placements)) {
+    if (id === childId) return region;
+  }
+  return null;
 }
 
 export interface RenderError {
@@ -516,7 +549,24 @@ export class A2UIRenderer extends LitElement {
         + ` the element itself does not exist yet.`,
       );
     }
+    const placements = comp.placements
+      && typeof comp.placements === 'object'
+      && !Array.isArray(comp.placements)
+      ? (comp.placements as Record<string, unknown>)
+      : null;
+    const placed = placements
+      ? new Set(Object.values(placements).filter((value): value is string => typeof value === 'string'))
+      : null;
     for (const { id: childId } of childRefs(comp)) {
+      if (placed && !placed.has(childId)) {
+        this._report(
+          childId,
+          byId.get(childId)?.component ?? '?',
+          `Child "${childId}" is listed in "children" but no "placements" region names it. `
+          + `This element draws named regions and has no default one, so the child would stand `
+          + `in the DOM unprojected and invisible.`,
+        );
+      }
       this._validate(childId, byId, [...path, id], depth + 1);
     }
   }
@@ -555,10 +605,20 @@ export class A2UIRenderer extends LitElement {
       </div>`;
     }
 
+    const placements = comp.placements
+      && typeof comp.placements === 'object'
+      && !Array.isArray(comp.placements)
+      ? (comp.placements as Record<string, unknown>)
+      : null;
     const children = childRefs(comp).map(({ id: childId, slot: childSlot }) => {
       const child = byId.get(childId);
       if (!child || path.includes(childId)) return nothing; // already reported by _validate
-      return this._build(child, byId, [...path, comp.id], childSlot);
+      return this._build(
+        child,
+        byId,
+        [...path, comp.id],
+        childSlot ?? placementFor(placements, childId),
+      );
     });
 
     const assign = (el: Element | undefined) => {

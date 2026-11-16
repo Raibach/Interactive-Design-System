@@ -85,8 +85,10 @@ export async function readSurface(): Promise<SurfaceLoad> {
 
   /* THE FINAL TREE'S OWN SCHEMA. The server validates the door's answer; the browser composes
      the tab's rows afterwards, so the same catalogue is read here and the composition is checked
-     against it before anything reaches the renderer. */
-  const catalogRes = await fetch('/src/components/A2UI/catalogs/surface-design/catalog.json');
+     against it before anything reaches the renderer.
+     THE SERVER'S DOOR, NOT A SOURCE PATH: `/src/...` exists only on the dev server, so the built
+     tunnel served its page document there and the room failed with "Unexpected token '<'". */
+  const catalogRes = await fetch(`/api/catalog/${encodeURIComponent(SURFACE_SYSTEM)}`);
   if (!catalogRes.ok) {
     throw new Error(
       `the surface catalogue could not be read (HTTP ${catalogRes.status}); nothing was drawn.`,
@@ -94,6 +96,26 @@ export async function readSurface(): Promise<SurfaceLoad> {
   }
   const catalog = await catalogRes.json() as { components?: Record<string, unknown> };
   const allowed = new Set(Object.keys(catalog.components ?? {}));
+
+  /*
+   * AND THE INGESTION LIST, WHICH IS NOT THE ASSEMBLY CATALOGUE. The room's catalogue above is the
+   * assembly truth: its names come from the Lit catalogue, and Figma feeds that catalogue through
+   * the approval gate. The prompt-composer file below is the INGESTION partition the Tools tab's
+   * tree lists; a selected row can be named in the preview, so its name is admitted for that one
+   * preview. It is a bridge, not a second assembly authority: the preview's selected name is the
+   * only reason these names are here, and the cleaner end state is the preview drawing by the
+   * element's Lit tag. A file that cannot be read is stated, not skipped, because the tools tab's
+   * own names would then be refused.
+   */
+  const toolsRes = await fetch('/api/catalog/prompt-composer');
+  if (!toolsRes.ok) {
+    throw new Error(
+      `the tools catalogue could not be read (HTTP ${toolsRes.status}); the tools tab's names `
+      + `cannot be admitted, so nothing was drawn.`,
+    );
+  }
+  const toolsCatalog = await toolsRes.json() as { components?: Record<string, unknown> };
+  for (const name of Object.keys(toolsCatalog.components ?? {})) allowed.add(name);
 
   return {
     surfaceId,

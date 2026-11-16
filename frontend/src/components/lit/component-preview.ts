@@ -1233,6 +1233,14 @@ export class ComponentPreview extends LitElement {
                 <code>${p.tag}</code>. Approving now replaces that component — its file, its Figma
                 map entry, its allowlist entry and its catalogue entry. Nothing else is touched.
               </p>
+              ${p.live
+                ? html`<p class="rwbody">
+                    <strong>${p.layerName || p.name || p.tag}</strong> is live: its layer name is
+                    listed in the application's component tree, so it is currently being served.
+                    Replacing it changes what the live system shows. A live element cannot be
+                    removed; it can only be replaced, as this approval does.
+                  </p>`
+                : nothing}
               ${(p.patterns ?? []).filter(
                 (entry) => entry.replaces && this._patternChecked.has(String(entry.tag ?? '')),
               ).length

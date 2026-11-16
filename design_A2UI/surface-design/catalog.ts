@@ -57,6 +57,7 @@ const component = (
   description: string,
   properties: Record<string, unknown>,
   required: string[] = [],
+  placements: string[] = [],
 ) => ({
   type: 'object',
   allOf: [
@@ -65,7 +66,32 @@ const component = (
     {
       type: 'object',
       description,
-      properties: { component: { const: name }, ...properties },
+      properties: {
+        component: { const: name },
+        /*
+         * THE STANDARD'S CHILD LIST, AND THE NAMED REGIONS BESIDE IT. `children` is the array of
+         * ids the standard defines. A frame needs to say which region each child stands in, and
+         * the standard's ChildList has no region names, so `placements` declares them: one
+         * ComponentId per region the element actually draws. A child in `children` that no
+         * placement names is reported by the renderer rather than drawn nowhere.
+         */
+        ...(placements.length
+          ? {
+              children: commonRef('ChildList'),
+              placements: {
+                type: 'object',
+                description:
+                  'The region each child stands in, keyed by the region name the element draws. '
+                  + 'Every id here must also appear in `children`.',
+                properties: Object.fromEntries(
+                  placements.map((region) => [region, commonRef('ComponentId')]),
+                ),
+                additionalProperties: false,
+              },
+            }
+          : {}),
+        ...properties,
+      },
       required: ['component', ...required],
     },
   ],
@@ -270,6 +296,7 @@ const ROOM_COMPONENTS = Object.fromEntries(
           Object.entries(entry.props).map(([prop, spec]) => [prop, binding(spec.type)]),
         ),
         required,
+        entry.placements ?? [],
       ),
     ];
   }),

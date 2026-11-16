@@ -805,6 +805,12 @@ export default function DesignSeatShell({ injected, toolsStanding, toolsVisit, o
         /* THE GATE'S TURNS, AS THE SURFACE STATES THEM. Undefined on other tabs: they bind
            nothing there, and an absent value stays absent. */
         turns: standing === APPROVALS_TAB ? (approvalTurns ?? []) : undefined,
+        /* THE TOOLS COLUMN'S TWO FACTS, ON THE DATA CHANNEL. The frame binds them; nothing reaches
+           into the drawn element to set them. */
+        leftLedgerText: standing === TOOLS_TAB && injected?.locked
+          ? (injected.ledger?.text ?? "This card is locked in the Supervisor Queue.")
+          : "",
+        leftAssembling: standing === TOOLS_TAB && !injected,
       },
     });
     try {
@@ -847,16 +853,12 @@ export default function DesignSeatShell({ injected, toolsStanding, toolsVisit, o
       }
 
       const workspace = seat.renderer.shadowRoot?.querySelector("design2-workspace") as
-        | (HTMLElement & { leftLedgerText?: string; leftAssembling?: boolean })
+        | HTMLElement
         | null;
       if (!workspace) {
         setError(`The ${standing} container never drew its layout.`);
         return;
       }
-      workspace.leftLedgerText = standing === TOOLS_TAB && injected?.locked
-        ? (injected.ledger?.text ?? "This card is locked in the Supervisor Queue.")
-        : "";
-      workspace.leftAssembling = standing === TOOLS_TAB && !injected;
 
       if (!chatEl) {
         setError(

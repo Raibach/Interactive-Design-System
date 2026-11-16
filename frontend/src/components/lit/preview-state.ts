@@ -8,6 +8,17 @@ export interface PreviewState {
   tag?: string;
   /** The human name — the Figma layer it was drawn from. */
   name?: string;
+  /**
+   * THE LAYER NAME THE SYSTEM KNOWS THIS ELEMENT BY. Identity is the layer name, not the tag:
+   * an approval replaces the element whose layer name matches, and the live check is a lookup of
+   * this name in the application's component tree.
+   */
+  layerName?: string;
+  /**
+   * TRUE WHEN THE APPLICATION'S COMPONENT TREE LISTS THIS ELEMENT'S LAYER NAME. A live element is
+   * being served; it cannot be removed, and replacing it changes what the live system shows.
+   */
+  live?: boolean;
   /** The Figma node behind it. */
   nodeId?: string;
   /** True when the catalogue already holds this tag, so approving replaces rather than adds. */

@@ -2,8 +2,12 @@
  * cardLifecycle — THE CARD'S LIFECYCLE, IN THE SAME WORDS THE SERVER USES.
  *
  * The server's `card_lifecycle.CardState` is the one source. This file is the client's copy of
- * the four names so a surface never compares a label or a colour to decide a lock. A card in
- * `Pending_Approval` or `Queued_For_Share` is read-only to its owner.
+ * the four names so a surface never compares a label or a colour to decide a lock.
+ *
+ * THERE IS NO LOCK ON A CARD (owner, 2026-11-16): *"There's no fucking lock, there's never a
+ * fucking lock on a card."* Pending is the default a saved Figma card wears, and it is not a
+ * refusal: the card opens, its canvas draws, and it can be re-opened, re-ingested, edited and
+ * closed. The function stays so every caller keeps one answer, and the answer is false.
  */
 export enum CardLifecycleState {
   Open = "Open",
@@ -12,17 +16,10 @@ export enum CardLifecycleState {
   QueuedForShare = "Queued_For_Share",
 }
 
-export const LOCKED_CARD_STATES: readonly CardLifecycleState[] = [
-  CardLifecycleState.PendingApproval,
-  CardLifecycleState.QueuedForShare,
-];
+export const LOCKED_CARD_STATES: readonly CardLifecycleState[] = [];
 
-export function isCardLocked(state: unknown): boolean {
-  const value = String(state ?? "");
-  return (
-    value === CardLifecycleState.PendingApproval ||
-    value === CardLifecycleState.QueuedForShare
-  );
+export function isCardLocked(_state: unknown, _routing?: unknown): boolean {
+  return false;
 }
 
 /** The refusal the workspace panel states instead of drawing a locked card's canvas. */

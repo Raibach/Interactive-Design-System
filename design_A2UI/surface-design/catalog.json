@@ -299,6 +299,19 @@
             "component": {
               "const": "chat-panel"
             },
+            "children": {
+              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList"
+            },
+            "placements": {
+              "type": "object",
+              "description": "The region each child stands in, keyed by the region name the element draws. Every id here must also appear in `children`.",
+              "properties": {
+                "view": {
+                  "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentId"
+                }
+              },
+              "additionalProperties": false
+            },
             "sessionId": {
               "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString"
             },
@@ -330,7 +343,7 @@
               "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString"
             },
             "graceLiveContext": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString"
+              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicBoolean"
             },
             "messages": {
               "oneOf": [
@@ -518,7 +531,7 @@
               "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString"
             },
             "graceLiveContext": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString"
+              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicBoolean"
             },
             "messages": {
               "oneOf": [
@@ -1326,7 +1339,7 @@
               "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString"
             },
             "graceLiveContext": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString"
+              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicBoolean"
             },
             "messages": {
               "oneOf": [
@@ -1514,7 +1527,7 @@
               "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString"
             },
             "graceLiveContext": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString"
+              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicBoolean"
             },
             "messages": {
               "oneOf": [
@@ -1728,6 +1741,31 @@
             "component": {
               "const": "design-workspace"
             },
+            "children": {
+              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList"
+            },
+            "placements": {
+              "type": "object",
+              "description": "The region each child stands in, keyed by the region name the element draws. Every id here must also appear in `children`.",
+              "properties": {
+                "left-header": {
+                  "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentId"
+                },
+                "left": {
+                  "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentId"
+                },
+                "left-footer": {
+                  "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentId"
+                },
+                "middle": {
+                  "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentId"
+                },
+                "right": {
+                  "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentId"
+                }
+              },
+              "additionalProperties": false
+            },
             "isThirdOpen": {
               "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicBoolean"
             },
@@ -1738,6 +1776,12 @@
               "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicNumber"
             },
             "chatOverlaysContent": {
+              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicBoolean"
+            },
+            "leftLedgerText": {
+              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString"
+            },
+            "leftAssembling": {
               "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicBoolean"
             }
           },
@@ -1833,7 +1877,7 @@
         },
         {
           "type": "object",
-          "description": "THE LEFT COLUMN'S FOOT: the Save control, the next-session control and the host's own answer under them. It draws and dispatches; the seat that holds the session decides what saving means.",
+          "description": "THE LEFT COLUMN'S FOOT: the Save control, the next-session control, the selected component's Delete control and the host's own answer under them. It draws and dispatches; the seat that holds the session decides what saving and deleting mean.",
           "properties": {
             "component": {
               "const": "design-left-footer"
@@ -1846,6 +1890,109 @@
             },
             "hideNew": {
               "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicBoolean"
+            },
+            "selected": {
+              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString"
+            }
+          },
+          "required": [
+            "component"
+          ]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "design-middle-container": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "$ref": "#/$defs/CatalogComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "THE MIDDLE COLUMN: the composer's output header over the hole a run's preview is loaded into. It is drawn only when the tree places a child in its middle region.",
+          "properties": {
+            "component": {
+              "const": "design-middle-container"
+            },
+            "children": {
+              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList"
+            },
+            "placements": {
+              "type": "object",
+              "description": "The region each child stands in, keyed by the region name the element draws. Every id here must also appear in `children`.",
+              "properties": {
+                "middle": {
+                  "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentId"
+                }
+              },
+              "additionalProperties": false
+            },
+            "outputType": {
+              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString"
+            }
+          },
+          "required": [
+            "component"
+          ]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "component-preview": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "$ref": "#/$defs/CatalogComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "THE PREVIEW PANEL: what a run loaded, its facts and its two actions. It draws what the model hands it and dispatches the actions; it never writes to the catalogue.",
+          "properties": {
+            "component": {
+              "const": "component-preview"
+            },
+            "preview": {
+              "type": "object"
+            },
+            "busy": {
+              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicBoolean"
+            },
+            "message": {
+              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString"
+            }
+          },
+          "required": [
+            "component"
+          ]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "draft-preview": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "$ref": "#/$defs/CatalogComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "THE DRAFT DRAWING: a component the ingest produced, drawn from its own file rather than from a catalogue name.",
+          "properties": {
+            "component": {
+              "const": "draft-preview"
+            },
+            "draft": {
+              "type": "object"
             }
           },
           "required": [
@@ -2148,6 +2295,15 @@
         },
         {
           "$ref": "#/components/design-left-footer"
+        },
+        {
+          "$ref": "#/components/design-middle-container"
+        },
+        {
+          "$ref": "#/components/component-preview"
+        },
+        {
+          "$ref": "#/components/draft-preview"
         },
         {
           "$ref": "#/components/figma-ingest-form"

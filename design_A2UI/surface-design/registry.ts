@@ -25,6 +25,13 @@ export interface SurfaceRegistryEntry {
   description: string;
   props: Record<string, { type: 'string' | 'number' | 'boolean' | 'object' | 'array'; optional?: boolean }>;
   events: string[];
+  /**
+   * THE NAMED REGIONS THIS ELEMENT DRAWS, in the order its own shadow tree declares them. A
+   * payload names a child in `children` (the standard's array) and says which region it stands in
+   * through the `placements` map: `{"left": "card-grid"}`. The catalogue declares both, so a child
+   * with no region is a refusal rather than a node that draws nowhere.
+   */
+  placements?: string[];
 }
 
 export const DESIGN_ROOM_REGISTRY: Record<string, SurfaceRegistryEntry> = {
@@ -39,8 +46,11 @@ export const DESIGN_ROOM_REGISTRY: Record<string, SurfaceRegistryEntry> = {
       leftCollapsed: { type: 'boolean', optional: true },
       chatLoadWidth: { type: 'number', optional: true },
       chatOverlaysContent: { type: 'boolean', optional: true },
+      leftLedgerText: { type: 'string', optional: true },
+      leftAssembling: { type: 'boolean', optional: true },
     },
     events: ['resize-start', 'resize', 'resize-end', 'third-column-toggle'],
+    placements: ['left-header', 'left', 'left-footer', 'middle', 'right'],
   },
   /*
    * THE CONSOLE IS THE DEFAULT CONTENT of this surface's middle... it is the left column's
@@ -85,15 +95,65 @@ export const DESIGN_ROOM_REGISTRY: Record<string, SurfaceRegistryEntry> = {
     tag: 'design2-left-footer',
     surface: 'design',
     description:
-      'THE LEFT COLUMN\'S FOOT: the Save control, the next-session control and the host\'s own '
-      + 'answer under them. It draws and dispatches; the seat that holds the session decides '
-      + 'what saving means.',
+      'THE LEFT COLUMN\'S FOOT: the Save control, the next-session control, the selected '
+      + 'component\'s Delete control and the host\'s own answer under them. It draws and '
+      + 'dispatches; the seat that holds the session decides what saving and deleting mean.',
     props: {
       result: { type: 'string', optional: true },
       busy: { type: 'boolean', optional: true },
       hideNew: { type: 'boolean', optional: true },
+      selected: { type: 'string', optional: true },
     },
-    events: ['design-left-save', 'design-left-new'],
+    events: ['design-left-save', 'design-left-new', 'component-delete'],
+  },
+  /*
+   * THE TOOLS COLUMN'S THREE NAMES. The tools run composes them into the room's tree, and their
+   * elements live in the app's own component folder (`frontend/src/components/lit/`), registered
+   * by the app's entry — they are the runtime layer for these names. They are declared here so the
+   * catalogue the door validates and the table the renderer resolves state one fact: before this,
+   * the three names existed only in a catalogue file the exporter would have erased.
+   */
+  'design-middle-container': {
+    tag: 'design-middle-container',
+    surface: 'design',
+    description:
+      'THE MIDDLE COLUMN: the composer\'s output header over the hole a run\'s preview is loaded '
+      + 'into. It is drawn only when the tree places a child in its middle region.',
+    props: {
+      outputType: { type: 'string', optional: true },
+    },
+    events: [],
+    placements: ['middle'],
+  },
+  'component-preview': {
+    tag: 'component-preview',
+    surface: 'design',
+    description:
+      'THE PREVIEW PANEL: what a run loaded, its facts and its two actions. It draws what the '
+      + 'model hands it and dispatches the actions; it never writes to the catalogue.',
+    props: {
+      preview: { type: 'object', optional: true },
+      busy: { type: 'boolean', optional: true },
+      message: { type: 'string', optional: true },
+    },
+    events: [
+      'preview-approve',
+      'preview-discard',
+      'preview-remove',
+      'preview-patterns',
+      'preview-collision-answer',
+    ],
+  },
+  'draft-preview': {
+    tag: 'draft-preview',
+    surface: 'design',
+    description:
+      'THE DRAFT DRAWING: a component the ingest produced, drawn from its own file rather than '
+      + 'from a catalogue name.',
+    props: {
+      draft: { type: 'object', optional: true },
+    },
+    events: [],
   },
   /*
    * THE TOOLS TAB'S OWN DRAWINGS. The tools door emits these two names (`routes/tools_surface.py`),

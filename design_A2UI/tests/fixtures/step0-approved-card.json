@@ -1,0 +1,122 @@
+{
+  "whatThisFileIs": "THE STEP 0 FIXTURE, BYPASSING THE REGISTRY. An approved card, and the raw JSON Patch a catalogue writer must apply to prompt-composer/catalog.json. No registry entry, no generator, no export step: Option B of the blocker decision. Provenance: CATALOG WRITE CONTRACT section 4.1 (payload) and the revised section 1.4 (entry), corrected for Fact 4 (the approval surface resolves against prompt-composer's catalogId) and for structural prop typing (ComponentId, ChildList).",
+  "whyRaw": "The target catalogue is hand-maintained and has no registry source, so a registry entry cannot reach it. Writing one here and exporting would land in a file the approval surface does not resolve through.",
+  "target": {
+    "file": "frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json",
+    "declaredCatalogId": "https://raibach.net/a2ui/catalogs/prompt-composer/v0_9_1/catalog.json",
+    "generator": null,
+    "compiledIntoBuild": true
+  },
+  "card": {
+    "session_id": "b0e4a6a2-1d47-4b1e-9f4e-3c3c2b7a9a10",
+    "element_name": "f-40001299-0101",
+    "title": "Prompt input section - agent role",
+    "description": "A prompt input section defining the agent role for a prompt platform: the role the agent adopts and the seat that selects it.",
+    "props": {
+      "role": { "kind": "text" },
+      "selected": { "kind": "text" },
+      "children": { "kind": "children" }
+    },
+    "required": ["component", "role", "children"],
+    "x_a11y": {
+      "declarations": {
+        "role": { "value": "combobox", "source": "figma-annotation", "nodeId": "40001299:0101" },
+        "label": { "value": "Agent role", "source": "figma-text-layer" },
+        "keyboard": { "value": "Arrow keys change the selection; Enter confirms", "source": "figma-annotation" },
+        "announcement": { "value": "Agent role, combobox, {value}", "source": "figma-annotation" }
+      }
+    }
+  },
+  "patch": [
+    {
+      "op": "add",
+      "path": "/components/f-40001299-0101",
+      "value": {
+        "type": "object",
+        "allOf": [
+          { "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon" },
+          { "$ref": "#/$defs/CatalogComponentCommon" },
+          {
+            "type": "object",
+            "description": "A prompt input section defining the agent role for a prompt platform: the role the agent adopts and the seat that selects it.",
+            "properties": {
+              "component": { "const": "f-40001299-0101" },
+              "role": { "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString" },
+              "selected": { "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString" },
+              "children": { "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList" }
+            },
+            "required": ["component", "role", "children"]
+          }
+        ],
+        "unevaluatedProperties": false,
+        "x-a11y": {
+          "declarations": {
+            "role": { "value": "combobox", "source": "figma-annotation", "nodeId": "40001299:0101" },
+            "label": { "value": "Agent role", "source": "figma-text-layer" },
+            "keyboard": { "value": "Arrow keys change the selection; Enter confirms", "source": "figma-annotation" },
+            "announcement": { "value": "Agent role, combobox, {value}", "source": "figma-annotation" }
+          }
+        }
+      }
+    },
+    {
+      "op": "add",
+      "path": "/$defs/anyComponent/oneOf/-",
+      "value": { "$ref": "#/components/f-40001299-0101" }
+    }
+  ],
+  "assertions": {
+    "name": {
+      "name": "f-40001299-0101",
+      "rule": "non-empty; no whitespace or control characters; already in the target catalogue or matching /^f-[0-9]+-[0-9]+$/",
+      "expected": "PASS",
+      "uax31": "NOT APPLICABLE - the published ComponentId declares no pattern, so no UAX #31 rule exists to assert"
+    },
+    "structuralTyping": {
+      "children": "must be $ref to common_types.json#/$defs/ChildList",
+      "componentRef": "a prop naming another component must be $ref to common_types.json#/$defs/ComponentId",
+      "rawStringForbidden": true
+    },
+    "instance": {
+      "valid": {
+        "id": "n1",
+        "component": "f-40001299-0101",
+        "role": "agent",
+        "selected": "seat-one",
+        "children": ["n2"]
+      },
+      "refusedUndeclaredProperty": {
+        "id": "n1",
+        "component": "f-40001299-0101",
+        "role": "agent",
+        "children": ["n2"],
+        "bogus": true
+      },
+      "refusedRawStringChildren": {
+        "id": "n1",
+        "component": "f-40001299-0101",
+        "role": "agent",
+        "children": "n2"
+      }
+    },
+    "resolution": [
+      {
+        "case": "matching catalogId",
+        "createSurfaceCatalogId": "https://raibach.net/a2ui/catalogs/prompt-composer/v0_9_1/catalog.json",
+        "entryPresentIn": "https://raibach.net/a2ui/catalogs/prompt-composer/v0_9_1/catalog.json",
+        "expected": "resolves"
+      },
+      {
+        "case": "mismatched catalogId - the seat's own",
+        "createSurfaceCatalogId": "https://raibach.net/a2ui/catalogs/prompt-composer/v0_9_1/catalog.json",
+        "entryPresentIn": "https://raibach.net/a2ui/catalogs/surface-design/v0_9_1/catalog.json",
+        "expected": "refused, and the refusal names the catalogId the surface declared"
+      }
+    ],
+    "functions": {
+      "case": "an approved card that exposes a callable function",
+      "expected": "refused with CATALOG_FUNCTION_VOCABULARY_ABSENT - the catalogue declares no functions block and the shared types' anyFunction reference returns HTTP 404"
+    }
+  },
+  "notRun": "Step 0 has not been run against this fixture. Nothing here has been injected into any catalogue."
+}

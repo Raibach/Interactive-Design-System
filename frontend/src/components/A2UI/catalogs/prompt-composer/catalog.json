@@ -2271,7 +2271,7 @@
           "type": "string"
         },
         "title": {
-          "$ref": "#/$defs/DynamicString"
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString"
         },
         "version": {
           "type": "number"
@@ -2819,6 +2819,54 @@
         },
         {
           "$ref": "#/components/f-40001177-2477"
+        },
+        {
+          "$ref": "#/components/EvalFeed"
+        },
+        {
+          "$ref": "#/components/eval-feed"
+        },
+        {
+          "$ref": "#/components/trace-context-header"
+        },
+        {
+          "$ref": "#/components/trace-tree"
+        },
+        {
+          "$ref": "#/components/trace-detail"
+        },
+        {
+          "$ref": "#/components/composer-workspace"
+        },
+        {
+          "$ref": "#/components/composer-chat-panel"
+        },
+        {
+          "$ref": "#/components/console-chat-panel"
+        },
+        {
+          "$ref": "#/components/draft-canvas"
+        },
+        {
+          "$ref": "#/components/artifact-canvas"
+        },
+        {
+          "$ref": "#/components/governance-usage-view"
+        },
+        {
+          "$ref": "#/components/design-left-footer"
+        },
+        {
+          "$ref": "#/components/design-left-panel"
+        },
+        {
+          "$ref": "#/components/design-middle-container"
+        },
+        {
+          "$ref": "#/components/design-workspace"
+        },
+        {
+          "$ref": "#/components/tools-workspace"
         }
       ],
       "discriminator": {

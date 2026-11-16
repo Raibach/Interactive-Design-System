@@ -25,6 +25,10 @@ export const SURFACE_PATHS = {
   railCollapsed: '/surface/rail/collapsed',
   thirdOpen: '/surface/third_open',
   heights: '/surface/heights',
+  /** The left column's read-only ledger — a locked Tools card's state, said in the column. */
+  leftLedgerText: '/surface/left_ledger_text',
+  /** The left column's wait — the Tools assembly has not reported yet. */
+  leftAssembling: '/surface/left_assembling',
 } as const;
 
 /** The surface's own state — the part of the model this seat writes. */
@@ -51,6 +55,10 @@ export type SurfaceState = {
   thirdOpen: boolean;
   /** The five boxes' heights, by box name, as the person dragged them. */
   heights: Record<string, number>;
+  /** The left column's read-only ledger — a locked Tools card's state, said in the column. */
+  leftLedgerText: string;
+  /** The left column's wait — the Tools assembly has not reported yet. */
+  leftAssembling: boolean;
 };
 
 const EMPTY_SURFACE: SurfaceState = {
@@ -62,6 +70,8 @@ const EMPTY_SURFACE: SurfaceState = {
   railCollapsed: false,
   thirdOpen: true,
   heights: {},
+  leftLedgerText: '',
+  leftAssembling: false,
 };
 
 /** The surface block of a model, with every fact present — an absent block reads as the empty state. */
@@ -89,6 +99,8 @@ export function readSurface(model: Record<string, unknown> | null | undefined): 
     railCollapsed: block.rail_collapsed === true,
     thirdOpen: block.third_open !== false,
     heights: { ...heights },
+    leftLedgerText: text(block.left_ledger_text) || EMPTY_SURFACE.leftLedgerText,
+    leftAssembling: block.left_assembling === true,
   };
 }
 
@@ -123,6 +135,8 @@ export function surfaceDataModel(
     rail: { ...rail, collapsed: next.railCollapsed },
     third_open: next.thirdOpen,
     heights: { ...next.heights },
+    left_ledger_text: next.leftLedgerText,
+    left_assembling: next.leftAssembling,
   };
   return { ...base, surface };
 }

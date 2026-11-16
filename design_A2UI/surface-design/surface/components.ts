@@ -17,6 +17,11 @@
  * array says nothing; `surfaceKey` gives each SOURCE object (the console's tree, the Tools report)
  * a stable number and combines it with the facts that change the tree. The shell assigns a tree
  * only when the key changed; the data model is assigned on every draw.
+ *
+ * A TAB PRESS SENDS THE TAB'S ROWS. The key includes the tab because the tab's furniture differs;
+ * the frame and its regions keep their ids and placements, so Lit reuses the frame element. The
+ * standard has no vocabulary for selecting a subtree by a value, so the structure message is the
+ * honest way to change the rows; A2UI.md states this amended rule.
  */
 import { posthogToolUrl } from '@/shared/appConfig';
 import { toolsSessionId } from '@design2/tools/session';
@@ -27,7 +32,7 @@ import './left-container/footer';
 
 import type { Tree } from './load';
 import type { Content } from '@design2/tools/content';
-import { surfaceDataModel, type SurfaceState } from './data';
+import { surfaceDataModel, SURFACE_PATHS, type SurfaceState } from './data';
 
 /** The frame's slots, as the door names them. The frame draws a slot when the tree fills it. */
 export const SURFACE_FRAME_SLOTS = ['left-header', 'left', 'left-footer', 'middle', 'right'] as const;
@@ -197,8 +202,55 @@ export function buildSurfaceTree(input: SurfaceTreeInput): SurfaceTree {
   const components = source.slice();
   const rootIndex = components.findIndex((entry) => String(entry?.id) === 'root');
   const rootSource = rootIndex >= 0 ? components[rootIndex] : undefined;
-  const children: Record<string, any> = {
-    ...((rootSource?.children as Record<string, any> | undefined) ?? {}),
+
+  /*
+   * THE ROOT'S CHILDREN AND THE REGIONS THEY STAND IN. The door sends the standard array plus a
+   * `placements` map; an older answer may still send `children` as an object keyed by region, so
+   * both are read here into one pair and written back only in the declared form. The array is the
+   * standard's ChildList; the map names the region each id stands in, and the catalogue declares
+   * the regions the frame draws.
+   */
+  const childIds = new Set<string>(
+    Array.isArray(rootSource?.children)
+      ? (rootSource.children as unknown[]).filter((id): id is string => typeof id === 'string')
+      : [],
+  );
+  const placements: Record<string, any> = {
+    ...((rootSource?.placements as Record<string, any> | undefined) ?? {}),
+  };
+  if (rootSource?.children && !Array.isArray(rootSource.children)) {
+    for (const [region, value] of Object.entries(rootSource.children as Record<string, unknown>)) {
+      placements[region] = value;
+      if (typeof value === 'string') {
+        childIds.add(value);
+      } else if (Array.isArray(value)) {
+        // A region holding a list is the older form's one hole with several children. The ids are
+        // kept in `children`; the renderer reports them if the element's regions hold one child.
+        for (const id of value) if (typeof id === 'string') childIds.add(id);
+      }
+    }
+  }
+  /*
+   * A REGION REPLACED TAKES ITS OLD CHILD OUT OF THE LIST. The door's array names every child the
+   * console drew; when a tab puts its own application in that region, the console's child is no
+   * longer placed anywhere and would otherwise stay in `children` as an unplaced node the renderer
+   * reports. The old object form dropped the key and the child with it; this keeps that rule.
+   */
+  const place = (region: string, id: string) => {
+    const previous = placements[region];
+    placements[region] = id;
+    childIds.add(id);
+    if (typeof previous === 'string' && previous !== id
+      && !Object.values(placements).includes(previous)) {
+      childIds.delete(previous);
+    }
+  };
+  const unplace = (region: string) => {
+    const previous = placements[region];
+    delete placements[region];
+    if (typeof previous === 'string' && !Object.values(placements).includes(previous)) {
+      childIds.delete(previous);
+    }
   };
 
   /* THE CHAT IS ONE NODE OF THE TREE. Its props are the door's bindings, with the session, the
@@ -210,7 +262,7 @@ export function buildSurfaceTree(input: SurfaceTreeInput): SurfaceTree {
   if (chatIndex >= 0) {
     chat = { ...(components[chatIndex] as Record<string, any>) };
     components[chatIndex] = chat;
-    children.right = String(chat.id);
+    place('right', String(chat.id));
     chat.component = isTools ? 'tools-chat' : (CHAT_NAME_BY_TAB[tab] ?? 'chat-panel');
     chat.sessionId = { path: '/surface/session_id' };
     chat.conversationId = { path: '/surface/conversation_id' };
@@ -249,14 +301,14 @@ export function buildSurfaceTree(input: SurfaceTreeInput): SurfaceTree {
   if (tab === 'ux') {
     const url = uxAppLanding();
     if (url) {
-      children.left = UX_FRAME_ID;
+      place('left', UX_FRAME_ID);
       components.push({
         id: UX_FRAME_ID,
         component: 'ux-app-frame',
         src: { path: '/ux/app_url' },
       });
     } else {
-      children.left = UX_ERROR_ID;
+      place('left', UX_ERROR_ID);
       components.push({
         id: UX_ERROR_ID,
         component: 'Text',
@@ -280,7 +332,7 @@ export function buildSurfaceTree(input: SurfaceTreeInput): SurfaceTree {
    */
   if (tab === 'approvals') {
     const gridIndex = components.findIndex(
-      (entry) => String(entry?.id) === String(children.left)
+      (entry) => String(entry?.id) === String(placements.left)
         || String(entry?.component ?? '') === 'ConsoleCardGrid',
     );
     if (gridIndex >= 0) {
@@ -290,39 +342,45 @@ export function buildSurfaceTree(input: SurfaceTreeInput): SurfaceTree {
     }
     /* THE CHAT DRAWS ITS OWN CONVERSATION. The door names a findings view for its view slot; on
        this tab the person asked for the conversation and nothing beside it. */
-    if (chat) delete chat.children;
+    if (chat) {
+      delete chat.children;
+      delete chat.placements;
+    }
   }
 
   /* THE TOOLS TAB'S OWN COLUMNS, AND NOT THE CONSOLE'S. */
   if (isTools) {
     if (injected?.leftId && !lockedTools) {
-      children.left = injected.leftId;
+      place('left', injected.leftId);
       for (const entry of injected.components ?? []) components.push(entry);
     } else {
-      delete children.left;
+      unplace('left');
     }
     if (injected?.middleId && !lockedTools) {
-      children.middle = injected.middleId;
+      place('middle', injected.middleId);
       for (const entry of injected.middleComponents ?? []) components.push(entry);
     } else {
-      delete children.middle;
+      unplace('middle');
     }
     if (injected && !lockedTools) {
-      children['left-footer'] = SURFACE_FOOT_ID;
+      place('left-footer', SURFACE_FOOT_ID);
       components.push({
         id: SURFACE_FOOT_ID,
         component: 'design-left-footer',
         busy: { path: '/session/saving' },
         result: { path: '/session/save_result' },
+        /* THE COMPONENT THE TREE HAS OPEN — the Delete control stands beside Save only while one
+           is selected (owner, 2026-11-16). The tree writes `design_selected` on every row press. */
+        selected: { path: '/session/design_selected' },
       });
     } else {
-      delete children['left-footer'];
+      unplace('left-footer');
     }
   }
 
   /* THE UX TAB'S FOOT IS THE SAME FURNITURE, WITHOUT THE NEXT-SESSION CONTROL. */
   if (tab === 'ux') {
-    children['left-footer'] = SURFACE_FOOT_ID;
+    place('left-footer', SURFACE_FOOT_ID);
     components.push({
       id: SURFACE_FOOT_ID,
       component: 'design-left-footer',
@@ -331,25 +389,29 @@ export function buildSurfaceTree(input: SurfaceTreeInput): SurfaceTree {
   }
 
   /*
-   * A SLOT NAMES A COMPONENT THE TREE CARRIES. The slots are composed here, in the browser, from
-   * the door's answer and the tab's own rows — so a slot that names nothing is this file's own
-   * error, and it used to reach the renderer as "No component with id … Referenced by root",
-   * which drew its error panel in place of the whole room. A slot with nothing behind it is
-   * empty, and an empty column is what that tab actually has.
+   * A REGION NAMES A COMPONENT THE TREE CARRIES. The array and its placements are composed here,
+   * in the browser, from the door's answer and the tab's own rows — so a region that names nothing
+   * is this file's own error, and it used to reach the renderer as "No component with id …
+   * Referenced by root", which drew its error panel in place of the whole room. A region with
+   * nothing behind it is empty, and an empty column is what that tab actually has.
    */
   const carried = new Set(components.map((entry) => String(entry?.id)));
-  for (const [slot, value] of Object.entries(children)) {
-    if (Array.isArray(value)) {
-      const kept = value.filter((id) => carried.has(String(id)));
-      if (kept.length) children[slot] = kept;
-      else delete children[slot];
-    } else if (!carried.has(String(value))) {
-      delete children[slot];
-    }
+  const rootChildren = [...childIds].filter((id) => carried.has(String(id)));
+  for (const [region, value] of Object.entries(placements)) {
+    if (typeof value === 'string' && !carried.has(value)) delete placements[region];
   }
 
   if (rootIndex >= 0 && rootSource) {
-    components[rootIndex] = { ...rootSource, children };
+    components[rootIndex] = {
+      ...rootSource,
+      children: rootChildren,
+      placements,
+      /* THE LEFT COLUMN'S TWO TOOLS FACTS ARE VALUES, NOT HOST WRITES. The shell used to reach
+         into the drawn frame and set these two properties; they now travel on the channel every
+         other fact uses, and the frame's own binding carries them to the element. */
+      leftLedgerText: { path: SURFACE_PATHS.leftLedgerText },
+      leftAssembling: { path: SURFACE_PATHS.leftAssembling },
+    };
   }
   const unique = components.filter(
     (entry, index, all) =>
@@ -359,6 +421,6 @@ export function buildSurfaceTree(input: SurfaceTreeInput): SurfaceTree {
   return {
     components: unique,
     dataModel,
-    key: surfaceKey(input, tab, children.left, children.middle),
+    key: surfaceKey(input, tab, placements.left, placements.middle),
   };
 }

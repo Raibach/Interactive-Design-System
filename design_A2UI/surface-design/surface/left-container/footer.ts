@@ -1,5 +1,5 @@
 /**
- * <design2-left-footer> — THE DESIGN ROOM'S COLUMN FOOTER, AND ITS ONE ACTION: SAVE.
+ * <design2-left-footer> — THE DESIGN ROOM'S COLUMN FOOTER: SAVE, AND THE SELECTED COMPONENT'S DELETE.
  *
  * The Composer bar's plate — the same height, fill, rounded corner and inner shadow, read from
  * `control-bar.ts` — carrying ONE control in the Composer's RUN treatment (`control-bar.ts`,
@@ -7,14 +7,19 @@
  * 43-pixel height, 142-pixel width and drop shadow. This room has no run, so the act at the bottom
  * of this column is saving the package (owner, 2026-10-31).
  *
- * APPLY CARBON STOOD HERE AND IS GONE (owner, 2026-10-31). A designer does not finish naming and
- * reading one design by applying a whole system to the room. The plate stays exactly as it is:
- * same height, fill, corner, inner shadow and position — only the control on it changes.
+ * THE SECOND CONTROL IS THE SELECTED COMPONENT'S DELETE (owner, 2026-11-16): *"add a delete button
+ * to the bottom next to save whenever one of the components is selected so the user can try to
+ * delete it if it's not locked and the user should be able to remove it with double
+ * confirmation."* It appears only while a catalogue component is selected, it arms on the first
+ * press and deletes on the second, and it never decides whether the component may be removed:
+ * the server's liveness guard refuses a component that is being served, with the files that name
+ * it, and that answer is drawn in `result` beside the button.
  *
  * IT DRAWS AND DISPATCHES, AND NOTHING ELSE. A press raises `design-left-save`; the seat that holds
  * the session answers it, because only it knows the title, the address, the notes and the package
- * that are being saved. The footer never fetches and never decides what saving means. `busy` and
- * `result` belong to the HOST: the seat sets them while the save is in flight and when it answers,
+ * that are being saved. The delete raises `component-delete` with the tag, and the seat runs the
+ * removal. The footer never fetches and never decides what saving or deleting means. `busy` and
+ * `result` belong to the HOST: the seat sets them while the work is in flight and when it answers,
  * and the footer's own line under the fields is that answer, in the host's words.
  */
 import { LitElement, css, html, nothing } from 'lit';
@@ -105,6 +110,27 @@ export class DesignLeftFooter extends LitElement {
       border-color: rgba(35, 67, 84, 0.45);
     }
     .new:disabled { opacity: 0.6; cursor: not-allowed; }
+    /* THE SELECTED COMPONENT'S DELETE — the same plate, a destructive control. The first press
+       arms it; the second deletes. A refusal from the server (a live component) is shown in the
+       result line beside it, in the server's words. */
+    .delete {
+      height: 43px;
+      min-width: 110px;
+      padding: 0 14px;
+      border: 1px solid rgba(160, 30, 30, 0.45);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.55);
+      color: #8f1d1d;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    }
+    .delete:hover { background: rgba(255, 255, 255, 0.85); border-color: rgba(160, 30, 30, 0.7); }
+    .delete.armed { background: #b91c1c; border-color: #b91c1c; color: #fff; }
+    .delete:disabled { opacity: 0.6; cursor: not-allowed; }
     /* Runtime state, not in the design — the Composer's own spinner. */
     .spinner {
       display: inline-block;
@@ -127,21 +153,56 @@ export class DesignLeftFooter extends LitElement {
   `;
 
   static properties = {
-    /** The host's answer after a save — one line beside the control. */
+    /** The host's answer after a save or a removal — one line beside the controls. */
     result: { type: String },
     /** Set by the host while the save is in flight; locks the control and reads "Saving...". */
     busy: { type: Boolean },
     hideNew: { type: Boolean, attribute: 'hide-new' },
+    /** The catalogue component the tree has open; empty means no Delete control. */
+    selected: { type: String },
   };
   declare result: string;
   declare busy: boolean;
   declare hideNew: boolean;
+  declare selected: string;
+
+  /** The Delete control's first press arms it; the second deletes. */
+  private _deleteArmed = false;
+  /** True while the removal this footer asked for is in flight. */
+  private _deleting = false;
 
   constructor() {
     super();
     this.result = '';
     this.busy = false;
     this.hideNew = false;
+    this.selected = '';
+  }
+
+  updated(changed: Map<string, unknown>): void {
+    /* A NEW SELECTION IS A NEW QUESTION: an armed Delete must not carry to another component. */
+    if (changed.has('selected')) this._deleteArmed = false;
+  }
+
+  /*
+   * THE HOST HAS FINISHED THE REMOVAL IT WAS ASKED FOR. The answer itself goes to the conversation
+   * (owner, 2026-11-16: the confirmation messages belong to the model and the chat), so this only
+   * releases the control's own working state; the footer never prints the answer beside the button.
+   */
+  private _onDeleteSettled = () => {
+    this._deleting = false;
+    this._deleteArmed = false;
+    this.requestUpdate();
+  };
+
+  connectedCallback(): void {
+    super.connectedCallback();
+    window.addEventListener('component-delete-settled', this._onDeleteSettled);
+  }
+
+  disconnectedCallback(): void {
+    window.removeEventListener('component-delete-settled', this._onDeleteSettled);
+    super.disconnectedCallback();
   }
 
   private _onSave() {
@@ -159,6 +220,31 @@ export class DesignLeftFooter extends LitElement {
     this.dispatchEvent(new CustomEvent('design-left-new', { bubbles: true, composed: true }));
   }
 
+  /*
+   * THE SELECTED COMPONENT'S DELETE, IN TWO PRESSES. The first arms the control and changes its
+   * word; the second tells the seat to remove that component. The seat runs the removal through
+   * the server's guard, so a component that is live is refused with the files that name it and
+   * nothing is deleted — the refusal is drawn in `result`, not swallowed here.
+   */
+  private _onDelete() {
+    if (this.busy || this._deleting || !this.selected) return;
+    if (!this._deleteArmed) {
+      this._deleteArmed = true;
+      this.requestUpdate();
+      return;
+    }
+    this._deleteArmed = false;
+    this._deleting = true;
+    this.dispatchEvent(
+      new CustomEvent('component-delete', {
+        detail: { tag: this.selected },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    this.requestUpdate();
+  }
+
   render() {
     return html`
       ${this.result ? html`<span class="result">${this.result}</span>` : nothing}
@@ -174,6 +260,23 @@ export class DesignLeftFooter extends LitElement {
             >
               Create new
             </button>`}
+        ${this.selected
+          ? html`<button
+              class="delete ${this._deleteArmed ? 'armed' : ''}"
+              type="button"
+              ?disabled=${this.busy || this._deleting}
+              title=${this._deleteArmed
+                ? `Click again to delete ${this.selected} from the catalogue`
+                : `Delete ${this.selected} from the catalogue`}
+              @click=${this._onDelete}
+            >
+              ${this._deleting
+                ? html`<span class="spinner"></span> <span>Deleting...</span>`
+                : this._deleteArmed
+                  ? 'Confirm delete'
+                  : 'Delete'}
+            </button>`
+          : nothing}
         <button
           class="save ${this.busy ? 'saving' : ''}"
           type="button"

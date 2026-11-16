@@ -16,6 +16,8 @@ export interface SeatRegistryEntry {
   description: string;
   props: Record<string, { type: 'string' | 'number' | 'boolean' | 'object' | 'array'; optional?: boolean }>;
   events: string[];
+  /** The named regions the element draws, for the payload's `placements` map. */
+  placements?: string[];
 }
 
 export const CHAT_SEAT_REGISTRY: Record<string, SeatRegistryEntry> = {
@@ -34,7 +36,7 @@ export const CHAT_SEAT_REGISTRY: Record<string, SeatRegistryEntry> = {
       disabledTabs: { type: 'string', optional: true },
       tracePrompt: { type: 'boolean', optional: true },
       instructions: { type: 'string', optional: true },
-      graceLiveContext: { type: 'string', optional: true },
+      graceLiveContext: { type: 'boolean', optional: true },
       messages: { type: 'array', optional: true },
       conversations: { type: 'array', optional: true },
       designPackages: { type: 'object', optional: true },
@@ -69,6 +71,7 @@ export const CHAT_SEAT_REGISTRY: Record<string, SeatRegistryEntry> = {
       productExpectedMinutes: { type: 'number', optional: true },
     },
     events: ['conversation-change', 'tab-change', 'product-attach', 'product-tool', 'right-column-drag-start'],
+    placements: ['view'],
   },
   'chat-tab': {
     tag: 'design2-chat-tab',
@@ -85,7 +88,7 @@ export const CHAT_SEAT_REGISTRY: Record<string, SeatRegistryEntry> = {
       disabledTabs: { type: 'string', optional: true },
       tracePrompt: { type: 'boolean', optional: true },
       instructions: { type: 'string', optional: true },
-      graceLiveContext: { type: 'string', optional: true },
+      graceLiveContext: { type: 'boolean', optional: true },
       messages: { type: 'array', optional: true },
       conversations: { type: 'array', optional: true },
       designPackages: { type: 'object', optional: true },
