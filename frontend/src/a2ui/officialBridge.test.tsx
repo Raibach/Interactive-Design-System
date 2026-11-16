@@ -1,6 +1,6 @@
 import React from 'react';
 import {render, waitFor} from '@testing-library/react';
-import {describe, expect, it} from 'vitest';
+import {describe, expect, it, vi} from 'vitest';
 import {Catalog, MessageProcessor} from '@a2ui/web_core/v0_9';
 import {A2uiSurface} from '@a2ui/react/v0_9';
 import catalogDoc from '@design2/surface-design/catalog.json';
@@ -124,5 +124,55 @@ describe('official bridge over the design room catalogue', () => {
       expect(banner?.shadowRoot?.textContent).toContain('The bridge drew the tree.');
       expect(banner?.shadowRoot?.textContent).toContain('A2UI-BRIDGE');
     });
+  });
+
+  it('resolves a DataBinding prop before the element is created', () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ok: true, json: async () => ({messages: []})})));
+
+    const catalog = createOfficialDesignCatalog();
+    const processor = new MessageProcessor([catalog]);
+    const surfaceId = 'official-binding';
+    const errors = processor.processMessagesWithErrors([
+      {version: 'v0.9.1', createSurface: {surfaceId, catalogId: catalog.id}},
+      {
+        version: 'v0.9.1',
+        updateComponents: {
+          surfaceId,
+          components: [
+            {
+              id: 'root',
+              component: 'chat-panel',
+              sessionId: 'session-binding',
+              conversationId: 'conversation-binding',
+              activeTab: 'chat',
+              railOwnedByHost: true,
+              conversations: {path: '/conversations'},
+            },
+          ],
+        },
+      },
+      {
+        version: 'v0.9.1',
+        updateDataModel: {
+          surfaceId,
+          path: '/',
+          value: {conversations: [{id: 'c1'}]},
+        },
+      },
+    ]);
+    expect(errors).toEqual([]);
+
+    const surface = processor.getSurface(surfaceId);
+    if (!surface) throw new Error('the surface was not created');
+
+    const {container} = render(<A2uiSurface surface={surface as any} />);
+    const chat = container.querySelector('design2-chat') as
+      | (HTMLElement & {conversations?: unknown})
+      | null;
+    expect(chat).not.toBeNull();
+    expect(Array.isArray(chat?.conversations)).toBe(true);
+    expect(chat?.conversations).toEqual([{id: 'c1'}]);
+
+    vi.unstubAllGlobals();
   });
 });

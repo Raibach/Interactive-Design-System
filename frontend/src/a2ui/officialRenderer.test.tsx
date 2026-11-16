@@ -63,6 +63,9 @@ describe('a2ui-official-renderer', () => {
       | null;
     expect(parent).not.toBeNull();
     expect(banner).not.toBeNull();
+    const host = banner?.parentElement;
+    expect(host?.getAttribute('slot')).toBe('middle');
+    expect(banner?.getAttribute('slot')).toBeNull();
     await waitFor(() => {
       expect(banner?.shadowRoot?.textContent).toContain('First.');
       expect(banner?.shadowRoot?.textContent).toContain('A2UI-RENDERER');

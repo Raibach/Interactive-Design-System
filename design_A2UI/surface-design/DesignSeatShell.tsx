@@ -847,6 +847,17 @@ export default function DesignSeatShell({ injected, toolsStanding, toolsVisit, o
         const right = seat.renderer.shadowRoot?.querySelector('[slot="right"]') as HTMLElement | null;
         const tag = String(right?.tagName ?? '').toLowerCase();
         chatEl = right && chatTags.has(tag) ? (right as SeatChat) : null;
+        if (!chatEl && right) {
+          /* The official renderer slotted the CHAT'S HOST into the right region; the chat element
+             is its child. The old renderer slotted the chat itself, which the branch above keeps. */
+          for (const wanted of chatTags) {
+            const nested = right.querySelector(wanted) as SeatChat | null;
+            if (nested) {
+              chatEl = nested;
+              break;
+            }
+          }
+        }
         if (chatEl) break;
         await new Promise((r) => setTimeout(r, 250));
         if (cancelled) return;

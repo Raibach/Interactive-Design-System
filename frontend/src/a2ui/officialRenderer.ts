@@ -15,7 +15,7 @@ import {flushSync} from 'react-dom';
 import {createRoot, type Root} from 'react-dom/client';
 import {MessageProcessor} from '@a2ui/web_core/v0_9';
 import {A2uiSurface} from '@a2ui/react/v0_9';
-import {createOfficialDesignCatalog} from './officialBridge';
+import {BRIDGED_TAGS, createOfficialDesignCatalog} from './officialBridge';
 
 const VERSION = 'v0.9.1';
 
@@ -120,6 +120,52 @@ export class OfficialDesignRenderer extends HTMLElement {
     });
   }
 
+  /**
+   * The official node layer wraps each implementation in its own host element and gives it an
+   * internal id, so the catalogue id is not on the DOM. The tree's own order is: a parent's
+   * `children` array is rendered as its direct hosts, in that order, and `placements` names the
+   * region for each id. This walks that structure and writes each host's `slot`.
+   */
+  private applyPlacements(): void {
+    const root = this.shadowRoot;
+    if (!root) return;
+    const components = new Map<string, Record<string, any>>();
+    for (const entry of this._components as Array<Record<string, any>>) {
+      components.set(String(entry?.id), entry);
+    }
+    const rootComponent = this._components.find(
+      (entry) => String((entry as Record<string, any>)?.id) === 'root',
+    ) as Record<string, any> | undefined;
+    if (!rootComponent) return;
+
+    const tag = BRIDGED_TAGS[String(rootComponent.component)];
+    const rootElement = tag ? (root.querySelector(tag) as HTMLElement | null) : null;
+    if (!rootElement) return;
+
+    const walk = (parent: HTMLElement, component: Record<string, any>): void => {
+      const children = Array.isArray(component.children) ? (component.children as unknown[]) : [];
+      const placements =
+        component.placements && typeof component.placements === 'object'
+          && !Array.isArray(component.placements)
+          ? (component.placements as Record<string, unknown>)
+          : {};
+      const hosts = Array.from(parent.children) as HTMLElement[];
+
+      children.forEach((rawId, index) => {
+        if (typeof rawId !== 'string') return;
+        const host = hosts[index];
+        if (!host) return;
+        const region = Object.entries(placements).find(([, id]) => id === rawId)?.[0];
+        if (region) host.setAttribute('slot', region);
+        const childComponent = components.get(rawId);
+        const childElement = host.firstElementChild as HTMLElement | null;
+        if (childComponent && childElement) walk(childElement, childComponent);
+      });
+    };
+
+    walk(rootElement, rootComponent);
+  }
+
   private draw(): void {
     const resolve = this._resolveUpdate;
     this._resolveUpdate = null;
@@ -178,6 +224,7 @@ export class OfficialDesignRenderer extends HTMLElement {
         flushSync(() => {
           root.render(React.createElement(A2uiSurface, {surface: surface as any}));
         });
+        this.applyPlacements();
       }
       this._treeDirty = false;
     } catch (error) {

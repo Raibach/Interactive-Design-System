@@ -16,7 +16,7 @@
  * refused by name rather than drawn as nothing.
  */
 import React, {useLayoutEffect, useRef} from 'react';
-import {Catalog, type ComponentApi} from '@a2ui/web_core/v0_9';
+import {Catalog, type ComponentApi, type ComponentContext} from '@a2ui/web_core/v0_9';
 import {createComponentImplementation} from '@a2ui/react/v0_9';
 import catalogDoc from '@design2/surface-design/catalog.json';
 import registryDoc from '@design2/surface-design/registry.json';
@@ -72,6 +72,7 @@ type BridgeProps = {
   tag: string;
   props: Record<string, unknown>;
   buildChild: (id: string, basePath?: string) => React.ReactNode;
+  context?: ComponentContext;
 };
 
 const childIdOf = (children: unknown): string[] => {
@@ -119,10 +120,28 @@ const childNodes = (
   });
 };
 
-const Bridged: React.FC<BridgeProps> = ({tag, props, buildChild}) => {
+const Bridged: React.FC<BridgeProps> = ({tag, props, buildChild, context}) => {
   const ref = useRef<HTMLElement | null>(null);
   const placement = React.useContext(SlotContext);
   const {id, component: _component, children, placements, ...elementProps} = props;
+
+  /*
+   * A DECLARED DATA BINDING THAT IS STILL A `{path}` OBJECT IS RESOLVED HERE. The official binder
+   * resolves the Dynamic* types itself; the custom props declared as `DataBinding` (the chat's
+   * `conversations` and `messages`) arrive as the path object, and the elements expect the value.
+   * This reads the same surface model the binder reads, so a data-only update re-renders this
+   * component and resolves the new value.
+   */
+  const resolve = (value: unknown): unknown => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+    const path = (value as {path?: unknown}).path;
+    if (typeof path !== 'string') return value;
+    const model = context?.dataContext?.dataModel;
+    return model ? model.get(path) : value;
+  };
+  const resolvedProps = Object.fromEntries(
+    Object.entries(elementProps).map(([name, value]) => [name, resolve(value)]),
+  );
 
   /*
    * THE PROPS ARE SET ON THE ELEMENT ITSELF. The binder has already resolved every dynamic value,
@@ -132,14 +151,15 @@ const Bridged: React.FC<BridgeProps> = ({tag, props, buildChild}) => {
   useLayoutEffect(() => {
     const element = ref.current as unknown as Record<string, unknown> | null;
     if (!element) return;
-    for (const [name, value] of Object.entries(elementProps)) {
+    for (const [name, value] of Object.entries(resolvedProps)) {
       if (value !== undefined) element[name] = value;
     }
-  }, [elementProps]);
+  }, [resolvedProps]);
 
   return React.createElement(
     tag,
     {
+      ...resolvedProps,
       ref: (el: HTMLElement | null) => { ref.current = el; },
       id: id as string | undefined,
       slot: placement?.slot ?? undefined,
@@ -159,11 +179,12 @@ export function createOfficialDesignCatalog(): Catalog<ComponentApi, any> {
 
   const components = [...catalog.components.values()].map((api) => {
     const tag = BRIDGED_TAGS[api.name];
-    return createComponentImplementation(api, ({props, buildChild}) => (
+    return createComponentImplementation(api, ({props, buildChild, context}) => (
       <Bridged
         tag={tag}
         props={props as Record<string, unknown>}
         buildChild={buildChild}
+        context={context}
       />
     ));
   });
