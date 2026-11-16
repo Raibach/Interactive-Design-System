@@ -89,6 +89,14 @@ const childIdOf = (children: unknown): string[] => {
   });
 };
 
+/**
+ * The named region a child stands in, handed down through the React tree. The official factory
+ * wraps each child in its own node layer, so the slot cannot be passed as a prop; the child's
+ * `Bridged` reads it here and writes the `slot` attribute on the element itself, which is what
+ * the parent's `<slot name="...">` projects.
+ */
+const SlotContext = React.createContext<{id: string; slot: string | null} | null>(null);
+
 const childNodes = (
   children: unknown,
   placements: unknown,
@@ -102,18 +110,18 @@ const childNodes = (
 
   return ids.map((childId) => {
     const child = buildChild(childId);
-    const region = regions.find(([, id]) => id === childId)?.[0];
-    if (!region) return <React.Fragment key={childId}>{child}</React.Fragment>;
+    const region = regions.find(([, id]) => id === childId)?.[0] ?? null;
     return (
-      <div slot={region} key={childId} style={{display: 'contents'}}>
+      <SlotContext.Provider key={childId} value={{id: childId, slot: region}}>
         {child}
-      </div>
+      </SlotContext.Provider>
     );
   });
 };
 
 const Bridged: React.FC<BridgeProps> = ({tag, props, buildChild}) => {
   const ref = useRef<HTMLElement | null>(null);
+  const placement = React.useContext(SlotContext);
   const {id, component: _component, children, placements, ...elementProps} = props;
 
   /*
@@ -131,7 +139,12 @@ const Bridged: React.FC<BridgeProps> = ({tag, props, buildChild}) => {
 
   return React.createElement(
     tag,
-    {ref: (el: HTMLElement | null) => { ref.current = el; }, id: id as string | undefined} as any,
+    {
+      ref: (el: HTMLElement | null) => { ref.current = el; },
+      id: id as string | undefined,
+      slot: placement?.slot ?? undefined,
+      'data-a2ui-id': placement?.id ?? id,
+    } as any,
     childNodes(children, placements, buildChild),
   );
 };
