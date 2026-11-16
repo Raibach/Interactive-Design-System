@@ -336,4 +336,7 @@ product/mitosis-main/
 /design/approval-reviews/Agentic-opensource/
 /design/approval-reviews/processmaker-develop.zip
 /governance/vector/system.db
+# The lock file beside a live database is state too: it exists only while something holds the
+# file, and nothing in a clone can use it. Same rule as the database above.
+*.db.lock
 /figma-ingest-plan.pdf

@@ -47,14 +47,14 @@ DESIGN_CONTEXT_TOOL = "get_design_context"
 #: never silently skipped — an unexecuted tool call reads as a successful one.
 SUPPORTED_TOOLS = {"figma.get_design_context"}
 
-DEFAULT_TIMEOUT = 15.0
+DEFAULT_TIMEOUT = None
 
 
 def _post(
     url: str,
     payload: dict[str, Any],
     session: str | None,
-    timeout: float,
+    timeout: float | None,
 ) -> tuple[dict | None, str | None, str | None]:
     """One JSON-RPC POST to the streamable-HTTP MCP. Returns (json, session, error)."""
     headers = {
@@ -74,7 +74,7 @@ def _post(
         )
     except requests.exceptions.Timeout:
         return None, None, (
-            f"Figma's MCP did not answer within {timeout:g}s ({url}). "
+            f"Figma's MCP did not answer ({url}). "
             f"It may be busy, or the file may be syncing."
         )
     except Exception as e:  # noqa: BLE001 — the reason IS the payload here
@@ -99,7 +99,7 @@ def call_design_context(
     node_id: str,
     file_key: str | None = None,
     url: str | None = None,
-    timeout: float = DEFAULT_TIMEOUT,
+    timeout: float | None = DEFAULT_TIMEOUT,
 ) -> tuple[bool, str, str | None]:
     """`get_design_context` for one node. Returns (ok, text, error)."""
     url = (url or DEFAULT_MCP_URL).rstrip("/")
@@ -283,7 +283,7 @@ def _rest_design_block(
 def run_tool_calls(
     tool_calls: list[dict[str, Any]] | None,
     file_key: str | None = None,
-    timeout: float = DEFAULT_TIMEOUT,
+    timeout: float | None = DEFAULT_TIMEOUT,
 ) -> tuple[list[str], list[str]]:
     """Execute a prompt's tool calls.
 

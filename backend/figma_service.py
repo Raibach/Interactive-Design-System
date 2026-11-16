@@ -24,7 +24,7 @@ def get_file(file_key: str, depth: int = 2) -> dict | None:
             f"{FIGMA_BASE}/files/{file_key}",
             headers=_headers(),
             params={"depth": depth, "geometry": "paths"},
-            timeout=30,
+            timeout=None,
         )
         if r.status_code == 200:
             data = r.json()
@@ -49,7 +49,7 @@ def get_file_versions(file_key: str) -> dict | None:
         r = requests.get(
             f"{FIGMA_BASE}/files/{file_key}/versions",
             headers=_headers(),
-            timeout=30,
+            timeout=None,
         )
         if r.status_code == 200:
             data = r.json()
@@ -69,7 +69,7 @@ def get_file_comments(file_key: str) -> dict | None:
         r = requests.get(
             f"{FIGMA_BASE}/files/{file_key}/comments",
             headers=_headers(),
-            timeout=30,
+            timeout=None,
         )
         if r.status_code == 200:
             return {"comments": r.json().get("comments", [])}
@@ -97,7 +97,7 @@ def get_dev_resources(file_key: str, node_id: str | None = None) -> dict | None:
         params = {}
         if node_id:
             params["node_id"] = node_id
-        r = requests.get(url, headers=_headers(), params=params, timeout=30)
+        r = requests.get(url, headers=_headers(), params=params, timeout=None)
         if r.status_code == 200:
             return {"dev_resources": r.json().get("dev_resources", [])}
         return {"error": f"Figma API returned {r.status_code}"}
@@ -143,7 +143,7 @@ def get_component_descriptions(file_key: str) -> dict[str, str]:
         r = requests.get(
             f"{FIGMA_BASE}/files/{file_key}/components",
             headers=_headers(),
-            timeout=30,
+            timeout=None,
         )
         if r.status_code != 200:
             return hit[1] if hit else {}
@@ -181,7 +181,7 @@ def get_component_names(file_key: str) -> dict[str, str]:
         r = requests.get(
             f"{FIGMA_BASE}/files/{file_key}/components",
             headers=_headers(),
-            timeout=30,
+            timeout=None,
         )
         if r.status_code != 200:
             return hit[1] if hit else {}
@@ -206,7 +206,7 @@ def get_node(file_key: str, node_id: str) -> dict | None:
             f"{FIGMA_BASE}/files/{file_key}/nodes",
             headers=_headers(),
             params={"ids": node_id, "geometry": "paths"},
-            timeout=30,
+            timeout=None,
         )
         if r.status_code == 200:
             nodes = r.json().get("nodes", {})
@@ -234,7 +234,7 @@ def get_node_image(file_key: str, node_id: str, scale: float = 2.0) -> dict[str,
             f"{FIGMA_BASE}/images/{file_key}",
             headers=_headers(),
             params={"ids": node_id, "format": "png", "scale": scale},
-            timeout=30,
+            timeout=None,
         )
         if r.status_code != 200:
             return {"ok": False, "error": f"Figma returned {r.status_code} for the node image"}
@@ -244,7 +244,7 @@ def get_node_image(file_key: str, node_id: str, scale: float = 2.0) -> dict[str,
         url = (payload.get("images") or {}).get(node_id.replace("-", ":")) or next(iter((payload.get("images") or {}).values()), None)
         if not url:
             return {"ok": False, "error": "Figma returned no image URL for this node"}
-        image = requests.get(url, timeout=60)
+        image = requests.get(url, timeout=None)
         if image.status_code != 200:
             return {"ok": False, "error": f"the rendered image could not be downloaded ({image.status_code})"}
         return {"ok": True, "data": image.content, "scale": scale, "format": "png"}

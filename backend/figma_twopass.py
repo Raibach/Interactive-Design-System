@@ -85,7 +85,7 @@ def read_metadata(
     node_id: str,
     file_key: str | None = None,
     url: str | None = None,
-    timeout: float = DEFAULT_TIMEOUT,
+    timeout: float | None = DEFAULT_TIMEOUT,
 ) -> tuple[list[dict[str, Any]], str | None]:
     """`get_metadata` for one node. Returns (layers in document order, error).
 

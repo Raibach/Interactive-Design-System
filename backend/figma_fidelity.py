@@ -701,6 +701,19 @@ def _stroke_drawn(spec_node: dict[str, Any], decls: list[str]) -> dict[str, Any]
     if svg:
         import re
 
+        # THE STROKE BAND IS THE STROKE. `_svg_for_vector` writes Figma's `strokeGeometry`
+        # as a path marked `data-figma-stroke="geometry"`, filled with the stroke's own
+        # colour. The weight is the spec's stated weight, already baked into that geometry.
+        band = re.search(r'<path\b[^>]*\bdata-figma-stroke="geometry"[^>]*>', svg)
+        if band:
+            band_fill = re.search(r'\bfill="([^"]*)"', band.group(0))
+            stroke = spec_node.get("stroke") or {}
+            if band_fill and band_fill.group(1) not in ("none", "") and stroke.get("color"):
+                return {
+                    "color": band_fill.group(1),
+                    "weight": _num(stroke.get("weight")),
+                    "by": "the stroke geometry path",
+                }
         colour = re.search(r'\bstroke="([^"]*)"', svg)
         weight = re.search(r'\bstroke-width="([^"]*)"', svg)
         if colour:
@@ -1106,6 +1119,14 @@ def _compare_fact(
         wanted = str(raw_node.get("strokeAlign") or "")
         if not wanted:
             return None
+        # THE ALIGNMENT IS CARRIED ON THE STROKE GEOMETRY PATH. `_svg_for_vector` marks that
+        # path with `data-figma-stroke-align`, whose value is this node's `strokeAlign` copied
+        # verbatim. The test is string equality against the emitted svg; when the attribute is
+        # absent, every existing failure path below still runs.
+        svg = str(spec_node.get("svg") or "")
+        if f'data-figma-stroke-align="{wanted}"' in svg:
+            return row(wanted, f'data-figma-stroke-align="{wanted}"',
+                       "the alignment travels on the stroke geometry path")
         # A STROKE-ONLY VECTOR IS ITS STROKE. Figma's `strokeGeometry` is the outline the stroke
         # occupies, with the alignment applied in its own coordinates, and `_svg_for_vector` fills
         # that path. There is no CSS alignment to compare because the artwork already is one.

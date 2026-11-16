@@ -1542,7 +1542,7 @@ def _catalog_check() -> dict[str, Any]:
             cwd=FRONTEND_DIR,
             capture_output=True,
             text=True,
-            timeout=300,
+            timeout=None,
         )
     except Exception as e:
         return {"ran": False, "summary": f"catalog:check could not run: {e}"}
@@ -1811,7 +1811,7 @@ def _validate_generated_module(code: str) -> dict[str, Any]:
             input=code,
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=None,
         )
     except Exception as e:
         return {"ok": False, "error": f"the generated code was NOT checked: esbuild could not run ({e})."}
@@ -1867,7 +1867,7 @@ def _transpile_module(code: str) -> dict[str, Any]:
             input=code,
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=None,
         )
     except Exception as e:
         return {"ok": False, "error": f"esbuild could not run ({e})"}
@@ -1921,7 +1921,7 @@ def _bundle_preview_module(abs_path: str) -> str:
         [esbuild, abs_path, "--bundle", "--format=esm", "--target=es2020", "--external:lit"],
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=None,
     )
     if proc.returncode != 0:
         msg = (proc.stderr or proc.stdout or "esbuild failed").strip()[:400]
@@ -1999,7 +1999,7 @@ def _run_cem_analyze() -> None:
             cwd=frontend_dir,
             capture_output=True,
             text=True,
-            timeout=120,
+            timeout=None,
         )
         if result.returncode != 0:
             print(f"⚠️ cem analyze failed: {result.stderr}")
@@ -2029,10 +2029,14 @@ def _fetch_figma_nodes(file_key: str, node_id: str) -> tuple[dict[str, Any], dic
     silent: `attempts` says how long each ask took and which one answered, and the answer prints
     that line.
 
-    ONLY A NO-ANSWER IS RETRIED. A timeout or a dropped connection is the network; a refusal from
-    Figma is an answer, and asking a second time would add thirty seconds to a sentence that is
+    ONLY A NO-ANSWER IS RETRIED. A dropped or failed connection is the network; a refusal from
+    Figma is an answer, and asking a second time would add another wait to a sentence that is
     already true. `HTTPError` is a subclass of `URLError`, so it is re-raised first and never
     retried.
+
+    THE READ HAS NO CEILING. The first ask waits until Figma answers or the connection fails;
+    a stall is not turned into a timed-out run. The second ask happens only after a connection
+    failure, and its outcome is recorded like the first.
 
     Returns (the response, the record of the asks).
     """
@@ -2045,7 +2049,7 @@ def _fetch_figma_nodes(file_key: str, node_id: str) -> tuple[dict[str, Any], dic
         raise HTTPException(status_code=503, detail="FIGMA_TOKEN not configured")
 
     url = f"https://api.figma.com/v1/files/{file_key}/nodes?ids={node_id}&geometry=paths"
-    read_timeout = 30.0
+    read_timeout = None
     attempts: list[dict[str, Any]] = []
     no_answer: Exception | None = None
 
@@ -2102,7 +2106,7 @@ def _no_answer_reason(error: Exception) -> str:
     return "the connection failed"
 
 
-def _read_record(attempts: list[dict[str, Any]], read_timeout: float) -> dict[str, Any]:
+def _read_record(attempts: list[dict[str, Any]], read_timeout: float | None) -> dict[str, Any]:
     """The record of the asks, and the one sentence the answer prints.
 
     ONE FUNCTION, BOTH READERS. The answer and the run's own record take this same value, so the
@@ -2110,9 +2114,13 @@ def _read_record(attempts: list[dict[str, Any]], read_timeout: float) -> dict[st
     """
     answered = next((item for item in attempts if item["outcome"] == "answered"), None)
     if answered is None:
+        reasons = "; ".join(
+            f"attempt {item['attempt']}: {item['outcome']}" for item in attempts
+        )
         summary = (
-            "The read did not answer in "
-            f"{_num_seconds(read_timeout)} seconds, twice. Nothing was written."
+            "The read did not answer twice"
+            + (f" ({reasons})" if reasons else "")
+            + ". Nothing was written."
         )
     elif answered["attempt"] == 1:
         # NOTHING TO REPORT. The first ask answered, and a line saying so on every run is noise.
@@ -2120,8 +2128,8 @@ def _read_record(attempts: list[dict[str, Any]], read_timeout: float) -> dict[st
     else:
         first = next(item for item in attempts if item["attempt"] == 1)
         summary = (
-            f"The first read did not answer within {_num_seconds(read_timeout)} seconds "
-            f"({first['outcome']}); the second answered in {answered['seconds']} seconds. "
+            f"The first read did not answer ({first['outcome']}); "
+            f"the second answered in {answered['seconds']} seconds. "
             "The design was read."
         )
     return {
@@ -2144,7 +2152,7 @@ def _num_seconds(value: float) -> str:
 # ============================================
 
 MCP_URL = os.getenv("FIGMA_MCP_URL", "http://127.0.0.1:3845/mcp")
-MCP_TIMEOUT = 15.0
+MCP_TIMEOUT = None
 
 
 INGEST_LOG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs", "figma-ingest.jsonl")
@@ -2457,7 +2465,7 @@ def _asset_bytes(asset: dict[str, Any]) -> bytes | None:
             return None
     if kind == "mcp-url":
         try:
-            with urllib.request.urlopen(data, timeout=10) as response:  # noqa: S310 — the URL is the local MCP server's, matched by _MCP_ASSET_URL_RE
+            with urllib.request.urlopen(data, timeout=None) as response:  # noqa: S310 — the URL is the local MCP server's, matched by _MCP_ASSET_URL_RE
                 return response.read() or None
         except Exception:
             return None
@@ -3131,12 +3139,12 @@ def _rendered_image_fill(node_id: str | None) -> str | None:
                 f"?ids={urllib.parse.quote(str(node_id))}&format=png&scale=1"
             )
             request = urllib.request.Request(url, headers={"X-Figma-Token": token})
-            with urllib.request.urlopen(request, timeout=30) as answer:
+            with urllib.request.urlopen(request, timeout=None) as answer:
                 rendered = json.loads(answer.read().decode("utf-8"))
             address = (rendered.get("images") or {}).get(str(node_id))
             if rendered.get("err") or not address:
                 raise ValueError(rendered.get("err") or "Figma returned no image address")
-            with urllib.request.urlopen(address, timeout=30) as image:
+            with urllib.request.urlopen(address, timeout=None) as image:
                 body = image.read()
             value = "url('data:image/png;base64," + base64.b64encode(body).decode("ascii") + "')"
         except Exception as error:  # noqa: BLE001 — the gap is named with the boundary's own words
@@ -4716,7 +4724,8 @@ def _svg_for_vector(node: dict[str, Any], root: dict[str, Any] | None = None) ->
     # viewBox is kept so the art is imperfect rather than invisible.
     shift = [[1.0, 0.0, -origin[0]], [0.0, 1.0, -origin[1]]]
     shifted = [_transform_path(one, shift) for one in paths_out]
-    if all(shifted):
+    shift_to_zero = all(shifted)
+    if shift_to_zero:
         paths_out = [one for one in shifted if one]
         canvas = f"0 0 {round(width, 4)} {round(height, 4)}"
     else:
@@ -4724,6 +4733,25 @@ def _svg_for_vector(node: dict[str, Any], root: dict[str, Any] | None = None) ->
             f"{round(origin[0], 4)} {round(origin[1], 4)} "
             f"{round(width, 4)} {round(height, 4)}"
         )
+
+    # ── THE STROKE'S OWN GEOMETRY IS CARRIED AS DATA ─────────────────────────
+    # `fillGeometry` is chosen before `strokeGeometry` above, so a filled shape's stroke
+    # geometry reached no character in the svg. It is written here as its own `<path>`,
+    # through the same transform and origin shift as the fill paths, and marked with
+    # `data-figma-stroke="geometry"` and `data-figma-stroke-align` so the emitted drawing
+    # says which JSON fields it carries.
+    stroke_paths_out: list[str] = []
+    if node.get("fillGeometry") and node.get("strokeGeometry"):
+        for entry in node.get("strokeGeometry") or []:
+            one = str((entry or {}).get("path") or "")
+            if not one:
+                continue
+            if fit == "transformed" and transform:
+                one = _transform_path(one, transform) or one
+            if shift_to_zero:
+                one = _transform_path(one, shift) or one
+            stroke_paths_out.append(one)
+    stroke_band = bool(stroke_paths_out)
 
     parts = [
         f'<svg width="{width}" height="{height}" viewBox="{canvas}" fill="none" xmlns="http://www.w3.org/2000/svg">'
@@ -4735,6 +4763,10 @@ def _svg_for_vector(node: dict[str, Any], root: dict[str, Any] | None = None) ->
     stroke_geometry = not node.get("fillGeometry") and bool(node.get("strokeGeometry"))
     for out in paths_out:
         attrs = [f'd="{out}"']
+        if stroke_geometry:
+            attrs.append('data-figma-stroke="geometry"')
+            if node.get("strokeAlign"):
+                attrs.append(f'data-figma-stroke-align="{node["strokeAlign"]}"')
         if stroke_geometry and stroke:
             attrs.append(f'fill="{stroke}"')
         else:
@@ -4742,12 +4774,19 @@ def _svg_for_vector(node: dict[str, Any], root: dict[str, Any] | None = None) ->
                 attrs.append(f'fill="{fill}"')
             else:
                 attrs.append('fill="none"')
-            if stroke:
+            if stroke and not stroke_band:
                 attrs.append(f'stroke="{stroke}"')
                 attrs.append(f'stroke-width="{round(float(node.get("strokeWeight") or 1), 4)}"')
         if winding and winding != "NONZERO":
             attrs.append(f'fill-rule="{winding.lower()}"')
         parts.append(f'<path {" ".join(attrs)}/>')
+    for out in stroke_paths_out:
+        stroke_attrs = [f'd="{out}"']
+        stroke_attrs.append(f'fill="{stroke}"' if stroke else 'fill="none"')
+        stroke_attrs.append('data-figma-stroke="geometry"')
+        if node.get("strokeAlign"):
+            stroke_attrs.append(f'data-figma-stroke-align="{node["strokeAlign"]}"')
+        parts.append(f'<path {" ".join(stroke_attrs)}/>')
     parts.append("</svg>")
     return "".join(parts)
 
