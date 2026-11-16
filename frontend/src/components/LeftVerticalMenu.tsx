@@ -589,7 +589,6 @@ const LogoutIcon = () => (
                 { id: "console", label: "Console" },
                 { id: "composer", label: "Composer" },
                 { id: "design", label: "Design" },
-                { id: "design2", label: "Design A2UI" },
                 /*
                  * EVERY TAB IS A ROOM, AND EVERY TAB IS A DOOR (2026-10-23). Product and
                  * Governance left the stub set on 2026-10-03; Development left it on 2026-10-04,
@@ -616,7 +615,7 @@ const LogoutIcon = () => (
                      */
                     if (tab.id === "design") {
                       window.dispatchEvent(new CustomEvent("open-ingest"));
-                    } else if (tab.id === "product" || tab.id === "development" || tab.id === "governance" || tab.id === "design2") {
+                    } else if (tab.id === "product" || tab.id === "development" || tab.id === "governance") {
                       window.dispatchEvent(new CustomEvent("navigate-tab", { detail: { tabId: tab.id } }));
                     }
                   }}

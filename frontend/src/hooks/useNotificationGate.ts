@@ -76,11 +76,15 @@ export function useNotificationGate(options?: NotificationGateOptions): Notifica
      * renderers — so all three are places the application can LAND: a browser whose last tab
      * was any of them opens there, which is what a room is for. No stub remains.
      */
-    const KNOWN_TABS = ['console', 'composer', 'design', 'design2', 'product', 'development', 'governance'];
-    const LANDABLE_TABS = ['console', 'composer', 'design', 'design2', 'product', 'development', 'governance'];
+    const KNOWN_TABS = ['console', 'composer', 'design', 'product', 'development', 'governance'];
+    const LANDABLE_TABS = ['console', 'composer', 'design', 'product', 'development', 'governance'];
     const saved = localStorage.getItem("activeHeaderTab");
+    /* THE DESIGN A2UI TAB IS RETIRED: its room is the Design tab's room. A browser that saved
+       the old id lands on Design rather than losing the room to the Console fallback. */
+    if (saved === 'design2') return 'design';
     if (saved && LANDABLE_TABS.includes(saved)) return saved;
-    return initialTab && LANDABLE_TABS.includes(initialTab) ? initialTab : "console";
+    const initial = initialTab === 'design2' ? 'design' : initialTab;
+    return initial && LANDABLE_TABS.includes(initial) ? initial : "console";
   });
 
   const setHeaderTab = (tab: string | null) => {
