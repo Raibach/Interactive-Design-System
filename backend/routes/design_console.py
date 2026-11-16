@@ -34,7 +34,7 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
 import services as state
-from card_lifecycle import LOCKED_STATES, CardState, card_state_of, is_card_locked, locked_state_message
+from card_lifecycle import LOCKED_STATES, CardState, card_state_of, card_status_word, is_card_locked, locked_state_message
 from deps import A2UI_CATALOG_ID, a2ui_catalog_for, validate_a2ui_components
 from grace_gui import LAST_USAGE, query_llm
 from prompt_sessions_api import (
@@ -58,7 +58,12 @@ DESIGN_CONSOLE_CATEGORY = "Design System"
 # travel with the state, so the card draws what the record says and the card element never learns
 # a state's name. A state that carries no colour keeps the card's own resting treatment.
 def _card_status(row: dict[str, Any], state: CardState | None) -> tuple[str, str]:
-    """The footer's word and colour for a card's lifecycle and review stage."""
+    """The footer's word and colour for a card's lifecycle and review stage.
+
+    THE WORD IS THE STATE MACHINE'S, NOT THIS FILE'S (owner, 2026-11-16). It comes from
+    `card_lifecycle.card_status_word`, the same call the main console makes, so one card reads the
+    same word wherever it is drawn. Only the colour is this room's own palette.
+    """
     meta = row.get("metadata") or {}
     if isinstance(meta, str):
         try:
@@ -66,22 +71,20 @@ def _card_status(row: dict[str, Any], state: CardState | None) -> tuple[str, str
         except (json.JSONDecodeError, ValueError):
             meta = {}
     stage = str((meta if isinstance(meta, dict) else {}).get("review_stage") or "")
+    word = card_status_word(row)
+    # THE WORD ON THE CARD IS "Pending" (owner, 2026-11-16: *"Just make it say pending. It
+    # doesn't have to say pending approval, the cards and approval."*). The state's stored name
+    # keeps its lifecycle value (`Pending_Approval`); only the word the person reads is shorter.
     if state == CardState.PENDING_APPROVAL:
-        # THE WORD ON THE CARD IS "Pending" (owner, 2026-11-16: *"Just make it say pending. It
-        # doesn't have to say pending approval, the cards and approval."*). The state's stored name
-        # keeps its lifecycle value (`Pending_Approval`); only the word the person reads is shorter.
-        return "Pending", "#8BE0A4"
+        return word, "#8BE0A4"
     if state == CardState.QUEUED_FOR_SHARE:
-        return "Queued for Share", "#8BE0A4"
+        return word, "#8BE0A4"
     if stage == "approved":
-        return "Approved", "#5FD688"
+        return word, "#5FD688"
     if stage == "changes-requested":
-        return "Changes Requested", "#8BE0A4"
-    if state == CardState.OPEN:
-        return "Open", ""
-    if state == CardState.CLOSED:
-        return "Closed", ""
-    return str(row.get("status") or "Saved"), ""
+        return word, "#8BE0A4"
+    # Open, Closed and a row with no lifecycle keep the card's own resting treatment.
+    return word, ""
 
 
 def design_card(

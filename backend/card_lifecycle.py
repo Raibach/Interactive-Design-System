@@ -63,8 +63,64 @@ def card_state_of(row: Mapping[str, Any] | None) -> CardState | None:
 
 
 def is_card_locked(row: Mapping[str, Any] | None) -> bool:
-    """True when the card is in a queue and its owner has lost mutation rights."""
-    return card_state_of(row) in LOCKED_STATES
+    """True when the card has been SUBMITTED and its owner has lost mutation rights.
+
+    PENDING IS THE DEFAULT, NOT A SUBMISSION (owner, 2026-11-16): *"we haven't built an approval
+    queue. They're just supposed to be what happens by default when you ingest a Figma component
+    and you don't approve it, so that they all default pending unless they're approved."* So the
+    state alone cannot lock a card. Locking on the state meant every Figma card went read-only the
+    moment it was saved — no re-save, no close, no re-ingest — and the refusal named a Supervisor
+    Queue that does not exist yet.
+
+    The lock belongs to a submission: the routing record that
+    `POST /api/design/sessions/{id}/queue` writes when someone sends a card. A card with no such
+    record is pending because nothing has approved it, and it stays editable.
+    """
+    state = card_state_of(row)
+    if state not in LOCKED_STATES:
+        return False
+    routing = _metadata(row).get("routing")
+    if not isinstance(routing, Mapping):
+        return False
+    return bool(str(routing.get("queued_at") or ""))
+
+
+# THE WORD THE CARD PRINTS — ONE DEFINITION (owner, 2026-11-16).
+#
+# Every surface that draws a card prints the word from here: the Design room's grid, the Approve
+# tab, and the main console. Two mappings is how one card came to read "active" on the main console
+# while the same row read "Pending" in the room, which looked like two different lists of cards.
+# A surface may choose its own colour; the word is the record's.
+_STATE_WORDS: dict[CardState, str] = {
+    CardState.PENDING_APPROVAL: "Pending",
+    CardState.QUEUED_FOR_SHARE: "Queued for Share",
+    CardState.OPEN: "Open",
+    CardState.CLOSED: "Closed",
+}
+
+
+def card_status_word(row: Mapping[str, Any] | None) -> str:
+    """The word a card's footer prints for this row.
+
+    The lifecycle decides it. The review stage refines a closed card, because an approved card
+    still carries the approval destination in its mask and is closed, not pending. A row that is
+    not a session card keeps the word the record already holds.
+    """
+    state = card_state_of(row)
+    if state is None:
+        status = row.get("status") if isinstance(row, Mapping) else None
+        return str(status or "Saved")
+    if state is CardState.CLOSED:
+        stage = str(_metadata(row).get("review_stage") or "")
+        if stage == "approved":
+            # ACTIVE IS THE WORD FOR AN APPROVED CARD (owner, 2026-11-16): *"the status changes to
+            # active because it's officially added to the Lit catalogue and it is now a usable
+            # component by the AI model when assembling the front end."* The word says what the
+            # card now is — a component the model may use — not what act made it so.
+            return "Active"
+        if stage == "changes-requested":
+            return "Changes Requested"
+    return _STATE_WORDS[state]
 
 
 def locked_state_message(state: CardState | None) -> str:

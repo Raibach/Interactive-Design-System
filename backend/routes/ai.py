@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 import services as state
 from console_tools import CONSOLE_TOOLS, EXPECTED_TOOL_COUNT, tool_inventory
-from card_lifecycle import CardState, card_state_of, is_card_locked, locked_state_message
+from card_lifecycle import CardState, card_state_of, card_status_word, is_card_locked, locked_state_message
 from design_save import apply_design_save_metadata
 from deps import (
     A2UI_CATALOG_ID,
@@ -1721,7 +1721,16 @@ def ai_assemble_surface(
                 "category": "Design System" if session_type.startswith("design") else (session.get("category") or ""),
                 "headerLabel": "Design Tools" if session_type.startswith("design") else "",
                 "subcategory": "Figma" if session_type.startswith("design") else "",
-                "status": (session.get("status") or "Active").lower(),
+                # THE WORD IS THE ONE THE ROOM PRINTS (owner, 2026-11-16). A design card reads its
+                # lifecycle's word — "Pending" while it waits for approval — because the room, the
+                # gate and this console all take it from `card_lifecycle.card_status_word`. It used
+                # to read the row's own status column here, so the same ten cards said "active" on
+                # this console and "Pending" in the room, which looked like two different lists.
+                # Every card outside the design sessions keeps the word its record holds.
+                "status": (
+                    card_status_word(session) if _design_state
+                    else (session.get("status") or "Active").lower()
+                ),
                 # THE LIFECYCLE AND THE LOCK, in the state machine's own words. A card outside
                 # the design sessions (a design system) carries no lifecycle state.
                 "state": _design_state.value if _design_state else "",
