@@ -13,7 +13,6 @@
 import { getStoredUserId } from '@/services/authService';
 import { readA2UIEnvelope, envelopeRefusalError } from '@/shared/a2ui-envelope';
 import { loadSystemRegistry } from '@/shared/a2uiRegistries';
-import '@/a2ui/officialRenderer';
 
 /** One surface tree: the flat component list and the model its props bind against. */
 export type Tree = { components: unknown[]; dataModel: Record<string, unknown> };
@@ -165,7 +164,7 @@ export async function loadSurfaceRegistry(): Promise<void> {
  * told which registry table to resolve the surface's names through and which surface it draws.
  */
 export function createSurfaceRenderer(surfaceId: string, tab: string): SurfaceRenderer {
-  const renderer = document.createElement('a2ui-official-renderer') as SurfaceRenderer;
+  const renderer = document.createElement('a2ui-renderer') as SurfaceRenderer;
   renderer.setAttribute('data-design-seat-renderer', tab);
   renderer.setAttribute('data-surface-id', surfaceId);
   renderer.style.cssText = 'display:block;width:100%;height:100%;min-height:0;';
