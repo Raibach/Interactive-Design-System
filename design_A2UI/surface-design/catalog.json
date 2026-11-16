@@ -1308,6 +1308,19 @@
             "component": {
               "const": "tools-chat"
             },
+            "children": {
+              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList"
+            },
+            "placements": {
+              "type": "object",
+              "description": "The region each child stands in, keyed by the region name the element draws. Every id here must also appear in `children`.",
+              "properties": {
+                "view": {
+                  "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentId"
+                }
+              },
+              "additionalProperties": false
+            },
             "sessionId": {
               "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString"
             },
@@ -1495,6 +1508,19 @@
           "properties": {
             "component": {
               "const": "ux-chat"
+            },
+            "children": {
+              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList"
+            },
+            "placements": {
+              "type": "object",
+              "description": "The region each child stands in, keyed by the region name the element draws. Every id here must also appear in `children`.",
+              "properties": {
+                "view": {
+                  "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentId"
+                }
+              },
+              "additionalProperties": false
             },
             "sessionId": {
               "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString"
@@ -2158,6 +2184,19 @@
           "properties": {
             "component": {
               "const": "design-left-panel"
+            },
+            "children": {
+              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList"
+            },
+            "placements": {
+              "type": "object",
+              "description": "The region each child stands in, keyed by the region name the element draws. Every id here must also appear in `children`.",
+              "properties": {
+                "left": {
+                  "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentId"
+                }
+              },
+              "additionalProperties": false
             }
           },
           "required": [

@@ -20,5 +20,6 @@ export const TOOLS_REGISTRY: Record<string, SurfaceRegistryEntry> = {
       + 'own copy of the chat, so its properties are the chat\'s.',
     props: CHAT_PROPS,
     events: CHAT_EVENTS,
+    placements: ['view'],
   },
 };

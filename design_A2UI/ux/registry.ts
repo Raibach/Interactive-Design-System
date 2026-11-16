@@ -17,6 +17,7 @@ export const UX_REGISTRY: Record<string, SurfaceRegistryEntry> = {
     description: 'THE UX TAB\'S CHAT: the analytics conversation and its turn.',
     props: CHAT_PROPS,
     events: CHAT_EVENTS,
+    placements: ['view'],
   },
   'ux-app-frame': {
     tag: 'design2-ux-app-frame',

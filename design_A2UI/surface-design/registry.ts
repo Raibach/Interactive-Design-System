@@ -215,6 +215,7 @@ export const DESIGN_ROOM_REGISTRY: Record<string, SurfaceRegistryEntry> = {
     description: 'THE TOOLS LEFT PANEL: the form and the catalogue tree, in the left column.',
     props: {},
     events: [],
+    placements: ['left'],
   },
 };
 
