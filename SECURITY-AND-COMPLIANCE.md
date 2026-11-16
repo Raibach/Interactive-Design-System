@@ -10,8 +10,6 @@ principle.
 
 ---
 
-## The loop is the AI. Humans are contributors.
-
 **There is no human in the loop, and the design does not put one there.**
 
 A loop is repetition, consistency and zero fatigue. People are the opposite of all three: they
